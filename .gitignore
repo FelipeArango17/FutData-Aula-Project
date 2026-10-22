@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Material de trabajo local
+Mockups/
+
+# Claude Code: configuración personal (las skills sí se comparten)
+.claude/settings.local.json
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+*.log
+
+# Java / backend
+target/
+build/
+*.class
+.gradle/
+
+# Variables de entorno (nunca se suben)
+.env
+.env.*
+!.env.example
+
+# IDEs
+.idea/
+.vscode/
+*.iml
