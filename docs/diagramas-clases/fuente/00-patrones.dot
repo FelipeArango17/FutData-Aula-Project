@@ -1,0 +1,80 @@
+digraph G {
+  rankdir=TB; splines=true; overlap=false; compound=true; newrank=true;
+  nodesep=0.45; ranksep=0.95; pad=0.35; bgcolor="white";
+  labelloc=t; labeljust=l; fontname="Inter"; fontsize=20; fontcolor="#1A2332";
+  label=<<B>Fig. 1 · Estructura base: patrones Fachada, DAO y DTO en una capa de FutData</B>>;
+  node [shape=plain, fontname="Inter"]; edge [fontname="Inter", fontsize=10, color="#4B5563", fontcolor="#374151"];
+  { rank=same;
+    "L0" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>PRESENTACION</B></FONT>>, fontname="Inter"];
+    "RecursoController" [label=<<TABLE BORDER="2" COLOR="#1565C0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#E3F2FD"><TR><TD BGCOLOR="#1565C0" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Controller&#187;</FONT><BR/><B>RecursoController</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+crear(RecursoRequestDTO) RecursoResponseDTO</FONT></TD></TR><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+consultar(id UUID) RecursoResponseDTO</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L0" -> "RecursoController" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L1" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>DTO / MAPPER</B></FONT>>, fontname="Inter"];
+    "RecursoRequestDTO" [label=<<TABLE BORDER="2" COLOR="#F9A825" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#FFF8E1"><TR><TD BGCOLOR="#F9A825" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;DTO&#187;</FONT><BR/><B>RecursoRequestDTO</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+datosDeEntrada</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L1" -> "RecursoRequestDTO" [style=invis, weight=50];
+    "RecursoResponseDTO" [label=<<TABLE BORDER="2" COLOR="#F9A825" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#FFF8E1"><TR><TD BGCOLOR="#F9A825" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;DTO&#187;</FONT><BR/><B>RecursoResponseDTO</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+datosDeSalida</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "RecursoRequestDTO" -> "RecursoResponseDTO" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L2" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>SERVICIOS · FACHADA</B></FONT>>, fontname="Inter"];
+    "IRecursoService" [label=<<TABLE BORDER="2" COLOR="#2E7D32" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#E8F5E9"><TR><TD BGCOLOR="#2E7D32" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Fachada (interfaz)&#187;</FONT><BR/><B>IRecursoService</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+operacionDeNegocioA() Resultado</FONT></TD></TR><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+operacionDeNegocioB() Resultado</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L2" -> "IRecursoService" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L3" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>SERVICIOS · IMPLEMENTACION<BR/>+ Mapper</B></FONT>>, fontname="Inter"];
+    "RecursoMapper" [label=<<TABLE BORDER="2" COLOR="#F9A825" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#FFF8E1"><TR><TD BGCOLOR="#F9A825" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Mapper&#187;</FONT><BR/><B>RecursoMapper</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+toEntity(RecursoRequestDTO) Recurso</FONT></TD></TR><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+toDTO(Recurso) RecursoResponseDTO</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L3" -> "RecursoMapper" [style=invis, weight=50];
+    "RecursoServiceImpl" [label=<<TABLE BORDER="2" COLOR="#2E7D32" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#E8F5E9"><TR><TD BGCOLOR="#2E7D32" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><B>RecursoServiceImpl</B></TD></TR><TR><TD ALIGN="LEFT" CELLPADDING="4"><FONT POINT-SIZE="10" COLOR="#4B5563"><I>implementa IRecursoService<BR/>coordina reglas, DAO y servicios</I></FONT></TD></TR></TABLE>>];
+    "RecursoMapper" -> "RecursoServiceImpl" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L4" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>DOMINIO · PERSISTENCIA (interfaz)</B></FONT>>, fontname="Inter"];
+    "ReglasRecurso" [label=<<TABLE BORDER="2" COLOR="#C62828" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#FFEBEE"><TR><TD BGCOLOR="#C62828" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Reglas de dominio&#187;</FONT><BR/><B>ReglasRecurso</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+validar(Recurso) void</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L4" -> "ReglasRecurso" [style=invis, weight=50];
+    "IRecursoDAO" [label=<<TABLE BORDER="2" COLOR="#6A1B9A" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#F3E5F5"><TR><TD BGCOLOR="#6A1B9A" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;DAO (interfaz)&#187;</FONT><BR/><B>IRecursoDAO</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+buscarPorId(id UUID) Recurso</FONT></TD></TR><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+guardar(Recurso) Recurso</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "ReglasRecurso" -> "IRecursoDAO" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L5" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>PERSISTENCIA (impl)</B></FONT>>, fontname="Inter"];
+    "RecursoDAOImpl" [label=<<TABLE BORDER="2" COLOR="#6A1B9A" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#F3E5F5"><TR><TD BGCOLOR="#6A1B9A" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><B>RecursoDAOImpl</B></TD></TR><TR><TD ALIGN="LEFT" CELLPADDING="4"><FONT POINT-SIZE="10" COLOR="#4B5563"><I>implementa IRecursoDAO<BR/>SQL con JDBC</I></FONT></TD></TR></TABLE>>];
+    "L5" -> "RecursoDAOImpl" [style=invis, weight=50];
+  }
+  { rank=same;
+    "L6" [shape=plaintext, label=<<FONT POINT-SIZE="11" COLOR="#6B7280"><B>ENTIDAD · FUENTE DE DATOS</B></FONT>>, fontname="Inter"];
+    "Recurso" [label=<<TABLE BORDER="2" COLOR="#37474F" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#ECEFF1"><TR><TD BGCOLOR="#37474F" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Entidad&#187;</FONT><BR/><B>Recurso</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">-id UUID</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "L6" -> "Recurso" [style=invis, weight=50];
+    "ConexionPool" [label=<<TABLE BORDER="2" COLOR="#00695C" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" BGCOLOR="#E0F2F1"><TR><TD BGCOLOR="#00695C" ALIGN="CENTER"><FONT COLOR="white" POINT-SIZE="1"> </FONT></TD></TR><TR><TD ALIGN="CENTER" CELLPADDING="5"><FONT POINT-SIZE="10" COLOR="#4B5563">&#171;Fuente de datos&#187;</FONT><BR/><B>ConexionPool</B></TD></TR><TR><TD ALIGN="LEFT" BORDER="0" CELLPADDING="3"><TABLE BORDER="0" CELLSPACING="0" CELLPADDING="1"><TR><TD ALIGN="LEFT" BALIGN="LEFT" CELLPADDING="1"><FONT POINT-SIZE="10">+getConnection() Connection</FONT></TD></TR></TABLE></TD></TR></TABLE>>];
+    "Recurso" -> "ConexionPool" [style=invis, weight=50];
+  }
+  "L0" -> "L1" [style=invis, weight=100];
+  "L1" -> "L2" [style=invis, weight=100];
+  "L2" -> "L3" [style=invis, weight=100];
+  "L3" -> "L4" [style=invis, weight=100];
+  "L4" -> "L5" [style=invis, weight=100];
+  "L5" -> "L6" [style=invis, weight=100];
+  "N1" [shape=note, style=filled, fillcolor="#FFFDE7", color="#F9A825", fontname="Inter", fontsize=10, label=<<B>FACHADA</B><BR ALIGN="LEFT"/>Una interfaz simple que oculta la coordinacion<BR ALIGN="LEFT"/>de reglas, DAO y servicios externos.<BR ALIGN="LEFT"/>El controlador no conoce lo que hay detras.<BR ALIGN="LEFT"/>>, width=2.6];
+  "N1" -> "IRecursoService" [style=dotted, arrowhead=none, constraint=false, color="#F9A825"];
+  { rank=same; "N1"; "IRecursoService"; }
+  "N2" [shape=note, style=filled, fillcolor="#FFFDE7", color="#F9A825", fontname="Inter", fontsize=10, label=<<B>DAO</B><BR ALIGN="LEFT"/>Aisla el SQL. Cambiar la base de datos<BR ALIGN="LEFT"/>solo afecta a RecursoDAOImpl.<BR ALIGN="LEFT"/>>, width=2.6];
+  "N2" -> "IRecursoDAO" [style=dotted, arrowhead=none, constraint=false, color="#F9A825"];
+  { rank=same; "N2"; "IRecursoDAO"; }
+  "N3" [shape=note, style=filled, fillcolor="#FFFDE7", color="#F9A825", fontname="Inter", fontsize=10, label=<<B>DTO</B><BR ALIGN="LEFT"/>Lo que viaja por la API.<BR ALIGN="LEFT"/>La entidad nunca se expone.<BR ALIGN="LEFT"/>>, width=2.6];
+  "N3" -> "RecursoRequestDTO" [style=dotted, arrowhead=none, constraint=false, color="#F9A825"];
+  "LEG" [shape=plain, label=<<TABLE BORDER="1" COLOR="#9CA3AF" CELLBORDER="0" CELLSPACING="2" CELLPADDING="3" BGCOLOR="white"><TR><TD COLSPAN="2" ALIGN="LEFT"><B><FONT POINT-SIZE="10">Leyenda</FONT></B></TD></TR><TR><TD BGCOLOR="#E3F2FD" BORDER="1" COLOR="#1565C0" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">Controlador (api.controllers)</FONT></TD></TR><TR><TD BGCOLOR="#FFF8E1" BORDER="1" COLOR="#F9A825" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">DTO / Mapper (api.dto)</FONT></TD></TR><TR><TD BGCOLOR="#E8F5E9" BORDER="1" COLOR="#2E7D32" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">Fachada (services.facade / impl)</FONT></TD></TR><TR><TD BGCOLOR="#FFEBEE" BORDER="1" COLOR="#C62828" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">Reglas de dominio (domain.rules)</FONT></TD></TR><TR><TD BGCOLOR="#F3E5F5" BORDER="1" COLOR="#6A1B9A" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">DAO (persistence.dao / impl)</FONT></TD></TR><TR><TD BGCOLOR="#ECEFF1" BORDER="1" COLOR="#37474F" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">Entidad (domain.entities)</FONT></TD></TR><TR><TD BGCOLOR="#E0F2F1" BORDER="1" COLOR="#00695C" WIDTH="18" HEIGHT="14"> </TD><TD ALIGN="LEFT"><FONT POINT-SIZE="10">Fuente de datos, servicio externo o util</FONT></TD></TR><TR><TD ALIGN="LEFT" COLSPAN="2"><FONT POINT-SIZE="10">- - -&#9655; implementa &#160;&#160; - - -&gt; depende de (usa) &#160;&#160; &#9671;&#8212; agregacion &#160;&#160; &#9670;&#8212; composicion</FONT></TD></TR></TABLE>>];
+  "ConexionPool" -> "LEG" [style=invis, weight=1];
+  "RecursoController" -> "IRecursoService" [label="usa solo la interfaz", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "RecursoController" -> "RecursoRequestDTO" [label="recibe", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "RecursoController" -> "RecursoResponseDTO" [label="responde", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "RecursoMapper" -> "RecursoRequestDTO" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=false];
+  "RecursoMapper" -> "RecursoResponseDTO" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=false];
+  "RecursoMapper" -> "Recurso" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "IRecursoService" -> "RecursoServiceImpl" [style=dashed, dir=back, arrowtail=empty, arrowsize=1.0, constraint=true];
+  "RecursoServiceImpl" -> "RecursoMapper" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=false];
+  "RecursoServiceImpl" -> "ReglasRecurso" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "RecursoServiceImpl" -> "IRecursoDAO" [label="usa solo la interfaz", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "IRecursoDAO" -> "RecursoDAOImpl" [style=dashed, dir=back, arrowtail=empty, arrowsize=1.0, constraint=true];
+  "RecursoDAOImpl" -> "ConexionPool" [label="JDBC", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "RecursoDAOImpl" -> "Recurso" [label="construye", style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+  "ReglasRecurso" -> "Recurso" [style=dashed, arrowhead=vee, arrowsize=0.8, constraint=true];
+}
