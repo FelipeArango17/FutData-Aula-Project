@@ -30,7 +30,7 @@ export default function AppShell() {
   return (
     <>
       {/* inert: con el Drawer abierto, el resto de la página no recibe foco ni clics */}
-      <div inert={drawerOpen} className="flex min-h-dvh flex-col md:flex-row">
+      <div inert={drawerOpen} className="flex min-h-app flex-col md:flex-row">
         <Sidebar role={role} />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppShell from './components/AppShell.jsx'
 import RoleRoute from './components/RoleRoute.jsx'
 import PlaceholderPage from './pages/PlaceholderPage.jsx'
+import { screens, extraScreens } from './pages/index.js'
 import RoleProvider from './context/RoleProvider.jsx'
 import { useRole } from './context/RoleContext.js'
 import { roles, menus, getItems } from './config/menus.js'
@@ -21,8 +22,14 @@ function App() {
             {roles.map((role) => (
               <Route key={role} path={`/${role}`} element={<RoleRoute role={role} />}>
                 <Route index element={<Navigate to={menus[role][0].items[0].to} replace />} />
-                {getItems(role).map((item) => (
-                  <Route key={item.to} path={item.to} element={<PlaceholderPage title={item.label} />} />
+                {getItems(role).map((item) => {
+                  const Screen = screens[item.to]
+                  return (
+                    <Route key={item.to} path={item.to} element={Screen ? <Screen /> : <PlaceholderPage title={item.label} />} />
+                  )
+                })}
+                {(extraScreens[role] ?? []).map(({ path, Screen }) => (
+                  <Route key={path} path={path} element={<Screen />} />
                 ))}
                 <Route path="*" element={<Navigate to={`/${role}`} replace />} />
               </Route>
