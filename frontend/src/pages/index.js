@@ -7,8 +7,7 @@ import AcuHorarios from './acudiente/Horarios.jsx'
 import AcuNotificaciones from './acudiente/Notificaciones.jsx'
 import EntInicio from './entrenador/Inicio.jsx'
 import EntAsistencia from './entrenador/Asistencia.jsx'
-import EntHorarios from './entrenador/Horarios.jsx'
-import EntNuevo from './entrenador/NuevoEntrenamiento.jsx'
+import Programacion from './entrenamientos/Programacion.jsx'
 import EntTorneos from './entrenador/Torneos.jsx'
 import TesInicio from './tesorero/Inicio.jsx'
 import TesPagos from './tesorero/Pagos.jsx'
@@ -19,7 +18,6 @@ import AdmDashboard from './administrador/Dashboard.jsx'
 import AdmDeportistas from './administrador/Deportistas.jsx'
 import AdmInscribir from './administrador/Inscribir.jsx'
 import AdmDocumentos from './administrador/Documentos.jsx'
-import AdmHorarios from './administrador/Horarios.jsx'
 import AdmTorneos from './administrador/Torneos.jsx'
 import AdmUsuarios from './administrador/Usuarios.jsx'
 import AdmRespaldo from './administrador/Respaldo.jsx'
@@ -37,7 +35,7 @@ export const screens = {
   '/acudiente/notificaciones': AcuNotificaciones,
   '/entrenador/inicio': EntInicio,
   '/entrenador/asistencia': EntAsistencia,
-  '/entrenador/horarios': EntHorarios,
+  '/entrenador/horarios': Programacion, // misma pantalla para entrenador y administrador (HU-026)
   '/entrenador/torneos': EntTorneos,
   '/tesorero/inicio': TesInicio,
   '/tesorero/pagos': TesPagos,
@@ -48,7 +46,7 @@ export const screens = {
   '/administrador/documentos': AdmDocumentos,
   '/administrador/usuarios': AdmUsuarios,
   '/administrador/asistencia': EntAsistencia, // mismo control de asistencia que el entrenador (Figma AD10)
-  '/administrador/horarios': AdmHorarios,
+  '/administrador/horarios': Programacion,
   '/administrador/torneos': AdmTorneos,
   '/administrador/pagos': AdmPagos,
   '/administrador/reportes': AdmReportes,
@@ -58,9 +56,14 @@ export const screens = {
 // Pantallas que no están en el menú (se llega desde un botón).
 export const extraScreens = {
   acudiente: [{ path: '/acudiente/jugadores/:id', Screen: AcuFicha }],
-  entrenador: [{ path: '/entrenador/horarios/nuevo', Screen: EntNuevo }],
+  entrenador: [
+    { path: '/entrenador/horarios/nuevo', Screen: Programacion },
+    { path: '/entrenador/horarios/:id/editar', Screen: Programacion },
+  ],
   tesorero: [{ path: '/tesorero/pagos/registrar', Screen: TesRegistrar }],
   administrador: [
+    { path: '/administrador/horarios/nuevo', Screen: Programacion },
+    { path: '/administrador/horarios/:id/editar', Screen: Programacion },
     { path: '/administrador/deportistas/inscribir', Screen: AdmInscribir },
     { path: '/administrador/pagos/registrar', Screen: AdmRegistrarPago },
   ],

@@ -5,6 +5,7 @@ const base =
 const variants = {
   primary: 'bg-brand-primary text-on-dark hover:bg-brand-primary-hover',
   secondary: 'border bg-surface text-primary hover:bg-app',
+  danger: 'border border-danger bg-danger text-danger hover:bg-surface',
 }
 
 // Con `to` es un enlace; sin `to` es un botón (sin acción mientras no haya backend).
