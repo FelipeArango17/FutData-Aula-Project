@@ -52,6 +52,9 @@ export const menus = {
   ],
   administrador: [
     {
+      items: [{ label: 'Dashboard', to: '/administrador/dashboard' }],
+    },
+    {
       title: 'Personas',
       items: [
         { label: 'Deportistas', to: '/administrador/deportistas' },

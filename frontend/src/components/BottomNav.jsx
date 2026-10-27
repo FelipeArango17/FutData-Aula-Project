@@ -8,7 +8,7 @@ export default function BottomNav({ role }) {
   if (!items) return null
 
   return (
-    <nav aria-label="Accesos rápidos" className="border-t bg-surface pb-safe md:hidden">
+    <nav aria-label="Accesos rápidos" className="sticky bottom-0 z-20 border-t bg-surface pb-safe md:hidden">
       {/* 4 columnas si caben; con letra grande se acomoda solo en 2 filas */}
       <ul className="grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))]">
         {items.map((item) => (

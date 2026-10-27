@@ -6,10 +6,23 @@
   body {
     @apply bg-app text-primary font-sans;
   }
+  /* Textos largos se parten en vez de desbordar (letra grande, pantallas de 320 px) */
+  h1, h2, h3, p, dt, dd, legend, label {
+    @apply break-words;
+  }
 }
 
 /* Zonas seguras (notch y barra de gestos): se suman al padding, no lo reemplazan */
 @layer utilities {
+  /* Alto de pantalla: vh de respaldo y dvh después (Safari < 15.4 no entiende dvh). Se declaran juntos para que dvh gane. */
+  .min-h-app {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .max-h-app {
+    max-height: 100vh;
+    max-height: 100dvh;
+  }
   .pt-safe {
     padding-top: env(safe-area-inset-top);
   }
