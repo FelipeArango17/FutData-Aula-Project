@@ -58,6 +58,7 @@ Familia: **Plus Jakarta Sans** (400, 500, 600, 700). Clase base: `font-sans` (de
 | KPI | KPI/Number | `text-kpi` | 26 / 32 px | 700 |
 
 Notas:
+- **Los tamaños van en `rem`, no en `px`** (28 px = `1.75rem`, 22 = `1.375rem`, 18 = `1.125rem`, 14 = `0.875rem`, 12 = `0.75rem`, 11 = `0.6875rem`, 26 = `1.625rem`; los interlineados también). Así el texto escala cuando el usuario sube el tamaño de letra del navegador o de la app (CU-08, hasta 200 %). En `px` ese ajuste no tendría efecto. La tabla de arriba muestra los valores de Figma en px; en `tailwind.config.js` están en rem.
 - `Label/Caps` no aplica transformación de mayúsculas en Figma; si una pantalla lo muestra en mayúsculas, añadir la clase `uppercase` en ese uso.
 - `KPI` es para los números grandes de las tarjetas de métricas financieras y deportivas.
 

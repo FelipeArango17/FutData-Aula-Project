@@ -10,14 +10,14 @@ export default {
       },
       // Estilos de texto: Display, Heading, Body, Label, KPI
       fontSize: {
-        display: ['28px', { lineHeight: '36px', fontWeight: '700' }], // Display/H1
-        h2: ['22px', { lineHeight: '30px', fontWeight: '600' }],      // Heading/H2
-        h3: ['18px', { lineHeight: '26px', fontWeight: '600' }],      // Heading/H3
-        body: ['14px', { lineHeight: '22px', fontWeight: '400' }],    // Body/Base
-        'body-medium': ['14px', { lineHeight: '22px', fontWeight: '500' }], // Body/Medium
-        small: ['12px', { lineHeight: '18px', fontWeight: '400' }],   // Body/Small
-        label: ['11px', { lineHeight: '16px', fontWeight: '600' }],   // Label/Caps
-        kpi: ['26px', { lineHeight: '32px', fontWeight: '700' }],     // KPI/Number
+        display: ['1.75rem', { lineHeight: '2.25rem', fontWeight: '700' }], // Display/H1
+        h2: ['1.375rem', { lineHeight: '1.875rem', fontWeight: '600' }],      // Heading/H2
+        h3: ['1.125rem', { lineHeight: '1.625rem', fontWeight: '600' }],      // Heading/H3
+        body: ['0.875rem', { lineHeight: '1.375rem', fontWeight: '400' }],    // Body/Base
+        'body-medium': ['0.875rem', { lineHeight: '1.375rem', fontWeight: '500' }], // Body/Medium
+        small: ['0.75rem', { lineHeight: '1.125rem', fontWeight: '400' }],   // Body/Small
+        label: ['0.6875rem', { lineHeight: '1rem', fontWeight: '600' }],   // Label/Caps
+        kpi: ['1.625rem', { lineHeight: '2rem', fontWeight: '700' }],     // KPI/Number
       },
       backgroundColor: {
         app: 'var(--color-bg-app)',
