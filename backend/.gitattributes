@@ -1,0 +1,2 @@
+# mvnw.cmd lo ejecuta cmd.exe, que necesita fin de línea CRLF; el resto del repo usa LF.
+*.cmd text eol=crlf
