@@ -4,7 +4,7 @@ import Page from '../../components/ui/Page.jsx'
 import Button from '../../components/ui/Button.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
 import DialogoConfirmacion from '../../components/ui/DialogoConfirmacion.jsx'
-import AvisoEstado from '../../components/entrenamientos/AvisoEstado.jsx'
+import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import CuadriculaSemanal from '../../components/entrenamientos/CuadriculaSemanal.jsx'
 import ListaPorDia from '../../components/entrenamientos/ListaPorDia.jsx'
 import FormularioEntrenamiento from '../../components/entrenamientos/FormularioEntrenamiento.jsx'
@@ -22,7 +22,7 @@ export default function Programacion() {
   const { id } = useParams()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { entrenamientos, cargado, semana, setSemana, crear, editar, eliminar, detectarConflicto } = useEntrenamientos()
+  const { entrenamientos, cargado, semana, setSemana, aviso, cerrarAviso, crear, editar, eliminar, detectarConflicto } = useEntrenamientos()
   const [filtro, setFiltro] = useState('Todas')
   const [porEliminar, setPorEliminar] = useState(null)
   const tituloMovil = useRef(null)
@@ -92,7 +92,7 @@ export default function Programacion() {
       subtitle={`${role === 'administrador' ? 'Todas las categorías · semana' : 'Semana'} del ${rangoSemana(semana)}`}
       ocultarEnMovil={formularioAbierto}
     >
-      <AvisoEstado />
+      <AvisoEstado aviso={aviso} onCerrar={cerrarAviso} />
       <div className="flex flex-col gap-6 md:flex-row md:flex-wrap md:items-start">
         <div ref={columnaPrincipal} className={`${formularioAbierto ? 'hidden md:flex' : 'flex'} min-w-0 flex-col gap-4 md:flex-1 md:basis-[40rem]`}>
           <div className="flex flex-wrap gap-2">
