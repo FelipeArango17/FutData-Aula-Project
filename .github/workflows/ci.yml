@@ -1,0 +1,84 @@
+# Integración continua de FutData (HU-051).
+# Se ejecuta en cada Pull Request hacia develop o main y en cada push a esas ramas.
+# Si cualquier paso falla (lint, compilación), el check queda en rojo y el PR no debe fusionarse.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# Solo lectura: el pipeline no necesita escribir en el repositorio
+permissions:
+  contents: read
+
+# Si se sube un commit nuevo a la misma rama, cancela la ejecución anterior
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (lint y build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci instala exactamente lo que dice package-lock.json y falla si no coincide con package.json
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Compilar (build)
+        run: npm run build
+
+  backend:
+    name: Backend (compilar)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # Mientras el proyecto Spring Boot no exista (backend/pom.xml), este job termina en verde sin compilar
+      - name: Detectar el proyecto Maven
+        id: detectar
+        working-directory: .
+        run: |
+          if [ -f backend/pom.xml ]; then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Backend::Todavía no hay backend/pom.xml; no se compila el backend."
+          fi
+
+      - name: Instalar Java 21
+        if: steps.detectar.outputs.existe == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: Compilar y empaquetar
+        if: steps.detectar.outputs.existe == 'true'
+        run: mvn -B -ntp -DskipTests package
