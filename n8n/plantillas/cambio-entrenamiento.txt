@@ -1,0 +1,13 @@
+{{saludo}}
+
+{{intro}}
+
+{{detalle}}
+{{motivo}}
+Si tienes preguntas, comunícate con el entrenador o con el club.
+
+--
+Recibes este aviso porque estás registrado en la categoría {{categoria}}
+como entrenador, jugador o acudiente.
+Asociación Deportiva Prado Fútbol Club · FutData
+Este es un correo automático, por favor no lo respondas.

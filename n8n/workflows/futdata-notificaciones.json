@@ -137,6 +137,30 @@
               },
               "renameOutput": true,
               "outputKey": "CODIGO_2FA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000002",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "CAMBIO_ENTRENAMIENTO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CAMBIO_ENTRENAMIENTO"
             }
           ]
         },
@@ -281,7 +305,7 @@
             {
               "id": "d0000001-0000-4000-8000-000000000003",
               "name": "correoEnmascarado",
-              "value": "={{ /^[^@\\s]+@[^@\\s]+$/.test(String($('Webhook').first().json.body.datos.correo)) ? String($('Webhook').first().json.body.datos.correo).replace(/^([^@])(?:[^@]+([^@])|[^@]?)@/, '$1***$2@') : '***' }}",
+              "value": "={{ /^[^@\\s]+@[^@\\s]+$/.test(String($json.correo ?? $('Webhook').first().json.body.datos.correo)) ? String($json.correo ?? $('Webhook').first().json.body.datos.correo).replace(/^([^@])(?:[^@]+([^@])|[^@]?)@/, '$1***$2@') : '***' }}",
               "type": "string"
             },
             {
@@ -387,9 +411,171 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
+        2440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de CAMBIO_ENTRENAMIENTO y depura los destinatarios (sin duplicados por\n// correo, sin mayúsculas, y sin correos inválidos). Nunca lanza errores: devuelve\n// { valido, detalle, destinatarios } y el nodo IF siguiente responde 202 o 400.\n// \"detalle\" explica el primer problema y nunca incluye correos ni nombres.\nconst TIPOS = ['CREADO', 'MODIFICADO', 'CANCELADO'];\nconst MAX_DESTINATARIOS = 200;\nconst MAX_TEXTO = 120;\nconst MAX_MOTIVO = 500;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_FECHA = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst RE_HORA = /^([01]\\d|2[0-3]):[0-5]\\d$/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst vacio = (v) => v === undefined || v === null;\nconst textoValido = (v, max) => typeof v === 'string' && v.trim() !== '' && v.trim().length <= max;\nconst fechaValida = (v) =>\n  typeof v === 'string' && RE_FECHA.test(v) && DateTime.fromISO(v, { zone: 'America/Bogota' }).isValid;\nconst horaValida = (v) => typeof v === 'string' && RE_HORA.test(v);\n\n// Reglas de cada campo del entrenamiento; \"anterior\" usa las mismas.\nconst CAMPOS = {\n  categoria: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n  fecha: [fechaValida, 'debe ser una fecha con el formato AAAA-MM-DD'],\n  horaInicio: [horaValida, 'debe tener el formato HH:mm (00:00 a 23:59)'],\n  lugar: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n  entrenador: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n};\n\nfunction validar(datos) {\n  if (!TIPOS.includes(datos.tipoCambio)) return 'tipoCambio debe ser CREADO, MODIFICADO o CANCELADO';\n  if (!esObjeto(datos.entrenamiento)) return 'falta el objeto entrenamiento';\n  for (const [campo, [valido, regla]] of Object.entries(CAMPOS)) {\n    if (!valido(datos.entrenamiento[campo])) return `entrenamiento.${campo} ${regla}`;\n  }\n  // \"anterior\" solo cuenta en MODIFICADO; con otro tipo se ignora sin validarlo.\n  if (datos.tipoCambio === 'MODIFICADO' && !vacio(datos.anterior)) {\n    if (!esObjeto(datos.anterior)) return 'anterior debe ser un objeto';\n    for (const campo of ['fecha', 'horaInicio', 'lugar', 'entrenador']) {\n      const [valido, regla] = CAMPOS[campo];\n      if (!vacio(datos.anterior[campo]) && !valido(datos.anterior[campo])) return `anterior.${campo} ${regla}`;\n    }\n  }\n  if (!vacio(datos.motivo) && (typeof datos.motivo !== 'string' || datos.motivo.trim().length > MAX_MOTIVO)) {\n    return `motivo debe ser texto de máximo ${MAX_MOTIVO} caracteres`;\n  }\n  if (\n    !Array.isArray(datos.destinatarios) ||\n    datos.destinatarios.length < 1 ||\n    datos.destinatarios.length > MAX_DESTINATARIOS\n  ) {\n    return `destinatarios debe tener entre 1 y ${MAX_DESTINATARIOS} elementos`;\n  }\n  return null;\n}\n\nfunction depurar(lista) {\n  const vistos = new Set();\n  const destinatarios = [];\n  for (const d of lista) {\n    if (!esObjeto(d) || typeof d.correo !== 'string') continue;\n    const correo = d.correo.trim();\n    if (correo.length > 254 || !RE_CORREO.test(correo)) continue;\n    const clave = correo.toLowerCase();\n    if (vistos.has(clave)) continue;\n    vistos.add(clave);\n    destinatarios.push({ correo, nombre: textoValido(d.nombre, MAX_TEXTO) ? d.nombre.trim() : '' });\n  }\n  return destinatarios;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  const destinatarios = detalle ? [] : depurar(datos.destinatarios);\n  if (detalle) {\n    resultado = { valido: false, detalle, destinatarios };\n  } else if (destinatarios.length === 0) {\n    resultado = { valido: false, detalle: 'destinatarios no tiene ningún correo válido', destinatarios };\n  } else {\n    resultado = { valido: true, detalle: '', destinatarios };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido', destinatarios: [] };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000017",
+      "name": "Validar datos CAMBIO_ENTRENAMIENTO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        580
+      ],
+      "notes": "Valida los datos, quita destinatarios duplicados (sin distinguir mayúsculas) y descarta correos inválidos."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000004-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000018",
+      "name": "¿Datos de entrenamiento válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: true, destinatarios: $json.destinatarios.length }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000019",
+      "name": "Responder 202",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        500
+      ],
+      "notes": "Responde antes de enviar: el backend espera máximo 5 s y el aviso a muchos destinatarios tarda más."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000020",
+      "name": "Responder 400 entrenamiento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        680
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Arma un correo por destinatario con las plantillas n8n/plantillas/cambio-entrenamiento.*\n// (copias abajo; si cambias la plantilla, actualiza también estas constantes).\n// Los datos ya vienen validados por \"Validar datos CAMBIO_ENTRENAMIENTO\".\nconst PLANTILLA_HTML = \"<!DOCTYPE html>\\n<html lang=\\\"es\\\" xmlns=\\\"http://www.w3.org/1999/xhtml\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">\\n<meta name=\\\"x-apple-disable-message-reformatting\\\">\\n<meta name=\\\"color-scheme\\\" content=\\\"light\\\">\\n<meta name=\\\"supported-color-schemes\\\" content=\\\"light\\\">\\n<title>{{asunto}}</title>\\n</head>\\n<body style=\\\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\\\">\\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\\n<div style=\\\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\\\">\\n{{vistaPrevia}}\\n</div>\\n<table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"background-color:#F7F8FA;\\\">\\n  <tr>\\n    <td align=\\\"center\\\" style=\\\"padding:32px 16px;\\\">\\n      <table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\\\">\\n        <!-- Encabezado -->\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\\\">\\n            <span style=\\\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\\\">Fut<span style=\\\"color:#3CB043;\\\">Data</span></span>\\n          </td>\\n        </tr>\\n        <!-- Cuerpo -->\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\\\">\\n            <!-- Etiqueta del tipo de cambio -->\\n            <table role=\\\"presentation\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"margin:0 0 20px 0;\\\">\\n              <tr>\\n                <td style=\\\"background-color:{{etiquetaFondo}}; border-radius:999px; padding:6px 14px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:18px; font-weight:700; color:{{etiquetaTexto}};\\\">{{etiqueta}}</td>\\n              </tr>\\n            </table>\\n            <p style=\\\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\\\">{{saludo}}</p>\\n            <p style=\\\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\\\">{{intro}}</p>\\n          </td>\\n        </tr>\\n        <!-- Datos del entrenamiento -->\\n        <tr>\\n          <td style=\\\"padding:0 32px 24px 32px;\\\">\\n            <table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"border:1px solid #E5E7EB; border-radius:8px;\\\">\\n{{filasDetalle}}\\n            </table>\\n          </td>\\n        </tr>\\n{{bloqueMotivo}}\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"padding:0 32px 32px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#4B5563;\\\">\\n            Si tienes preguntas, comunícate con el entrenador o con el club.\\n          </td>\\n        </tr>\\n        <!-- Pie -->\\n        <tr>\\n          <td align=\\\"center\\\" style=\\\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\\\">\\n            Recibes este aviso porque estás registrado en la categoría {{categoria}} como entrenador, jugador o acudiente.<br>\\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\\n            Este es un correo automático, por favor no lo respondas.\\n          </td>\\n        </tr>\\n      </table>\\n    </td>\\n  </tr>\\n</table>\\n</body>\\n</html>\\n\";\nconst PLANTILLA_TEXTO = \"{{saludo}}\\n\\n{{intro}}\\n\\n{{detalle}}\\n{{motivo}}\\nSi tienes preguntas, comunícate con el entrenador o con el club.\\n\\n--\\nRecibes este aviso porque estás registrado en la categoría {{categoria}}\\ncomo entrenador, jugador o acudiente.\\nAsociación Deportiva Prado Fútbol Club · FutData\\nEste es un correo automático, por favor no lo respondas.\\n\";\n\nconst DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];\nconst DIAS_CORTOS = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];\nconst MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\nconst MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];\nconst TIPOS = {\n  CREADO: { etiqueta: 'Nuevo entrenamiento', asunto: 'Nuevo entrenamiento', fondo: '#E8F7E8', texto: '#1F7A29' },\n  MODIFICADO: { etiqueta: 'Entrenamiento modificado', asunto: 'Cambio en el entrenamiento', fondo: '#FEF3E2', texto: '#7A4B00' },\n  CANCELADO: { etiqueta: 'Entrenamiento cancelado', asunto: 'Entrenamiento cancelado', fondo: '#FDECEA', texto: '#B3261E' },\n};\nconst FUENTE = \"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif;\";\n\n// Una sola línea, sin saltos (evita encabezados rotos en el asunto).\nconst limpiar = (v) => String(v ?? '').replace(/\\s+/g, ' ').trim();\nconst escapar = (v) =>\n  limpiar(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n// fecha y horaInicio son hora local de Colombia; no se convierten.\nconst momento = (fecha, hora = '00:00') => DateTime.fromISO(`${fecha}T${hora}`, { zone: 'America/Bogota' });\nconst hora12 = (dt) => `${dt.hour % 12 || 12}:${String(dt.minute).padStart(2, '0')} ${dt.hour < 12 ? 'a. m.' : 'p. m.'}`;\nconst fechaLarga = (dt) => `${DIAS[dt.weekday - 1]} ${dt.day} de ${MESES[dt.month - 1]} de ${dt.year}`;\nconst fechaCorta = (dt) => `${DIAS_CORTOS[dt.weekday - 1]} ${dt.day} ${MESES_CORTOS[dt.month - 1]}`;\n// Reemplaza {{marcador}} en una sola pasada: un texto de la petición con \"{{...}}\" no se vuelve a procesar.\nconst llenar = (plantilla, valores) => plantilla.replace(/\\{\\{(\\w+)\\}\\}/g, (_, clave) => valores[clave] ?? '');\n\nconst datos = $('Webhook').first().json.body.datos;\nconst destinatarios = $input.first().json.destinatarios;\nconst tipo = datos.tipoCambio;\nconst e = datos.entrenamiento;\nconst anterior = tipo === 'MODIFICADO' && datos.anterior && typeof datos.anterior === 'object' ? datos.anterior : {};\nconst cambio = (campo) => anterior[campo] != null && limpiar(anterior[campo]) !== limpiar(e[campo]);\nconst actual = momento(e.fecha, e.horaInicio);\nconst categoria = limpiar(e.categoria);\nconst motivo = tipo === 'CREADO' ? '' : limpiar(datos.motivo);\nconst t = TIPOS[tipo];\n\n// [etiqueta, valor actual, valor anterior (solo si cambió)]\nconst filas = [\n  ['Categoría', categoria, null],\n  ['Fecha', fechaLarga(actual), cambio('fecha') ? fechaLarga(momento(anterior.fecha)) : null],\n  ['Hora', `${hora12(actual)}, hora de Colombia`, cambio('horaInicio') ? hora12(momento(e.fecha, anterior.horaInicio)) : null],\n  ['Lugar', limpiar(e.lugar), cambio('lugar') ? limpiar(anterior.lugar) : null],\n  ['Entrenador', limpiar(e.entrenador), cambio('entrenador') ? limpiar(anterior.entrenador) : null],\n];\nconst hayCambios = filas.some((f) => f[2] !== null);\n\nconst filaHtml = ([etiqueta, valor, antes], i) => {\n  const borde = i < filas.length - 1 ? ' border-bottom:1px solid #E5E7EB;' : '';\n  const contenido =\n    antes === null\n      ? escapar(valor)\n      : `<span style=\"font-size:12px; color:#4B5563;\">Antes:</span> <span style=\"color:#4B5563; text-decoration:line-through;\">${escapar(antes)}</span><br>` +\n        `<span style=\"font-size:12px; color:#1F7A29;\">Ahora:</span> <strong style=\"color:#1F7A29;\">${escapar(valor)}</strong>`;\n  return [\n    '              <tr>',\n    `                <td width=\"110\" valign=\"top\" style=\"padding:12px 16px;${borde} ${FUENTE} font-size:13px; line-height:22px; font-weight:600; color:#4B5563;\">${etiqueta}</td>`,\n    `                <td valign=\"top\" style=\"padding:12px 16px;${borde}${antes === null ? '' : ' background-color:#E8F7E8;'} ${FUENTE} font-size:15px; line-height:22px; color:#1A2332;\">${contenido}</td>`,\n    '              </tr>',\n  ].join('\\n');\n};\nconst filaTexto = ([etiqueta, valor, antes]) => `${`${etiqueta}:`.padEnd(12)}${valor}${antes === null ? '' : ` (antes: ${antes})`}`;\n\nconst intro = {\n  CREADO: [`Se programó un nuevo entrenamiento para la categoría ${categoria}.`],\n  MODIFICADO: hayCambios\n    ? [\n        `Cambiaron los datos del entrenamiento de la categoría ${categoria}. Lo que cambió aparece resaltado:`,\n        `Cambiaron los datos del entrenamiento de la categoría ${categoria}. Lo que cambió muestra el valor anterior entre paréntesis:`,\n      ]\n    : [`Se actualizó el entrenamiento de la categoría ${categoria}. Estos son sus datos:`],\n  CANCELADO: [`Se canceló el entrenamiento de la categoría ${categoria}. No se realizará en la fecha y hora indicadas:`],\n}[tipo];\nconst introHtml = intro[0];\nconst introTexto = intro[1] ?? intro[0];\n\nconst bloqueMotivo = motivo\n  ? [\n      '        <tr>',\n      '          <td style=\"padding:0 32px 24px 32px;\">',\n      '            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">',\n      '              <tr>',\n      `                <td style=\"padding:16px; ${FUENTE} font-size:14px; line-height:22px; color:#7A4B00;\">`,\n      `                  <strong>Motivo:</strong> ${escapar(motivo)}`,\n      '                </td>',\n      '              </tr>',\n      '            </table>',\n      '          </td>',\n      '        </tr>',\n    ].join('\\n')\n  : '';\n\nconst asunto = `${t.asunto} ${categoria} · ${fechaCorta(actual)}, ${hora12(actual)}`;\nconst comunes = {\n  asunto: escapar(asunto),\n  vistaPrevia: escapar(`${t.etiqueta}: ${fechaLarga(actual)}, ${hora12(actual)}, ${limpiar(e.lugar)}.`),\n  etiqueta: t.etiqueta,\n  etiquetaFondo: t.fondo,\n  etiquetaTexto: t.texto,\n  intro: escapar(introHtml),\n  filasDetalle: filas.map(filaHtml).join('\\n'),\n  bloqueMotivo,\n  categoria: escapar(categoria),\n};\nconst comunesTexto = {\n  intro: introTexto,\n  detalle: filas.map(filaTexto).join('\\n'),\n  motivo: motivo ? `\\nMotivo: ${motivo}\\n` : '',\n  categoria,\n};\n\nreturn destinatarios.map((d) => ({\n  json: {\n    correo: d.correo,\n    asunto,\n    html: llenar(PLANTILLA_HTML, { ...comunes, saludo: d.nombre ? `Hola, ${escapar(d.nombre)}:` : 'Hola:' }),\n    texto: llenar(PLANTILLA_TEXTO, { ...comunesTexto, saludo: d.nombre ? `Hola, ${limpiar(d.nombre)}:` : 'Hola:' }),\n  },\n}));\n"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000021",
+      "name": "Armar un correo por destinatario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        500
+      ],
+      "notes": "Copia de n8n/plantillas/cambio-entrenamiento.html y .txt. Un ítem por destinatario."
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "={{ $json.asunto }}",
+        "emailFormat": "both",
+        "text": "={{ $json.texto }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000022",
+      "name": "Enviar aviso de entrenamiento",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        500
+      ],
+      "webhookId": "e2a1c0de-0338-4026-9a51-f17da7a00338",
+      "credentials": {
+        "smtp": {
+          "id": "smtpFutData",
+          "name": "SMTP FutData"
+        }
+      },
+      "notes": "Un correo por ítem (un destinatario en \"Para\"). Una falla va a la salida de error y no frena a los demás.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000005-0000-4000-8000-000000000001",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "CAMBIO_ENTRENAMIENTO",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000023",
+      "name": "¿Responder 502?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
         2220,
         80
-      ]
+      ],
+      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO) ya respondieron 202: solo registran la falla.",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -519,6 +705,13 @@
         ],
         [
           {
+            "node": "Validar datos CAMBIO_ENTRENAMIENTO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Responder 400 evento",
             "type": "main",
             "index": 0
@@ -599,7 +792,82 @@
       "main": [
         [
           {
+            "node": "¿Responder 502?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responder 502?": {
+      "main": [
+        [
+          {
             "node": "Responder 502",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Validar datos CAMBIO_ENTRENAMIENTO": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de entrenamiento válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de entrenamiento válidos?": {
+      "main": [
+        [
+          {
+            "node": "Responder 202",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 entrenamiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 202": {
+      "main": [
+        [
+          {
+            "node": "Armar un correo por destinatario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar un correo por destinatario": {
+      "main": [
+        [
+          {
+            "node": "Enviar aviso de entrenamiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar aviso de entrenamiento": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Armar registro de falla",
             "type": "main",
             "index": 0
           }
