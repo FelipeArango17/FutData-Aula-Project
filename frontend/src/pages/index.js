@@ -20,6 +20,7 @@ import AdmInscribir from './administrador/Inscribir.jsx'
 import AdmDocumentos from './administrador/Documentos.jsx'
 import AdmTorneos from './administrador/Torneos.jsx'
 import AdmUsuarios from './administrador/Usuarios.jsx'
+import AdmEntrenadorFormulario from './administrador/EntrenadorFormulario.jsx'
 import AdmRespaldo from './administrador/Respaldo.jsx'
 import AdmReportes from './administrador/Reportes.jsx'
 import AdmPagos from './administrador/Pagos.jsx'
@@ -64,6 +65,8 @@ export const extraScreens = {
   administrador: [
     { path: '/administrador/horarios/nuevo', Screen: Programacion },
     { path: '/administrador/horarios/:id/editar', Screen: Programacion },
+    { path: '/administrador/usuarios/entrenadores/nuevo', Screen: AdmEntrenadorFormulario },
+    { path: '/administrador/usuarios/entrenadores/:id/editar', Screen: AdmEntrenadorFormulario },
     { path: '/administrador/deportistas/inscribir', Screen: AdmInscribir },
     { path: '/administrador/pagos/registrar', Screen: AdmRegistrarPago },
   ],

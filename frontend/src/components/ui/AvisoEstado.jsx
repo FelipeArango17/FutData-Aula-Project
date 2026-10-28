@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react'
 import Icon from '../Icon.jsx'
-import { useEntrenamientos } from '../../context/EntrenamientosContext.js'
 
-// Mensaje de estado tras guardar o eliminar (simulado: no se envía ningún aviso real).
+// Mensaje de estado tras guardar o eliminar. aviso = { id, texto } o null; onCerrar quita el aviso.
+// Lo usan programación de entrenamientos y gestión de entrenadores.
 // El contenedor role="status" siempre está en la página; el mensaje aparece dentro.
 // Cuando llega un aviso nuevo recibe el foco: después de eliminar el botón que abrió el diálogo ya no existe.
-export default function AvisoEstado() {
-  const { aviso, cerrarAviso } = useEntrenamientos()
+export default function AvisoEstado({ aviso, onCerrar }) {
   const ref = useRef(null)
 
   useEffect(() => {
@@ -21,7 +20,7 @@ export default function AvisoEstado() {
           <p className="min-w-0 flex-1 basis-48 break-words text-body-medium">{aviso.texto}</p>
           <button
             type="button"
-            onClick={cerrarAviso}
+            onClick={onCerrar}
             className="flex min-h-11 items-center rounded-md px-3 text-body-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
             Cerrar aviso
