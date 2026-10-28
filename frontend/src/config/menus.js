@@ -34,6 +34,7 @@ export const menus = {
     {
       items: [
         { label: 'Inicio', to: '/entrenador/inicio' },
+        { label: 'Mis grupos', to: '/entrenador/grupos' },
         { label: 'Asistencia', to: '/entrenador/asistencia' },
         { label: 'Horarios', to: '/entrenador/horarios' },
         { label: 'Torneos', to: '/entrenador/torneos' },
@@ -58,6 +59,7 @@ export const menus = {
       title: 'Personas',
       items: [
         { label: 'Deportistas', to: '/administrador/deportistas' },
+        { label: 'Grupos', to: '/administrador/grupos' },
         { label: 'Documentos', to: '/administrador/documentos' },
         { label: 'Usuarios y roles', to: '/administrador/usuarios' },
       ],
