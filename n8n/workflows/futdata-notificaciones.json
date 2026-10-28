@@ -264,6 +264,118 @@
     },
     {
       "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0000001-0000-4000-8000-000000000001",
+              "name": "fecha",
+              "value": "={{ $now.setZone('America/Bogota').toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000002",
+              "name": "evento",
+              "value": "={{ String($('Webhook').first().json.body.evento) }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000003",
+              "name": "correoEnmascarado",
+              "value": "={{ /^[^@\\s]+@[^@\\s]+$/.test(String($('Webhook').first().json.body.datos.correo)) ? String($('Webhook').first().json.body.datos.correo).replace(/^([^@])(?:[^@]+([^@])|[^@]?)@/, '$1***$2@') : '***' }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000004",
+              "name": "error",
+              "value": "={{ String($json.error || 'Error desconocido').replace(/[^\\s@<>\"'(),;:\\[\\]]+@[^\\s@<>\"'(),;:\\[\\]]+/g, '[correo]').replace(/\\b\\d{6}\\b/g, '[código]').slice(0, 500) }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000005",
+              "name": "idEjecucion",
+              "value": "={{ String($execution.id) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000013",
+      "name": "Armar registro de falla",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1340,
+        80
+      ],
+      "notes": "Solo datos no sensibles: nunca el código, el nombre, el correo completo, el token ni el cuerpo.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0000002-0000-4000-8000-000000000001",
+              "name": "linea",
+              "value": "={{ JSON.stringify($json) + '\\n' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000014",
+      "name": "Serializar línea JSONL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        80
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "linea",
+        "binaryPropertyName": "data",
+        "options": {
+          "fileName": "fallas-notificaciones.jsonl"
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000015",
+      "name": "Convertir a archivo",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1780,
+        80
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/opt/futdata/logs/fallas-notificaciones.jsonl",
+        "dataPropertyName": "data",
+        "options": {
+          "append": true
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000016",
+      "name": "Guardar falla en log",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        80
+      ],
+      "notes": "Si el registro falla, el flujo sigue: la respuesta 502 sale de todas formas.",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"No se pudo enviar el correo\"\n}",
         "options": {
@@ -275,7 +387,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1340,
+        2220,
         80
       ]
     },
@@ -441,6 +553,50 @@
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar registro de falla": {
+      "main": [
+        [
+          {
+            "node": "Serializar línea JSONL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serializar línea JSONL": {
+      "main": [
+        [
+          {
+            "node": "Convertir a archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir a archivo": {
+      "main": [
+        [
+          {
+            "node": "Guardar falla en log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar falla en log": {
+      "main": [
         [
           {
             "node": "Responder 502",

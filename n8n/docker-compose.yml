@@ -34,10 +34,15 @@ services:
       EXECUTIONS_DATA_HARD_DELETE_BUFFER: "0"
       EXECUTIONS_DATA_PRUNE_HARD_DELETE_INTERVAL: "1"
       EXECUTIONS_DATA_MAX_AGE: "168"
+      # Carpetas que pueden leer o escribir los nodos de archivos (separadas por ";").
+      # Solo la de logs: ahí el flujo agrega las fallas de envío (sin datos sensibles).
+      N8N_RESTRICT_FILE_ACCESS_TO: /opt/futdata/logs
     volumes:
       - n8n_data:/home/node/.n8n
       # Flujos del repo, montados solo lectura para importarlos con la CLI.
       - ./workflows:/opt/futdata/workflows:ro
+      # Registro de fallas de envío (fallas-notificaciones.jsonl), con escritura. Ignorado por Git.
+      - ./logs:/opt/futdata/logs:rw
 
 volumes:
   n8n_data:

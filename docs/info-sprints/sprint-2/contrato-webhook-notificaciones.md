@@ -72,7 +72,7 @@ Todas las respuestas son JSON.
 | `400` | El evento no está soportado | `{"enviado": false, "error": "Evento no soportado"}` |
 | `400` | Faltan campos de `datos` o tienen formato inválido | `{"enviado": false, "error": "Faltan campos o tienen un formato inválido"}` |
 | `401` | Falta la cabecera `X-FutData-Token` o su valor no coincide | `{"enviado": false, "error": "Token inválido"}` |
-| `502` | Falló el envío por SMTP | `{"enviado": false, "error": "No se pudo enviar el correo"}` |
+| `502` | Falló el envío por SMTP. n8n ya registró la falla (ver [Registro de fallas en n8n](#registro-de-fallas-en-n8n)) | `{"enviado": false, "error": "No se pudo enviar el correo"}` |
 
 Otros códigos posibles que no genera el flujo, sino n8n o la red:
 
@@ -87,7 +87,7 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
 
 1. Definir aquí la tabla de campos de `datos` del evento.
 2. En n8n, agregar una regla al nodo Switch `Evento` con el nombre del evento. Cada regla es una salida nueva.
-3. Conectar esa salida a su propia validación de `datos`, su nodo de envío y sus nodos `Respond to Webhook` (`200`, `400`, `502`), igual que la rama de `CODIGO_2FA`.
+3. Conectar esa salida a su propia validación de `datos`, su nodo de envío y sus nodos `Respond to Webhook` (`200`, `400`), igual que la rama de `CODIGO_2FA`. La salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos y termina en `Responder 502`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.
 
 Mientras un evento no tenga rama, cae en la salida por defecto del Switch y responde `400 Evento no soportado`, así que el backend puede empezar a enviarlo sin romper nada.
@@ -119,16 +119,33 @@ futdata:
 | `200` | Continúa; responde `VerificacionDTO` con el correo enmascarado |
 | `400` | Error de programación (contrato roto): registrar el evento y el mensaje de error, lanzar excepción interna |
 | `401` | Configuración incorrecta del token: registrar como error de configuración |
-| `502`, timeout u otro error | Informar al usuario que no se pudo enviar el código y que lo intente de nuevo |
+| `502` | Informar al usuario que no se pudo enviar el código y que lo intente de nuevo. n8n ya registró la falla; el backend la registra además en su auditoría (ver abajo) |
+| Timeout u otro error | Igual que `502`. Aquí n8n pudo no registrar nada, así que el registro del backend es el único |
 
 **Seguridad y registros:**
 
 - **Nunca registrar el código** (ni el cuerpo completo de la petición) en logs, trazas de excepción ni en `AuditoriaLogger`. Registrar solo el evento, el `usuarioId` y el código HTTP de la respuesta. Si se activa el log de peticiones HTTP del cliente, debe excluir esta llamada.
 - Tampoco registrar el valor de `X-FutData-Token`.
 - El correo puede registrarse enmascarado (`j***@ejemplo.com`) si hace falta para soporte.
+- **Ante un `502`, registrar también la falla en la auditoría del backend** (`AuditoriaLogger`) cuando exista: evento, `usuarioId`, código HTTP y fecha. El log de n8n no reemplaza esa auditoría. Está en otro equipo, no conoce al usuario y no ve los timeouts ni las fallas de red, que solo ve el backend.
 
 **Pruebas:** con `MockRestServiceServer` (para `RestClient`) o un servidor simulado, verificar la cabecera, el cuerpo y el manejo de cada código de respuesta, y que el código no aparezca en los logs capturados.
 
 ## Datos que guarda n8n
 
-El flujo está configurado para no guardar ejecuciones (exitosas, fallidas ni manuales). Aun así, n8n 2.x marca la ejecución como borrada y la elimina de su base de datos después de un búfer; `n8n/docker-compose.yml` reduce ese búfer a 0 y revisa cada minuto, de modo que los datos de una ejecución (que incluyen el código) no permanecen más de ~1 minuto, por debajo de los 10 minutos de vigencia del código. Como consecuencia, los fallos del flujo no quedan en el historial de n8n: el diagnóstico se hace con la respuesta HTTP y los logs del backend.
+El flujo está configurado para no guardar ejecuciones (exitosas, fallidas ni manuales). Aun así, n8n 2.x marca la ejecución como borrada y la elimina de su base de datos después de un búfer; `n8n/docker-compose.yml` reduce ese búfer a 0 y revisa cada minuto, de modo que los datos de una ejecución (que incluyen el código) no permanecen más de ~1 minuto, por debajo de los 10 minutos de vigencia del código. Como consecuencia, los fallos del flujo no quedan en el historial de n8n; para las fallas de envío está el registro de la sección siguiente.
+
+## Registro de fallas en n8n
+
+Cuando el SMTP falla, antes de responder `502` el flujo agrega una línea en formato JSON Lines a `/opt/futdata/logs/fallas-notificaciones.jsonl` (en el repo, `n8n/logs/`, ignorado por Git). No depende del backend ni de la base de datos.
+
+```json
+{"fecha":"2026-10-28T09:42:06.626-05:00","evento":"CODIGO_2FA","correoEnmascarado":"o***3@gmail.com","error":"connect ECONNREFUSED 127.0.0.1:2525","idEjecucion":"4"}
+```
+
+- Campos: `fecha` (ISO 8601, `America/Bogota`), `evento`, `correoEnmascarado`, `error` (mensaje del SMTP, máximo 500 caracteres, con correos y números de 6 dígitos reemplazados) e `idEjecucion`.
+- **Nunca** contiene el código, el nombre, el correo completo, el token ni el cuerpo de la petición.
+- Si escribir el registro falla, el flujo responde `502` igual: para el backend, un `502` siempre significa "falló el envío", haya quedado o no la línea.
+- El registro de n8n complementa la auditoría del backend; no la reemplaza (ver *Seguridad y registros*).
+
+Detalles, consulta del archivo y propuesta de tabla `fallas_notificacion` para Supabase: [`n8n/README.md`, sección "Registro de fallas"](../../../n8n/README.md#registro-de-fallas).
