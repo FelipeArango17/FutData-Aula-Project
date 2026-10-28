@@ -1,6 +1,6 @@
 # Integración continua de FutData (HU-051).
 # Se ejecuta en cada Pull Request hacia develop o main y en cada push a esas ramas.
-# Si cualquier paso falla (lint, compilación), el check queda en rojo y el PR no debe fusionarse.
+# Si cualquier paso falla (lint, pruebas, compilación), el check queda en rojo y el PR no debe fusionarse.
 name: CI
 
 on:
@@ -44,6 +44,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Pruebas
+        run: npm test
+
       - name: Compilar (build)
         run: npm run build
 
@@ -81,4 +84,4 @@ jobs:
 
       - name: Compilar y empaquetar
         if: steps.detectar.outputs.existe == 'true'
-        run: mvn -B -ntp -DskipTests package
+        run: mvn -B -ntp verify
