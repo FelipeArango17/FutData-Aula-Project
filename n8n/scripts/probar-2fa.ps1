@@ -33,7 +33,7 @@ if (-not $token -or -not $correo) {
 
 $script:fallos = 0
 
-function Probar([string]$nombre, [int]$esperado, [hashtable]$cuerpo, [hashtable]$cabeceras = @{}) {
+function Probar([string]$nombre, [int]$esperado, [hashtable]$cuerpo, [hashtable]$cabeceras = @{}, [int]$tiempoMax = 15) {
     # Se envían bytes UTF-8 para que Windows PowerShell 5.1 no cambie las tildes.
     $bytes = [System.Text.Encoding]::UTF8.GetBytes(($cuerpo | ConvertTo-Json -Depth 5 -Compress))
     $params = @{
@@ -42,14 +42,19 @@ function Probar([string]$nombre, [int]$esperado, [hashtable]$cuerpo, [hashtable]
         Headers     = $cabeceras
         ContentType = 'application/json; charset=utf-8'
         Body        = $bytes
-        TimeoutSec  = 15
+        TimeoutSec  = $tiempoMax
     }
     try {
         $respuesta = Invoke-RestMethod @params
         $codigo = 200
         $detalle = $respuesta | ConvertTo-Json -Compress
     } catch {
-        if (-not $_.Exception.Response) { throw }
+        if (-not $_.Exception.Response) {
+            # Sin respuesta HTTP: n8n apagado o la petición superó $tiempoMax segundos.
+            Write-Host "FALLA $nombre -> sin respuesta en $tiempoMax s ($($_.Exception.Message)). ¿Está n8n encendido? (docker compose ps)" -ForegroundColor Red
+            $script:fallos++
+            return
+        }
         $codigo = [int]$_.Exception.Response.StatusCode
         $detalle = $_.ErrorDetails.Message
     }
@@ -105,7 +110,9 @@ Probar 'Sin token' 401 $valido
 Probar 'Evento inválido' 400 @{ evento = 'EVENTO_INEXISTENTE'; datos = @{ correo = $correo } } @{ 'X-FutData-Token' = $token }
 if ($ProbarFalla) {
     $antes = (Leer-Log).Count
-    Probar 'Falla de envío SMTP' 502 $valido @{ 'X-FutData-Token' = $token }
+    # El 502 llega cuando el SMTP se rinde: ~20 s con Docker Desktop y hasta 2 min si el host
+    # no responde (connectionTimeout de nodemailer). Por eso este caso espera más.
+    Probar 'Falla de envío SMTP' 502 $valido @{ 'X-FutData-Token' = $token } 150
     Revisar-Log $antes
 }
 

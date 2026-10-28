@@ -40,11 +40,17 @@ fi
 fallos=0
 
 # Envía un POST y compara el código HTTP. El cuerpo llega por stdin como bytes UTF-8.
+# Espera hasta TIEMPO_MAX segundos (15 por defecto).
 probar() {
   local nombre="$1" esperado="$2"; shift 2
-  local salida codigo
-  salida="$(curl -sS -m 15 -w $'\n%{http_code}' -X POST "$URL" \
-    -H 'Content-Type: application/json; charset=utf-8' "$@" --data-binary @-)"
+  local salida codigo tiempo="${TIEMPO_MAX:-15}"
+  if ! salida="$(curl -sS -m "$tiempo" -w $'\n%{http_code}' -X POST "$URL" \
+    -H 'Content-Type: application/json; charset=utf-8' "$@" --data-binary @-)"; then
+    # Sin respuesta HTTP: n8n apagado o la petición superó el tiempo máximo.
+    echo "FALLA $nombre -> sin respuesta en $tiempo s. ¿Está n8n encendido? (docker compose ps)"
+    fallos=$((fallos + 1))
+    return
+  fi
   codigo="${salida##*$'\n'}"
   if [[ "$codigo" == "$esperado" ]]; then
     echo "OK    $nombre -> $codigo ${salida%$'\n'*}"
@@ -96,7 +102,9 @@ JSON
 
 if (( PROBAR_FALLA )); then
   antes="$(leer_log | wc -l)"
-  probar "Falla de envío SMTP" 502 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
+  # El 502 llega cuando el SMTP se rinde: ~20 s con Docker Desktop y hasta 2 min si el host
+  # no responde (connectionTimeout de nodemailer). Por eso este caso espera más.
+  TIEMPO_MAX=150 probar "Falla de envío SMTP" 502 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
   revisar_log "$antes"
 fi
 
