@@ -1,30 +1,40 @@
 import { useEffect, useRef } from 'react'
 import Icon from '../Icon.jsx'
 
-// Mensaje de estado tras guardar o eliminar. aviso = { id, texto } o null; onCerrar quita el aviso.
-// Lo usan programación de entrenamientos y gestión de entrenadores.
-// El contenedor role="status" siempre está en la página; el mensaje aparece dentro.
-// Cuando llega un aviso nuevo recibe el foco: después de eliminar el botón que abrió el diálogo ya no existe.
-export default function AvisoEstado({ aviso, onCerrar }) {
+const botonClases =
+  'flex min-h-11 items-center rounded-md px-3 text-body-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus'
+
+// Mensaje de estado. aviso = { id, texto, accion? } o null; accion = { texto, onClick } (por ejemplo "Reintentar").
+// Lo usan programación de entrenamientos, gestión de entrenadores y el inicio de sesión.
+// rol: "status" para avisos que informan (éxito) o "alert" para errores. tono: "success" | "danger".
+// onCerrar: si no se pasa, el aviso no tiene botón para cerrarlo.
+// El contenedor con el rol siempre está en la página; el mensaje aparece dentro.
+// enfocar: cuando llega un aviso nuevo recibe el foco (después de eliminar el botón que abrió el diálogo ya no existe).
+export default function AvisoEstado({ aviso, onCerrar, rol = 'status', tono = 'success', enfocar = true }) {
   const ref = useRef(null)
 
   useEffect(() => {
-    if (aviso) ref.current?.focus()
-  }, [aviso])
+    if (aviso && enfocar) ref.current?.focus()
+  }, [aviso, enfocar])
+
+  const colores = tono === 'danger' ? 'bg-danger text-danger' : 'bg-success text-success'
 
   return (
-    <div role="status" ref={ref} tabIndex={-1} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+    <div role={rol} ref={ref} tabIndex={-1} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
       {aviso && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-success p-4 text-success">
-          <Icon name="check" className="h-5 w-5 shrink-0" />
+        <div className={`flex flex-wrap items-center gap-2 rounded-lg p-4 ${colores}`}>
+          <Icon name={tono === 'danger' ? 'alert' : 'check'} className="h-5 w-5 shrink-0" />
           <p className="min-w-0 flex-1 basis-48 break-words text-body-medium">{aviso.texto}</p>
-          <button
-            type="button"
-            onClick={onCerrar}
-            className="flex min-h-11 items-center rounded-md px-3 text-body-medium underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            Cerrar aviso
-          </button>
+          {aviso.accion && (
+            <button type="button" onClick={aviso.accion.onClick} className={botonClases}>
+              {aviso.accion.texto}
+            </button>
+          )}
+          {onCerrar && (
+            <button type="button" onClick={onCerrar} className={botonClases}>
+              Cerrar aviso
+            </button>
+          )}
         </div>
       )}
     </div>
