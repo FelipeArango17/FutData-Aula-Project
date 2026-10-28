@@ -134,8 +134,9 @@ Deben salir tres líneas `OK` y llegar un correo a `CORREO_PRUEBA` con el códig
 
 Comprueba que una falla real del SMTP responda `502` y quede en el [registro de fallas](#registro-de-fallas). Hay que romper la credencial a propósito:
 
-1. En n8n abre la credencial `SMTP FutData`, cambia **Port** a un puerto donde no escuche nada (por ejemplo `2525`) y guárdala. El flujo publicado la usa al momento, sin volver a publicar.
-2. Ejecuta los scripts con el parámetro de falla:
+1. Confirma que n8n está encendido: `docker compose ps` debe mostrar `futdata-n8n` con estado `Up`. Si no muestra nada, el contenedor está detenido (por ejemplo, después de reiniciar el equipo o Docker Desktop); levántalo con `docker compose up -d`.
+2. En n8n abre la credencial `SMTP FutData`, cambia **Port** a un puerto donde no escuche nada (por ejemplo `2525`) y guárdala. Al guardar, n8n prueba la conexión y muestra *Couldn't connect with these settings … ECONNREFUSED*: es lo esperado, la credencial queda guardada igual. El flujo publicado la usa al momento, sin volver a publicar.
+3. Ejecuta los scripts con el parámetro de falla:
 
    ```bash
    bash scripts/probar-2fa.sh --probar-falla
@@ -146,7 +147,9 @@ Comprueba que una falla real del SMTP responda `502` y quede en el [registro de 
    ```
 
    En este modo se omite el caso `200` (con el SMTP roto no puede pasar). Corren *Sin token*, *Evento inválido* y *Falla de envío SMTP*, que espera `502`. Después el script revisa que `logs/fallas-notificaciones.jsonl` tenga una línea nueva, que sea JSON con los cinco campos y que no contenga el código `123456`, el `CORREO_PRUEBA` completo ni el token. Deben salir cuatro líneas `OK`.
-3. **Restaura el puerto** de la credencial (`465`, o `587`) y vuelve a correr el script sin el parámetro para confirmar el `200`.
+
+   El caso *Falla de envío SMTP* tarda: con Docker Desktop en Windows la conexión rechazada demora unos 20 s, y si el host no responde nodemailer espera hasta 2 min. Por eso ese caso espera hasta 150 s (los demás, 15 s). Si sale `sin respuesta`, revisa el paso 1.
+4. **Restaura el puerto** de la credencial (`465`, o `587`) y vuelve a correr el script sin el parámetro para confirmar el `200`.
 
 El script lee el log desde `n8n/logs/` en tu equipo, así que solo sirve con el n8n de este `docker-compose.yml`.
 
