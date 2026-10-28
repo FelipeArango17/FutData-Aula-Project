@@ -3,8 +3,7 @@ import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import GrupoCasillas from '../ui/GrupoCasillas.jsx'
 import { CATEGORIAS, ESPECIALIDADES, TIPOS_DOCUMENTO } from '../../services/entrenadoresService.js'
-
-const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+import { esCorreoValido } from '../../utils/validaciones.js'
 
 function validar(v) {
   const errores = {}
@@ -20,7 +19,7 @@ function validar(v) {
   else if (!/^\d{10}$/.test(telefono)) errores.telefono = 'El teléfono debe tener exactamente 10 dígitos, sin espacios.'
   const correo = v.correo.trim()
   if (!correo) errores.correo = 'Escribe el correo electrónico.'
-  else if (!CORREO.test(correo)) errores.correo = 'El correo no es válido. Ejemplo: nombre@pradofc.co.'
+  else if (!esCorreoValido(correo)) errores.correo = 'El correo no es válido. Ejemplo: nombre@pradofc.co.'
   if (!v.especialidad.trim()) errores.especialidad = 'Escribe la especialidad.'
   if (v.categorias.length === 0) errores.categorias = 'Selecciona al menos una categoría.'
   return errores

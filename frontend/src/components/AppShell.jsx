@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar.jsx'
 import TopBar from './TopBar.jsx'
 import Drawer from './Drawer.jsx'
@@ -13,6 +13,16 @@ export default function AppShell() {
   const { role } = useRole()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const menuButtonRef = useRef(null)
+  const location = useLocation()
+
+  // Al llegar desde la verificación 2FA el foco va al título de la pantalla (el botón que se pulsó ya no existe)
+  useEffect(() => {
+    if (!location.state?.enfocarTitulo) return
+    const titulo = document.querySelector('main h1')
+    titulo?.setAttribute('tabindex', '-1')
+    titulo?.classList.add('focus:outline-none')
+    titulo?.focus()
+  }, [location.key, location.state])
 
   const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 

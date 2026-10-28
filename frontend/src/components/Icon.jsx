@@ -17,6 +17,10 @@ const paths = {
   info: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v5M12 8v.01',
   trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
   plus: 'M12 5v14M5 12h14',
+  eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z',
+  eyeOff: 'M3 3l18 18M10.6 5.1A9.8 9.8 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.2 3.9M6.6 6.6C3.7 8.5 2 12 2 12s4 7 10 7a9.7 9.7 0 004.4-1M9.9 9.9a3 3 0 004.2 4.2',
+  lock: 'M6 11h12v9H6zM8 11V8a4 4 0 018 0v3',
+  mail: 'M3 6h18v12H3zM3 7l9 6 9-6',
 }
 
 export default function Icon({ name, className = 'h-6 w-6' }) {
