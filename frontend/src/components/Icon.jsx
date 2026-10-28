@@ -21,6 +21,7 @@ const paths = {
   eyeOff: 'M3 3l18 18M10.6 5.1A9.8 9.8 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.2 3.9M6.6 6.6C3.7 8.5 2 12 2 12s4 7 10 7a9.7 9.7 0 004.4-1M9.9 9.9a3 3 0 004.2 4.2',
   lock: 'M6 11h12v9H6zM8 11V8a4 4 0 018 0v3',
   mail: 'M3 6h18v12H3zM3 7l9 6 9-6',
+  download: 'M12 4v11M7 11l5 5 5-5M5 20h14',
 }
 
 export default function Icon({ name, className = 'h-6 w-6' }) {
