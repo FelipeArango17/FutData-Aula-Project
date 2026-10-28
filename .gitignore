@@ -12,6 +12,7 @@ node_modules/
 dist/
 .vite/
 *.log
+n8n/logs/*.jsonl
 
 # Java / backend
 target/
