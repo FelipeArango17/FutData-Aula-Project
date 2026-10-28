@@ -1,0 +1,467 @@
+{
+  "id": "FutDataNotif036",
+  "name": "FutData · Notificaciones",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "futdata/notificaciones",
+        "authentication": "none",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "b7c1e3f0-2fa0-4036-9a51-f17da7a00036"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $env.N8N_WEBHOOK_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000000-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.headers['x-futdata-token'] }}",
+              "rightValue": "={{ $env.N8N_WEBHOOK_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000011",
+      "name": "Validar token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000001-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.body.evento }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000001-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.body.datos }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000002",
+      "name": "Validar estructura",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000001",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "CODIGO_2FA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CODIGO_2FA"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "No soportado"
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000003",
+      "name": "Evento",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        660,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000003-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.body.datos.correo }}",
+              "rightValue": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.body.datos.nombre }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.datos.codigo }}",
+              "rightValue": "^\\d{6}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000004",
+              "leftValue": "={{ $json.body.datos.vigenciaMinutos }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000004",
+      "name": "Validar datos CODIGO_2FA",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        60
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $('Webhook').item.json.body.datos.correo }}",
+        "subject": "Tu código de verificación de FutData",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $('Webhook').item.json.body.datos.nombre }}:\n\nRecibimos una solicitud para ingresar a tu cuenta de FutData.\nEscribe este código de verificación para continuar:\n\n    {{ $('Webhook').item.json.body.datos.codigo }}\n\nEl código vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n\n¿No intentaste ingresar? Ignora este correo; nadie podrá entrar a tu\ncuenta sin este código.\nNunca compartas este código con nadie. El personal de FutData jamás te\nlo pedirá.\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Tu código de verificación de FutData</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nUsa este código para terminar de ingresar a FutData. Vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ String($('Webhook').item.json.body.datos.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;') }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">Recibimos una solicitud para ingresar a tu cuenta de FutData. Escribe este código de verificación para continuar:</p>\n          </td>\n        </tr>\n        <!-- Código -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#EAF0F7; border:1px solid #E5E7EB; border-radius:8px;\">\n              <tr>\n                <td align=\"center\" style=\"padding:16px 24px 16px 36px; font-family:'Courier New', Courier, monospace; font-size:36px; font-weight:700; line-height:44px; letter-spacing:12px; color:#0F2C4C;\">{{ $('Webhook').item.json.body.datos.codigo }}</td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <tr>\n          <td align=\"center\" style=\"padding:16px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#1F7A29; font-weight:600;\">\n            El código vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n          </td>\n        </tr>\n        <!-- Aviso de seguridad -->\n        <tr>\n          <td style=\"padding:0 32px 32px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>¿No intentaste ingresar?</strong> Ignora este correo; nadie podrá entrar a tu cuenta sin este código.<br>\n                  <strong>Nunca compartas este código</strong> con nadie. El personal de FutData jamás te lo pedirá.\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000005",
+      "name": "Enviar correo 2FA",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1100,
+        -20
+      ],
+      "webhookId": "e2a1c0de-2fa0-4036-9a51-f17da7a00036",
+      "credentials": {
+        "smtp": {
+          "id": "smtpFutData",
+          "name": "SMTP FutData"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": true\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000006",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"No se pudo enviar el correo\"\n}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000007",
+      "name": "Responder 502",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1340,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Faltan campos o tienen un formato inválido\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000008",
+      "name": "Responder 400 datos",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1100,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Evento no soportado\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000009",
+      "name": "Responder 400 evento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Token inválido\"\n}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000012",
+      "name": "Responder 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"El cuerpo debe tener evento y datos\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000010",
+      "name": "Responder 400 estructura",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar token": {
+      "main": [
+        [
+          {
+            "node": "Validar estructura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar estructura": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 estructura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento": {
+      "main": [
+        [
+          {
+            "node": "Validar datos CODIGO_2FA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos CODIGO_2FA": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo 2FA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo 2FA": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 502",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false,
+    "saveExecutionProgress": false,
+    "timezone": "America/Bogota"
+  },
+  "pinData": {},
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

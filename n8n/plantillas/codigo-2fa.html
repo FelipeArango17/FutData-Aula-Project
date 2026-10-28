@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Tu código de verificación de FutData</title>
+</head>
+<body style="margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+<!-- Texto de vista previa (oculto en el cuerpo del correo) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;">
+Usa este código para terminar de ingresar a FutData. Vence en {{vigenciaMinutos}} minutos.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F8FA;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;">
+        <!-- Encabezado -->
+        <tr>
+          <td align="left" style="background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;">
+            <span style="font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;">Fut<span style="color:#3CB043;">Data</span></span>
+          </td>
+        </tr>
+        <!-- Cuerpo -->
+        <tr>
+          <td align="left" style="padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;">
+            <p style="margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;">Hola, {{nombre}}:</p>
+            <p style="margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;">Recibimos una solicitud para ingresar a tu cuenta de FutData. Escribe este código de verificación para continuar:</p>
+          </td>
+        </tr>
+        <!-- Código -->
+        <tr>
+          <td align="center" style="padding:0 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="background-color:#EAF0F7; border:1px solid #E5E7EB; border-radius:8px;">
+              <tr>
+                <td align="center" style="padding:16px 24px 16px 36px; font-family:'Courier New', Courier, monospace; font-size:36px; font-weight:700; line-height:44px; letter-spacing:12px; color:#0F2C4C;">{{codigo}}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:16px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#1F7A29; font-weight:600;">
+            El código vence en {{vigenciaMinutos}} minutos.
+          </td>
+        </tr>
+        <!-- Aviso de seguridad -->
+        <tr>
+          <td style="padding:0 32px 32px 32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;">
+              <tr>
+                <td style="padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;">
+                  <strong>¿No intentaste ingresar?</strong> Ignora este correo; nadie podrá entrar a tu cuenta sin este código.<br>
+                  <strong>Nunca compartas este código</strong> con nadie. El personal de FutData jamás te lo pedirá.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Pie -->
+        <tr>
+          <td align="center" style="border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;">
+            Asociación Deportiva Prado Fútbol Club · FutData<br>
+            Este es un correo automático, por favor no lo respondas.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

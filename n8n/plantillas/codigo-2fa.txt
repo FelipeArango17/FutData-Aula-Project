@@ -1,0 +1,17 @@
+Hola, {{nombre}}:
+
+Recibimos una solicitud para ingresar a tu cuenta de FutData.
+Escribe este código de verificación para continuar:
+
+    {{codigo}}
+
+El código vence en {{vigenciaMinutos}} minutos.
+
+¿No intentaste ingresar? Ignora este correo; nadie podrá entrar a tu
+cuenta sin este código.
+Nunca compartas este código con nadie. El personal de FutData jamás te
+lo pedirá.
+
+--
+Asociación Deportiva Prado Fútbol Club · FutData
+Este es un correo automático, por favor no lo respondas.

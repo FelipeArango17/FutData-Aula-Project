@@ -1,0 +1,44 @@
+# n8n para desarrollo local de FutData (HU-036).
+# Uso: copiar .env.example a .env, completar los valores y ejecutar `docker compose up -d` en esta carpeta.
+services:
+  n8n:
+    # Versión fija: actualizarla a propósito, nunca con "latest".
+    image: docker.n8n.io/n8nio/n8n:2.45.4
+    container_name: futdata-n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      GENERIC_TIMEZONE: America/Bogota
+      TZ: America/Bogota
+      # Cifra las credenciales guardadas (SMTP). Si se pierde, hay que volver a crearlas.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?Define N8N_ENCRYPTION_KEY en n8n/.env}
+      WEBHOOK_URL: ${N8N_BASE_URL:-http://localhost:5678}/
+      # Secreto compartido con el backend; el flujo compara la cabecera X-FutData-Token con $env.N8N_WEBHOOK_TOKEN.
+      N8N_WEBHOOK_TOKEN: ${N8N_WEBHOOK_TOKEN:?Define N8N_WEBHOOK_TOKEN en n8n/.env}
+      # Remitente de los correos; el flujo lo lee con $env.SMTP_FROM.
+      SMTP_FROM: ${SMTP_FROM:?Define SMTP_FROM en n8n/.env}
+      # Permite $env en las expresiones del flujo (n8n 2.x lo bloquea por defecto).
+      # Solo el equipo tiene acceso al editor de n8n; ningún flujo debe exponer variables en sus respuestas.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # No guardar los datos de ejecuciones exitosas ni manuales (contienen el código 2FA).
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: none
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "false"
+      # Con "none", n8n solo marca la ejecución como borrada y la elimina de la base después
+      # de un búfer (1 h por defecto). Búfer 0 y revisión cada minuto: el código no sobrevive
+      # en SQLite más de ~1 min, muy por debajo de sus 10 min de vigencia.
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_HARD_DELETE_BUFFER: "0"
+      EXECUTIONS_DATA_PRUNE_HARD_DELETE_INTERVAL: "1"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      # Flujos del repo, montados solo lectura para importarlos con la CLI.
+      - ./workflows:/opt/futdata/workflows:ro
+
+volumes:
+  n8n_data:
+    name: futdata_n8n_data
