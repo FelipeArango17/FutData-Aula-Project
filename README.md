@@ -255,7 +255,7 @@ El proyecto de Supabase lo administra el equipo. Quien necesite acceso pide la i
 
 ### 8.6 Automatización (n8n)
 
-n8n se ejecuta en un contenedor Docker. Los flujos y su configuración se documentarán en `docs/` cuando se definan.
+n8n se ejecuta en un contenedor Docker. La configuración, el flujo de notificaciones y los pasos para levantarlo están en [`n8n/README.md`](n8n/README.md). El contrato del webhook que usa el backend está en [`docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md`](docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md).
 
 ---
 
