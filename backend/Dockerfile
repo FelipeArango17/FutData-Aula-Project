@@ -37,4 +37,9 @@ EXPOSE 8080
 ENV SPRING_PROFILES_ACTIVE=prod \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 
+# "Healthy" = el puerto HTTP acepta conexiones (bash y /dev/tcp vienen en la imagen Ubuntu; no hace falta curl).
+# No consulta /api/health a propósito: ese endpoint devuelve 503 sin base de datos aunque la aplicación esté viva.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${PORT:-8080}"]
+
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

@@ -1,0 +1,11 @@
+# Añade el healthcheck a n8n SIN editar n8n/docker-compose.yml. Lo carga el `include` de docker-compose.yml (raíz); si se
+# ejecuta `docker compose up` dentro de n8n/, este archivo no participa y n8n funciona igual, solo que sin healthcheck.
+# /healthz es el endpoint de salud de n8n; la imagen trae wget.
+services:
+  n8n:
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s

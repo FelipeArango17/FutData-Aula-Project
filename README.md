@@ -271,6 +271,74 @@ El proyecto de Supabase lo administra el equipo. Quien necesite acceso pide la i
 
 n8n se ejecuta en un contenedor Docker. La configuración, el flujo de notificaciones y los pasos para levantarlo están en [`n8n/README.md`](n8n/README.md). El contrato del webhook que usa el backend está en [`docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md`](docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md).
 
+### 8.7 Levantar todo con un solo comando
+
+Backend y n8n en contenedores, desde la raíz del repositorio. Es la forma más corta de tenerlos juntos; las secciones 8.4 y 8.6 siguen valiendo para trabajar cada uno por separado (`./mvnw spring-boot:run`, `cd n8n && docker compose up -d`).
+
+**Requisitos:** Docker Desktop encendido y Docker Compose **2.20 o superior** (`docker compose version`; el archivo usa `include`).
+
+**1. Crea los dos archivos `.env`** (están ignorados por Git; los secretos nunca van en el repositorio):
+
+```bash
+cp backend/.env.example backend/.env          # macOS, Linux, Git Bash
+cp n8n/.env.example n8n/.env
+```
+
+```powershell
+Copy-Item backend\.env.example backend\.env   # PowerShell
+Copy-Item n8n\.env.example n8n\.env
+```
+
+**2. Complétalos:**
+
+- `n8n/.env`: `N8N_ENCRYPTION_KEY`, `N8N_WEBHOOK_TOKEN` y `SMTP_FROM` (ver [`n8n/README.md`](n8n/README.md), paso 1). Un valor aleatorio se genera con `openssl rand -hex 32` (PowerShell: ver el comentario de `n8n/.env.example`).
+- `backend/.env`: `DB_URL`, `DB_USER` y `DB_PASSWORD` de Supabase y `CORS_ORIGINS`. **`N8N_WEBHOOK_TOKEN` debe ser el MISMO valor en los dos archivos**; si difieren, n8n rechaza al backend con `401`.
+- Perfil de Spring: la imagen usa `prod`, que **exige las seis variables** (`DB_URL`, `DB_USER`, `DB_PASSWORD`, `CORS_ORIGINS`, `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN`) y si falta alguna el contenedor se detiene diciendo cuál. Para trabajar sin base de datos agrega `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
+
+> **Hay dos `N8N_BASE_URL` y no son lo mismo:**
+>
+> | Dónde | Valor | Quién la usa |
+> | :--- | :--- | :--- |
+> | `n8n/.env` | `http://localhost:5678` | Es cómo **n8n se presenta** (editor y URL de los webhooks). La usa tu **navegador**. |
+> | Backend dentro de Docker | `http://n8n:5678` | Es la que usará el **cliente HTTP del backend**. `docker-compose.yml` la fija así, por encima de `backend/.env`: dentro de la red de Docker, `n8n` es el nombre del servicio. |
+>
+> En `backend/.env` deja `http://localhost:5678`: es el valor correcto cuando corres el backend **fuera** de Docker (`./mvnw spring-boot:run`), y con este compose se sobrescribe solo. Pero **dentro del contenedor `localhost:5678` NO funciona**: `localhost` es el propio backend, no n8n, y la llamada falla con `Connection refused`. Eso pasa si ejecutas la imagen sin este compose (por ejemplo `docker run --env-file backend/.env`, como en `backend/README.md`) o si alguien quita la sobrescritura: en ese caso pon `N8N_BASE_URL=http://n8n:5678` y conecta el contenedor a la red de n8n.
+
+**3. Levanta, revisa y apaga:**
+
+```bash
+docker compose up -d --build     # construye el backend y arranca backend + n8n
+docker compose ps                # ambos deben quedar "Up" y, pasados unos segundos, "(healthy)"
+docker compose logs -f backend   # registros del backend (Ctrl+C para salir)
+docker compose down              # detiene y elimina los contenedores
+```
+
+> **No uses `docker compose down -v`.** La `-v` borra el volumen `futdata_n8n_data`, con los flujos y la credencial SMTP de n8n. Con `down` a secas el volumen se conserva.
+
+Los comandos son los mismos en macOS, Linux, Git Bash y PowerShell.
+
+| Servicio | Puerto | URL |
+| :--- | :--- | :--- |
+| Backend | 8080 | http://localhost:8080/swagger-ui.html |
+| n8n | 5678 | http://localhost:5678 |
+
+**Cómo verificar:**
+
+- http://localhost:8080/api/health responde. Con el perfil `local` y sin base de datos devuelve `503` con `"baseDeDatos": "DOWN"`: es lo normal, la aplicación está viva (por eso el healthcheck del contenedor mira el puerto y no este endpoint).
+- http://localhost:5678 abre el editor de n8n (la primera vez pide crear la cuenta de propietario); http://localhost:5678/healthz responde `{"status":"ok"}`.
+
+**Lo que sigue siendo manual** (vive en el volumen de n8n, no en el compose): crear la credencial **"SMTP FutData"** e importar y publicar el flujo. Pasos 3, 4 y 5 de [`n8n/README.md`](n8n/README.md); allí los comandos `docker compose exec n8n ...` funcionan igual desde la raíz.
+
+**Si ya tienes n8n corriendo desde `n8n/`:** el contenedor se llama igual (`futdata-n8n`), así que antes detenlo con `cd n8n && docker compose down` (sin `-v`; tus datos quedan en el volumen) y levanta todo desde la raíz. En sentido contrario, igual: `docker compose down` en la raíz antes de usar `cd n8n && docker compose up -d`.
+
+| Síntoma | Causa probable | Qué hacer |
+| :--- | :--- | :--- |
+| `env file .../backend/.env not found` (o `n8n/.env`) | No copiaste el `.env.example` | Paso 1 |
+| `Define N8N_ENCRYPTION_KEY en n8n/.env` | Falta un valor en `n8n/.env` | Paso 2 |
+| El backend se reinicia o se detiene | Con el perfil `prod` falta una variable | `docker compose logs backend` dice cuál |
+| Error al leer `include` en `docker-compose.yml` | Compose anterior a 2.20 | Actualiza Docker Desktop |
+| `port is already allocated` | Algo usa el 8080 o el 5678 | Detén ese proceso o contenedor |
+
 ---
 
 ## 9. Design system
