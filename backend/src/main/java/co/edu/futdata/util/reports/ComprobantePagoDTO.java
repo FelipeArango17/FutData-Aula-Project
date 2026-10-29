@@ -14,7 +14,8 @@ import java.util.List;
  * tarjeta o cuenta bancaria.
  *
  * @param numeroComprobante número único que asigna quien llama. Formato sugerido: {@code FD-AAAA-NNNNNN}
- *                          (año del pago y consecutivo de 6 dígitos), por ejemplo {@code FD-2026-000123}
+ *                          (año en que se asigna el número y consecutivo de 6 dígitos), por ejemplo
+ *                          {@code FD-2026-000123}
  * @param fechaEmision      momento en que se genera el comprobante (se imprime en hora de Colombia)
  * @param nombreDeportista  nombre y apellido del deportista
  * @param categoria         categoría del deportista, por ejemplo {@code Sub-12}; opcional

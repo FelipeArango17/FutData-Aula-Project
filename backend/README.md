@@ -256,7 +256,7 @@ Si un dato no es válido, `generar()` lanza `ComprobanteInvalidoException` con t
 
 Reglas: `numeroComprobante` (máximo 40 caracteres), `fechaEmision`, `nombreDeportista`, `nombreAcudiente` (máximo 120), `concepto` (máximo 200), `fechaPago` y `metodo` son obligatorios. `monto` debe ser mayor que 0. `fechaPago` no puede ser posterior a hoy ni a la fecha de emisión, las dos en hora de Colombia. `referenciaWompi` (máximo 100) es **obligatoria** en los pagos en línea (PSE, Nequi o Tarjeta), porque todos llegan por el webhook de Wompi, y se **rechaza** en los manuales (Efectivo o Transferencia).
 
-**Número de comprobante.** Formato: `FD-AAAA-NNNNNN`, con el año del pago y un consecutivo de 6 dígitos, por ejemplo `FD-2026-000123`. El generador no lo inventa ni comprueba que sea único (ver *Pendientes*).
+**Número de comprobante.** Formato: `FD-AAAA-NNNNNN`, con el año en que se asigna el número y un consecutivo de 6 dígitos, por ejemplo `FD-2026-000123`. El generador no lo inventa ni comprueba que sea único (ver *Pendientes*).
 
 ### Qué lleva y qué no
 
@@ -344,9 +344,10 @@ El timeout de conexión y de lectura es de 10 s (`futdata.supabase.timeout`, en 
 
 ### Rutas: qué se guarda en `Pago.recibo_url`
 
-Ruta: `AAAA/FD-AAAA-NNNNNN.pdf`, con el año de la fecha de pago y el número del comprobante. Ejemplo: `2026/FD-2026-000123.pdf`.
+Ruta: `AAAA/FD-AAAA-NNNNNN.pdf`: la carpeta es el año **del número** del comprobante. Ejemplo: `2026/FD-2026-000123.pdf`.
 - No lleva nombres, documentos ni correos.
-- El servicio exige que el número tenga el formato `FD-AAAA-NNNNNN` y el mismo año de la fecha de pago.
+- El servicio exige que el número tenga el formato `FD-AAAA-NNNNNN`.
+- **No** exige que ese año sea el de la fecha de pago. Un pago del 31 de diciembre registrado en enero recibe un número del año nuevo y queda en esa carpeta: `FD-2026-000001` → `2026/FD-2026-000001.pdf`.
 
 **En `Pago.recibo_url` se guarda la ruta, no una URL.** El diccionario de datos lo llama "URL del recibo", pero las URL firmadas vencen a los pocos minutos: guardar una no serviría. Con la ruta, cada descarga pide una URL nueva.
 
@@ -414,6 +415,7 @@ Lee las variables del sistema, no `backend/.env`. `SUPABASE_BUCKET_COMPROBANTES`
 - **Tabla `Pago`:** la columna `recibo_url` guardará la ruta. Se propone llamarla `recibo_ruta` en el diccionario de datos. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
 - **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con HU-001 y HU-005.
 - **Respuestas HTTP de las excepciones de Storage**, en `ManejadorGlobalErrores`, junto con el endpoint.
+- **Propuesta para Felipe (`docker-compose.yml`, no aplicada).** Hoy el compose arranca el backend con el perfil `prod` de la imagen, que exige `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`: mientras el proyecto de Supabase no exista, `docker compose up` deja el backend detenido. Como el compose es para desarrollo, se propone que el servicio `backend` tenga `environment: SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}`. Así arranca en `local` por defecto, y quien quiera probar `prod` lo pide con `SPRING_PROFILES_ACTIVE=prod docker compose up -d`. Mientras tanto: `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
 
 ## Formato de errores (para el frontend)
 
