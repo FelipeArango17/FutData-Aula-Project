@@ -14,9 +14,9 @@ public interface IComprobanteService {
     /**
      * Genera el PDF y lo sube al bucket de comprobantes. No sobrescribe uno existente.
      *
-     * @param datos datos del comprobante; {@code numeroComprobante} con el formato {@code FD-AAAA-NNNNNN} y el año
-     *              de la fecha de pago
-     * @return la ruta dentro del bucket, {@code AAAA/FD-AAAA-NNNNNN.pdf}: lo que se guarda en {@code Pago.recibo_url}
+     * @param datos datos del comprobante; {@code numeroComprobante} con el formato {@code FD-AAAA-NNNNNN}
+     * @return la ruta dentro del bucket, {@code AAAA/FD-AAAA-NNNNNN.pdf}, con el año del número (no el de la fecha de
+     *         pago): lo que se guarda en {@code Pago.recibo_url}
      * @throws co.edu.futdata.util.reports.ComprobanteInvalidoException                datos inválidos ({@code 400})
      * @throws co.edu.futdata.datasource.external.ArchivoYaExisteException            ya hay un comprobante con ese número
      * @throws co.edu.futdata.datasource.external.AlmacenamientoException             otras fallas de Storage

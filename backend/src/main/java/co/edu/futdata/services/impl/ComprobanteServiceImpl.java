@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 /**
  * Genera el comprobante con {@link IGeneradorComprobante} y lo guarda con {@link IAlmacenamientoArchivos}.
  *
- * <p>Ruta: {@code AAAA/FD-AAAA-NNNNNN.pdf}, con el año de la fecha de pago y el número del comprobante. No lleva
+ * <p>Ruta: {@code AAAA/FD-AAAA-NNNNNN.pdf}: el año y el número del comprobante. No lleva
  * nombres, documentos ni correos: solo el año y el número.
  */
 @Service
@@ -56,17 +56,16 @@ public class ComprobanteServiceImpl implements IComprobanteService {
         return almacenamiento.urlFirmada(supabase.bucketComprobantes(), ruta, supabase.vigenciaUrlFirmada());
     }
 
-    /** {@code 2026/FD-2026-000123.pdf}. El número debe tener el formato y el año de la fecha de pago. */
+    /**
+     * {@code 2026/FD-2026-000123.pdf}. La carpeta es el año del número, que puede no ser el de la fecha de pago
+     * (un pago del 31 de diciembre registrado en enero recibe un número del año nuevo).
+     */
     static String rutaDe(ComprobantePagoDTO datos) {
         String numero = datos.numeroComprobante().strip();
         Matcher formato = NUMERO.matcher(numero);
         if (!formato.matches()) {
             throw new ComprobanteInvalidoException(List.of("numeroComprobante: debe tener el formato FD-AAAA-NNNNNN"));
         }
-        int anio = datos.fechaPago().getYear();
-        if (Integer.parseInt(formato.group(1)) != anio) {
-            throw new ComprobanteInvalidoException(List.of("numeroComprobante: el año debe ser el de la fecha de pago (" + anio + ")"));
-        }
-        return anio + "/" + numero + ".pdf";
+        return formato.group(1) + "/" + numero + ".pdf";
     }
 }

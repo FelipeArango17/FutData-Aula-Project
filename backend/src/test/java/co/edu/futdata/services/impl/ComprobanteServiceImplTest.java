@@ -64,13 +64,21 @@ class ComprobanteServiceImplTest {
         assertThat(almacenamiento.subidas).isEmpty();
     }
 
+    /** Pago del 31 de diciembre registrado en enero: el número es del año nuevo y la carpeta sale del número. */
     @Test
-    void elAnioDelNumeroDebeSerElDeLaFechaDePago() {
-        ComprobanteInvalidoException e = catchThrowableOfType(ComprobanteInvalidoException.class,
-                () -> servicio.generarYGuardar(datos("FD-2025-000123", LocalDate.of(2026, 1, 3))));
+    void laCarpetaEsElAnioDelNumeroAunqueElPagoSeaDelAnioAnterior() {
+        String ruta = servicio.generarYGuardar(datos("FD-2026-000001", LocalDate.of(2025, 12, 31)));
 
-        assertThat(e.getErrores()).containsExactly("numeroComprobante: el año debe ser el de la fecha de pago (2026)");
-        assertThat(almacenamiento.subidas).isEmpty();
+        assertThat(ruta).isEqualTo("2026/FD-2026-000001.pdf");
+        assertThat(almacenamiento.subidas).extracting(Subida::ruta).containsExactly("2026/FD-2026-000001.pdf");
+        // Y el enlace se puede pedir con esa misma ruta
+        assertThat(servicio.enlaceDescarga(ruta)).isEqualTo("https://firmada.example/2026/FD-2026-000001.pdf");
+    }
+
+    @Test
+    void laCarpetaNoDependeDeLaFechaDePago() {
+        assertThat(servicio.generarYGuardar(datos("FD-2025-000777", LocalDate.of(2026, 1, 3)))).isEqualTo("2025/FD-2025-000777.pdf");
+        assertThat(servicio.generarYGuardar(datos("FD-2026-000778", LocalDate.of(2026, 10, 27)))).isEqualTo("2026/FD-2026-000778.pdf");
     }
 
     @Test
