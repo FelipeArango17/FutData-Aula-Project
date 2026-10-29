@@ -1,6 +1,9 @@
 package co.edu.futdata.datasource.external;
 
 import co.edu.futdata.config.N8nProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
@@ -10,6 +13,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -26,12 +30,17 @@ import org.springframework.web.client.RestClientException;
  *
  * <p><b>Registros:</b> solo el evento, el código HTTP, la duración y, si n8n lo devuelve, el número de
  * destinatarios. Nunca el cuerpo, el código 2FA, los correos, los destinatarios ni el token.
+ *
+ * <p>El cuerpo se serializa aquí a bytes con Jackson en lugar de pasarle el mapa a {@code RestClient}: con
+ * {@code logging.level.org.springframework.web=DEBUG}, Spring registra el objeto que convierte ("Writing
+ * [...]"), y ahí saldrían el código y los correos. Con bytes solo registra la referencia del arreglo.
  */
 @Component
 public class N8nClient implements INotificador {
 
     static final String RUTA_WEBHOOK = "/webhook/futdata/notificaciones";
     static final String CABECERA_TOKEN = "X-FutData-Token";
+    static final MediaType JSON_UTF8 = new MediaType(MediaType.APPLICATION_JSON, StandardCharsets.UTF_8);
 
     private static final Logger log = LoggerFactory.getLogger(N8nClient.class);
     /** Correos y números de 6 dígitos o más: si el detalle de un 400 los trae, no se usa. */
@@ -40,15 +49,18 @@ public class N8nClient implements INotificador {
 
     private final RestClient http;
     private final N8nProperties propiedades;
+    private final ObjectMapper json;
 
-    public N8nClient(RestClient.Builder builder, N8nProperties propiedades) {
-        this(builder.requestFactory(fabricaConTimeout(propiedades.timeout())).build(), propiedades);
+    @Autowired
+    public N8nClient(RestClient.Builder builder, N8nProperties propiedades, ObjectMapper json) {
+        this(builder.requestFactory(fabricaConTimeout(propiedades.timeout())).build(), propiedades, json);
     }
 
     /** Para las pruebas: recibe un {@code RestClient} ya armado (por ejemplo, con MockRestServiceServer). */
-    N8nClient(RestClient http, N8nProperties propiedades) {
+    N8nClient(RestClient http, N8nProperties propiedades, ObjectMapper json) {
         this.http = http;
         this.propiedades = propiedades;
+        this.json = json;
     }
 
     private static SimpleClientHttpRequestFactory fabricaConTimeout(Duration timeout) {
@@ -65,15 +77,24 @@ public class N8nClient implements INotificador {
             throw new IllegalArgumentException("notificar() necesita un evento y datos no vacíos");
         }
 
+        byte[] cuerpo;
+        try {
+            cuerpo = json.writeValueAsBytes(Map.of("evento", evento, "datos", datos));
+        } catch (JsonProcessingException e) {
+            // Sin la causa: su mensaje podría traer parte de los datos.
+            log.error("Notificación {} no enviada: los datos no se pueden convertir a JSON", evento);
+            throw new IllegalArgumentException("Los datos de la notificación " + evento + " no se pueden convertir a JSON");
+        }
+
         long inicio = System.nanoTime();
         Respuesta respuesta;
         try {
             respuesta = http.post()
                     .uri(url)
-                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentType(JSON_UTF8)
                     .accept(MediaType.APPLICATION_JSON)
                     .header(CABECERA_TOKEN, propiedades.webhookToken())
-                    .body(Map.of("evento", evento, "datos", datos))
+                    .body(cuerpo)
                     .exchange((peticion, res) -> new Respuesta(res.getStatusCode().value(), leerCuerpo(res)), true);
         } catch (ResourceAccessException e) {
             long ms = milisegundos(inicio);
@@ -86,9 +107,8 @@ public class N8nClient implements INotificador {
             long ms = milisegundos(inicio);
             log.error("Notificación {} no enviada: error del cliente HTTP {} ({} ms)", evento, e.getClass().getSimpleName(), ms);
             // TODO auditoría (AuditoriaLogger): registrar evento, usuarioId, "error del cliente" y fecha.
-            // Sin la causa: su mensaje podría traer parte del cuerpo.
             throw new NotificacionNoEnviadaException("No se pudo enviar la notificación " + evento
-                    + " por un error al armar o leer la petición", evento, null, null);
+                    + " por un error del cliente HTTP", evento, null, null);
         }
 
         long ms = milisegundos(inicio);
