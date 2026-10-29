@@ -8,6 +8,7 @@ import AcuNotificaciones from './acudiente/Notificaciones.jsx'
 import EntInicio from './entrenador/Inicio.jsx'
 import EntAsistencia from './entrenador/Asistencia.jsx'
 import ListaPorGrupo from './deportistas/ListaPorGrupo.jsx'
+import DeportistaNuevo from './deportistas/DeportistaNuevo.jsx'
 import Programacion from './entrenamientos/Programacion.jsx'
 import EntTorneos from './entrenador/Torneos.jsx'
 import TesInicio from './tesorero/Inicio.jsx'
@@ -71,6 +72,7 @@ export const extraScreens = {
     { path: '/administrador/usuarios/entrenadores/nuevo', Screen: AdmEntrenadorFormulario },
     { path: '/administrador/usuarios/entrenadores/:id/editar', Screen: AdmEntrenadorFormulario },
     { path: '/administrador/deportistas/inscribir', Screen: AdmInscribir },
+    { path: '/administrador/deportistas/nuevo', Screen: DeportistaNuevo },
     { path: '/administrador/pagos/registrar', Screen: AdmRegistrarPago },
   ],
 }

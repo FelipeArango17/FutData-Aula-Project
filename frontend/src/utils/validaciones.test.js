@@ -124,6 +124,14 @@ describe('validarNombre', () => {
     }
   })
 
+  it('los tres mensajes se pueden cambiar (campos "Nombres" y "Apellidos")', () => {
+    const apellidos = { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres }
+    expect(validarNombre('', apellidos)).toBe('Escribe los apellidos.')
+    expect(validarNombre('A', apellidos)).toBe('Los apellidos deben tener entre 2 y 60 caracteres.')
+    expect(validarNombre('Ríos2', apellidos)).toBe('Los apellidos solo pueden tener letras, espacios, guion y apóstrofo.')
+    expect(validarNombre('Ríos Zapata', apellidos)).toBeNull()
+  })
+
   it('una tilde escrita con la letra y el acento por separado también pasa', () => {
     expect(validarNombre('José')).toBeNull()
   })

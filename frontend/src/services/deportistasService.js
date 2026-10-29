@@ -5,13 +5,17 @@
 //
 // Forma de datos propuesta para el frontend:
 //   Categoria  = { id, nombre, activa }
-//   Deportista = { id, nombre, apellido, tipoDocumento, documento, fechaNacimiento, idCategoria, activo, acudiente }
+//   Deportista = { id, nombre, apellido, tipoDocumento, documento, fechaNacimiento, telefono, direccion, idCategoria, activo,
+//                  acudiente, creadoPor?, creadoEn? }
 //     fechaNacimiento  "AAAA-MM-DD"
-//     idCategoria      número (Deportista.id_categoria del diccionario de datos)
+//     telefono         10 dígitos (celular de contacto); direccion: texto de 5 a 120 caracteres
+//     idCategoria      número (Deportista.id_categoria del diccionario de datos) o null si aún no tiene grupo
+//     creadoPor        correo de quien lo registró; creadoEn: fecha y hora ISO del registro (solo los creados con crearDeportista)
 //     activo           boolean
 //     acudiente        correo de la cuenta del acudiente, o null (lo usará el estado de cuenta)
 //
-// Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED'.
+// Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED' |
+//   'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }).
 //
 // PENDIENTE: confirmar con el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md):
 // - D3: el deportista guarda su categoría (`idCategoria`, no se calcula por edad). Falta definir edad_minima/edad_maxima
@@ -19,10 +23,23 @@
 // - "Vigente" = categoría activa (`activa`). `Categoria` aún no tiene ese campo en el diccionario.
 // - Un deportista pertenece a UNA sola categoría a la vez.
 // - `acudiente` como correo es un atajo de la demo: en el modelo, Acudiente referencia a Deportista (N:1).
-// - Los datos de la demo son ficticios; no hay datos reales de menores.
+// - Los datos de la demo son ficticios; no hay datos reales de menores. Teléfonos y direcciones también son inventados.
+// - HU-008: la historia dice "administrador o secretaria"; hoy solo existe el rol administrador, así que solo él puede
+//   registrar deportistas (crearDeportista lanza SIN_PERMISO para los demás roles).
+// - HU-008 / D3: la historia dice que se "guarda la edad", pero la edad NO se guarda: se calcula siempre desde la fecha de
+//   nacimiento (calcularEdad). Hay que confirmarlo con Juan.
+// - Documento duplicado: se compara solo por número de documento (sin espacios ni puntos), sin importar el tipo. El mensaje
+//   no revela quién es el otro deportista. En producción lo garantiza una restricción única en la base de datos.
+// - Un deportista creado sin categoría (idCategoria null) todavía no aparece en ninguna lista por grupo.
+// - Los tipos de documento de los deportistas son propios (no se mezclan con los de los entrenadores).
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
+import {
+  MENSAJES, enLista, validarCampos, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
+} from '../utils/validaciones.js'
 
 export { HOY_EJEMPLO }
+// Los deportistas son menores: primero Registro civil y Tarjeta de identidad. La duplicidad se compara solo por número.
+export const TIPOS_DOCUMENTO_DEPORTISTA = ['Registro civil', 'Tarjeta de identidad', 'Cédula de extranjería', 'Pasaporte', 'Cédula de ciudadanía']
 export const ACUDIENTE_DEMO = 'acudiente@pradofc.co'
 
 // PENDIENTE: las categorías salen de la lista de entrenamientosService (CATEGORIAS) para no duplicarla.
@@ -33,8 +50,12 @@ let categorias = [
 ]
 
 const TI = 'Tarjeta de identidad'
+// Teléfono y dirección ficticios: 3000000001, 3000000002... y calles inventadas
 const d = (id, nombre, apellido, documento, fechaNacimiento, idCategoria, activo = true, acudiente = null) => ({
-  id, nombre, apellido, tipoDocumento: TI, documento, fechaNacimiento, idCategoria, activo, acudiente,
+  id, nombre, apellido, tipoDocumento: TI, documento, fechaNacimiento,
+  telefono: `300000${String(id).padStart(4, '0')}`,
+  direccion: `Calle ${10 + id} # ${20 + id}-${10 + id}, Barrio Ejemplo`,
+  idCategoria, activo, acudiente,
 })
 
 // Sub-16 (id 5) queda sin deportistas a propósito para probar el estado vacío.
@@ -61,6 +82,7 @@ let deportistas = [
   d(20, 'Gabriela', 'Montoya Ejemplo', '1100000020', '2011-12-19', 4),
   d(21, 'Esteban', 'Ocampo Ejemplo', '1100000021', '2012-05-01', 4),
 ]
+let siguienteId = deportistas.length + 1
 
 // Simulación de red: retardo y fallo se pueden cambiar (pruebas y verificación manual del estado de error).
 let retardoMs = 250
@@ -119,15 +141,76 @@ export async function obtenerDeportista(id) {
   return copiar(encontrado)
 }
 
+// La categoría debe existir y estar vigente (activa). Devuelve la categoría.
+function categoriaVigente(idCategoria) {
+  const categoria = categorias.find((c) => c.id === Number(idCategoria))
+  if (!categoria) throw error('CATEGORIA_NO_EXISTE', 'La categoría no existe.')
+  if (!categoria.activa) throw error('CATEGORIA_NO_VIGENTE', 'La categoría no está vigente.')
+  return categoria
+}
+
 // Sin pantalla en esta tarea: queda para reutilizar (por ejemplo al inscribir o cambiar de grupo).
 export async function asignarCategoria(idDeportista, idCategoria) {
   await simularRed()
   const actual = deportistas.find((x) => x.id === Number(idDeportista))
   if (!actual) throw error('DEPORTISTA_NO_EXISTE', 'El deportista no existe.')
-  const categoria = categorias.find((c) => c.id === Number(idCategoria))
-  if (!categoria) throw error('CATEGORIA_NO_EXISTE', 'La categoría no existe.')
-  if (!categoria.activa) throw error('CATEGORIA_NO_VIGENTE', 'La categoría no está vigente.')
+  const categoria = categoriaVigente(idCategoria)
   const actualizado = { ...actual, idCategoria: categoria.id }
   deportistas = deportistas.map((x) => (x.id === actual.id ? actualizado : x))
   return copiar(actualizado)
+}
+
+// Formulario en blanco (idCategoria '' = sin asignar)
+export const DEPORTISTA_VACIO = {
+  nombre: '', apellido: '', tipoDocumento: '', documento: '', fechaNacimiento: '', telefono: '', direccion: '', idCategoria: '',
+}
+
+// Reglas de los datos personales (HU-008): las usan el formulario y crearDeportista, con los validadores compartidos.
+// La fecha de nacimiento siempre se valida contra HOY_EJEMPLO. Devuelve { campo: mensaje } solo con los campos con error.
+export function validarDatosDeportista(datos) {
+  return validarCampos(datos, {
+    nombre: [(v) => validarNombre(v, { obligatorio: MENSAJES.nombresObligatorio, longitud: MENSAJES.nombresLongitud, caracteres: MENSAJES.nombresCaracteres })],
+    apellido: [(v) => validarNombre(v, { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres })],
+    tipoDocumento: [enLista(TIPOS_DOCUMENTO_DEPORTISTA, MENSAJES.tipoDocumento)],
+    documento: [validarDocumento],
+    fechaNacimiento: [(v) => validarFechaNacimiento(v, HOY_EJEMPLO)],
+    telefono: [validarTelefono],
+    direccion: [validarDireccion],
+  })
+}
+
+// Mismo número de documento, ignorando espacios y puntos en ambos lados (por si un dato llega de otra fuente)
+const soloDocumento = (x) => String(x ?? '').replace(/[\s.]/g, '')
+export const mismoDocumento = (a, b) => soloDocumento(a) !== '' && soloDocumento(a) === soloDocumento(b)
+
+// Registra un deportista nuevo (activo, sin acudiente). Solo el administrador. La categoría es opcional ('' o null = sin asignar).
+// Orden de las comprobaciones: permiso, datos, documento duplicado y categoría vigente; si algo falla no se crea nada.
+export async function crearDeportista(datos, actor) {
+  await simularRed()
+  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para registrar deportistas.')
+  const errores = validarDatosDeportista(datos)
+  if (Object.keys(errores).length > 0) throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores })
+  if (deportistas.some((x) => mismoDocumento(x.documento, datos.documento))) {
+    throw error('DOCUMENTO_DUPLICADO', 'Ya existe un deportista registrado con este documento.')
+  }
+  const sinCategoria = datos.idCategoria === undefined || datos.idCategoria === null || datos.idCategoria === ''
+  const categoria = sinCategoria ? null : categoriaVigente(datos.idCategoria)
+
+  const nuevo = {
+    id: siguienteId++,
+    nombre: datos.nombre.trim(),
+    apellido: datos.apellido.trim(),
+    tipoDocumento: datos.tipoDocumento,
+    documento: datos.documento.trim(),
+    fechaNacimiento: datos.fechaNacimiento.trim(),
+    telefono: datos.telefono.trim(),
+    direccion: datos.direccion.trim(),
+    idCategoria: categoria ? categoria.id : null,
+    activo: true,
+    acudiente: null,
+    creadoPor: actor.correo ?? null,
+    creadoEn: new Date().toISOString(),
+  }
+  deportistas = [...deportistas, nuevo]
+  return copiar(nuevo)
 }

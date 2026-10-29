@@ -36,6 +36,13 @@ export const MENSAJES = {
   // Nuevos (para los formularios de deportista, inscripción y pago)
   nombreLongitud: 'El nombre debe tener entre 2 y 60 caracteres.',
   nombreCaracteres: 'El nombre solo puede tener letras, espacios, guion y apóstrofo.',
+  // Campos "Nombres" y "Apellidos" (plural), como en el formulario de deportistas
+  nombresObligatorio: 'Escribe los nombres.',
+  nombresLongitud: 'Los nombres deben tener entre 2 y 60 caracteres.',
+  nombresCaracteres: 'Los nombres solo pueden tener letras, espacios, guion y apóstrofo.',
+  apellidosObligatorio: 'Escribe los apellidos.',
+  apellidosLongitud: 'Los apellidos deben tener entre 2 y 60 caracteres.',
+  apellidosCaracteres: 'Los apellidos solo pueden tener letras, espacios, guion y apóstrofo.',
   direccionObligatoria: 'Escribe la dirección.',
   direccionLongitud: 'La dirección debe tener entre 5 y 120 caracteres.',
   fechaNacimientoObligatoria: 'Indica la fecha de nacimiento.',
@@ -75,11 +82,12 @@ export function validarTelefono(valor) {
 }
 
 // 2 a 60 caracteres: letras (con tildes y ñ), espacios, guion y apóstrofo; empieza por una letra.
-export function validarNombre(valor, { obligatorio = MENSAJES.nombreObligatorio } = {}) {
+// Los tres mensajes se pueden cambiar (por ejemplo para "Apellidos" en plural).
+export function validarNombre(valor, { obligatorio = MENSAJES.nombreObligatorio, longitud = MENSAJES.nombreLongitud, caracteres = MENSAJES.nombreCaracteres } = {}) {
   const nombre = texto(valor).normalize('NFC')
   if (!nombre) return obligatorio
-  if (nombre.length < 2 || nombre.length > 60) return MENSAJES.nombreLongitud
-  return /^\p{L}[\p{L} '’-]*$/u.test(nombre) ? null : MENSAJES.nombreCaracteres
+  if (nombre.length < 2 || nombre.length > 60) return longitud
+  return /^\p{L}[\p{L} '’-]*$/u.test(nombre) ? null : caracteres
 }
 
 export function validarDireccion(valor) {

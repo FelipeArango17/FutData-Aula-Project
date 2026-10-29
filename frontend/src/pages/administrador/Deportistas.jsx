@@ -20,7 +20,10 @@ export default function Deportistas() {
 
   return (
     <Page title="Deportistas" subtitle="86 jugadores inscritos">
-      <Button to="/administrador/deportistas/inscribir" className="md:self-start">Inscribir jugador</Button>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:self-start">
+        <Button to="/administrador/deportistas/inscribir">Inscribir jugador</Button>
+        <Button to="/administrador/deportistas/nuevo" variant="secondary">Nuevo deportista</Button>
+      </div>
       <FilterChips label="Categoría" options={filtros} value={filtro} onChange={setFiltro} />
       {visibles.length === 0 && <p className="text-body text-secondary">No hay jugadores de ejemplo en esta categoría.</p>}
       <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
