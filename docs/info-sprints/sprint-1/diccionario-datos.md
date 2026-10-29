@@ -3,14 +3,14 @@
 **Sprint:** Sprint 1  
 **Proyecto:** FutData - Asociación Deportiva Prado Fútbol Club  
 **Origen:** Modelo Entidad-Relación definido para la HU de modelado de datos  
-**Ampliación Sprint 2:** se agregan las tablas `Categoria` y `Entrenamiento` y los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y es una propuesta pendiente de confirmar por el responsable del modelo de datos (ver sección 5). Se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`), que ya incluía estas entidades.
+**Ampliación Sprint 2:** se agregan las tablas `Categoria` y `Entrenamiento` y los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).
 
 ## 1. Convenciones
 
 - `PK` identifica de forma única cada registro.
 - `FK` referencia la clave primaria de otra tabla.
 - `NOT NULL` indica un campo obligatorio. Las restricciones de obligatoriedad no están expresadas en el código del diagrama y deberán definirse durante la implementación de la base de datos.
-- `varchar` almacena texto corto; `text`, texto de longitud variable; `int`, números enteros; `long`, enteros de mayor capacidad; `decimal`, valores numéricos con decimales; `date`, fecha; `time`, hora del día; `datetime`, fecha y hora; y `boolean`, valores verdadero/falso.
+- `UUID` identifica registros y relaciones entre tablas; `varchar` almacena texto corto; `text`, texto de longitud variable; `int`, números enteros; `long`, enteros de mayor capacidad; `decimal`, valores numéricos con decimales; `date`, fecha; `time`, hora del día; `datetime`, fecha y hora; y `boolean`, valores verdadero/falso.
 - Los campos `edad` son calculados a partir de `fecha_nacimiento`; no deben mantenerse como un valor independiente sin una regla de actualización.
 - Los campos `foto`, `documentos` y `recibo_url` almacenan URLs o rutas al almacenamiento de archivos, no el contenido binario.
 
@@ -22,7 +22,7 @@ Registro principal de los jugadores del club.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_deportista` | `int` | PK | Identificador único del deportista. |
+| `id_deportista` | `UUID` | PK | Identificador único del deportista. |
 | `nombre` | `varchar` | — | Nombres del deportista. |
 | `apellido` | `varchar` | — | Apellidos del deportista. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
@@ -37,7 +37,7 @@ Registro principal de los jugadores del club.
 | `foto` | `varchar` | — | URL de la fotografía en almacenamiento en la nube. |
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del deportista. |
 | `fecha_registro` | `date` | — | Fecha de registro en el sistema. |
-| `id_categoria` | `int` | FK | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. |
+| `id_categoria` | `UUID` | FK | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. |
 
 ### 2.2 `Acudiente`
 
@@ -45,7 +45,7 @@ Personas responsables o acudientes asociados a un deportista.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_acudiente` | `int` | PK | Identificador único del acudiente. |
+| `id_acudiente` | `UUID` | PK | Identificador único del acudiente. |
 | `nombre` | `varchar` | — | Nombres del acudiente. |
 | `apellido` | `varchar` | — | Apellidos del acudiente. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
@@ -55,7 +55,8 @@ Personas responsables o acudientes asociados a un deportista.
 | `telefono` | `varchar` | — | Teléfono de contacto. |
 | `correo` | `varchar` | — | Correo electrónico. |
 | `direccion` | `varchar` | — | Dirección de residencia. |
-| `id_deportista` | `int` | FK | Deportista al que está asociado. Referencia `Deportista.id_deportista`. |
+| `id_deportista` | `UUID` | FK | Deportista al que está asociado. Referencia `Deportista.id_deportista`. |
+| `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el acudiente. |
 
 ### 2.3 `Entrenador`
 
@@ -63,7 +64,7 @@ Información personal y laboral de los entrenadores.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_entrenador` | `int` | PK | Identificador único del entrenador. |
+| `id_entrenador` | `UUID` | PK | Identificador único del entrenador. |
 | `nombre` | `varchar` | — | Nombres del entrenador. |
 | `apellido` | `varchar` | — | Apellidos del entrenador. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
@@ -76,6 +77,7 @@ Información personal y laboral de los entrenadores.
 | `horario_trabajo` | `varchar` | — | Horario de trabajo del entrenador. |
 | `especialidad` | `varchar` | — | **Nuevo (Sprint 2).** Especialidad del entrenador (por ejemplo, porteros o preparación física). Ya existe en el diagrama de clases del dominio. |
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del entrenador. |
+| `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el entrenador. |
 
 ### 2.4 `Usuario`
 
@@ -83,11 +85,10 @@ Credenciales y datos básicos de acceso al sistema.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_usuario` | `int` | PK | Identificador único del usuario. |
+| `id_usuario` | `UUID` | PK | Identificador único del usuario. |
 | `nombre` | `varchar` | — | Nombre visible del usuario. |
 | `correo` | `varchar` | — | Correo utilizado para el acceso. |
 | `contraseña` | `varchar` | — | Contraseña almacenada de forma segura mediante hash. |
-| `rol` | `varchar` | — | Rol indicado en el registro del usuario. |
 
 ### 2.5 `Pago`
 
@@ -95,8 +96,8 @@ Pagos realizados por un deportista.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_pago` | `int` | PK | Identificador único del pago. |
-| `id_deportista` | `int` | FK | Deportista que realiza o recibe el cobro. Referencia `Deportista.id_deportista`. |
+| `id_pago` | `UUID` | PK | Identificador único del pago. |
+| `id_deportista` | `UUID` | FK | Deportista que realiza o recibe el cobro. Referencia `Deportista.id_deportista`. |
 | `fecha_pago` | `date` | — | Fecha en que se registra el pago. |
 | `monto` | `decimal` | — | Valor monetario pagado. |
 | `concepto` | `varchar` | — | Concepto del pago. |
@@ -109,7 +110,7 @@ Información de los torneos en los que puede participar el club.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_torneo` | `int` | PK | Identificador único del torneo. |
+| `id_torneo` | `UUID` | PK | Identificador único del torneo. |
 | `nombre_torneo` | `varchar` | — | Nombre del torneo. |
 | `categoria` | `varchar` | — | Categoría participante. |
 | `lugar` | `varchar` | — | Lugar donde se realiza el torneo. |
@@ -123,53 +124,67 @@ Mensajes de notificación de pagos dirigidos a acudientes.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_notificacion_pago` | `int` | PK | Identificador único de la notificación. |
-| `id_acudiente` | `int` | FK | Acudiente destinatario. Referencia `Acudiente.id_acudiente`. |
+| `id_notificacion_pago` | `UUID` | PK | Identificador único de la notificación. |
+| `id_acudiente` | `UUID` | FK | Acudiente destinatario. Referencia `Acudiente.id_acudiente`. |
 | `mensaje` | `text` | — | Contenido de la notificación. |
 | `fecha_envio` | `datetime` | — | Fecha y hora del envío. |
 | `leido` | `boolean` | — | Indica si el acudiente leyó la notificación. |
 
-### 2.8 `Asistencia`
+### 2.8 `Notificacion`
+
+Notificaciones generales dirigidas a las cuentas de usuarios, incluidos los avisos de entrenamientos.
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_notificacion` | `UUID` | PK | Identificador único de la notificación. |
+| `id_usuario` | `UUID` | FK | Usuario destinatario. Referencia `Usuario.id_usuario`. |
+| `id_entrenamiento` | `UUID` | FK | Entrenamiento relacionado, si aplica. Referencia `Entrenamiento.id_entrenamiento`. Nullable para otros tipos de aviso. |
+| `tipo` | `varchar` | — | Tipo de notificación, por ejemplo `ENTRENAMIENTO_CREADO`, `ENTRENAMIENTO_ACTUALIZADO` o `ENTRENAMIENTO_ELIMINADO`. |
+| `mensaje` | `text` | — | Contenido de la notificación. |
+| `fecha_envio` | `datetime` | — | Fecha y hora del envío. |
+| `leido` | `boolean` | — | Indica si el usuario leyó la notificación. |
+
+### 2.9 `Asistencia`
 
 Registro de asistencia de un deportista tomado por un entrenador.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_asistencia` | `int` | PK | Identificador único del registro de asistencia. |
-| `id_deportista` | `int` | FK | Deportista registrado. Referencia `Deportista.id_deportista`. |
-| `id_entrenador` | `int` | FK | Entrenador que registra la asistencia. Referencia `Entrenador.id_entrenador`. |
-| `id_entrenamiento` | `int` | FK | **Nuevo (Sprint 2).** Entrenamiento al que corresponde la asistencia. Referencia `Entrenamiento.id_entrenamiento`. Ver decisión D5. |
+| `id_asistencia` | `UUID` | PK | Identificador único del registro de asistencia. |
+| `id_deportista` | `UUID` | FK | Deportista registrado. Referencia `Deportista.id_deportista`. |
+| `id_entrenador` | `UUID` | FK | Entrenador que registra la asistencia. Referencia `Entrenador.id_entrenador`. |
+| `id_entrenamiento` | `UUID` | FK | **Nuevo (Sprint 2).** Entrenamiento al que corresponde la asistencia. Referencia `Entrenamiento.id_entrenamiento`. Ver decisión D5. |
 | `fecha` | `date` | — | Fecha de la asistencia. |
 | `presente` | `boolean` | — | Indica si el deportista estuvo presente. |
 | `observaciones` | `text` | — | Comentarios adicionales sobre la asistencia. |
 
-### 2.9 `InscripcionTorneo`
+### 2.10 `InscripcionTorneo`
 
 Tabla intermedia que registra la participación de deportistas en torneos.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_inscripcion` | `int` | PK | Identificador único de la inscripción. |
-| `id_torneo` | `int` | FK | Torneo de la inscripción. Referencia `Torneo.id_torneo`. |
-| `id_deportista` | `int` | FK | Deportista inscrito. Referencia `Deportista.id_deportista`. |
+| `id_inscripcion` | `UUID` | PK | Identificador único de la inscripción. |
+| `id_torneo` | `UUID` | FK | Torneo de la inscripción. Referencia `Torneo.id_torneo`. |
+| `id_deportista` | `UUID` | FK | Deportista inscrito. Referencia `Deportista.id_deportista`. |
 | `resultado` | `varchar` | — | Resultado o clasificación obtenida. |
 
-### 2.10 `Rol`
+### 2.11 `Rol`
 
 Catálogo de roles disponibles en el sistema.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_rol` | `int` | PK | Identificador único del rol. |
+| `id_rol` | `UUID` | PK | Identificador único del rol. |
 | `nombre` | `varchar` | — | Nombre del rol. |
 
-### 2.11 `ReporteFinanciero`
+### 2.12 `ReporteFinanciero`
 
 Resumen mensual de los ingresos del club.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_reporte` | `int` | PK | Identificador único del reporte. |
+| `id_reporte` | `UUID` | PK | Identificador único del reporte. |
 | `mes` | `int` | — | Mes del periodo reportado. |
 | `año` | `int` | — | Año del periodo reportado. |
 | `ingresos_mensualidades` | `decimal` | — | Total de ingresos por mensualidades. |
@@ -177,37 +192,37 @@ Resumen mensual de los ingresos del club.
 | `ingresos_ventas` | `decimal` | — | Total de ingresos por ventas. |
 | `fecha_generacion` | `datetime` | — | Fecha y hora de generación del reporte. |
 
-### 2.12 `UsuarioRol`
+### 2.13 `UsuarioRol`
 
 Tabla intermedia para asociar usuarios con roles.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_usuario_rol` | `int` | PK | Identificador único de la asociación. |
-| `id_usuario` | `int` | FK | Usuario asociado. Referencia `Usuario.id_usuario`. |
-| `id_rol` | `int` | FK | Rol asignado. Referencia `Rol.id_rol`. |
+| `id_usuario_rol` | `UUID` | PK | Identificador único de la asociación. |
+| `id_usuario` | `UUID` | FK | Usuario asociado. Referencia `Usuario.id_usuario`. |
+| `id_rol` | `UUID` | FK | Rol asignado. Referencia `Rol.id_rol`. |
 
-### 2.13 `Categoria`
+### 2.14 `Categoria`
 
 **Nuevo (Sprint 2).** Catálogo de categorías por edad del club (Sub-8, Sub-10, Sub-12, Sub-14 y Sub-16 en las pantallas actuales).
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_categoria` | `int` | PK | Identificador único de la categoría. |
+| `id_categoria` | `UUID` | PK | Identificador único de la categoría. |
 | `nombre` | `varchar` | — | Nombre de la categoría, por ejemplo `Sub-12`. Único. |
 | `edad_minima` | `int` | — | Edad mínima para pertenecer a la categoría. Ver decisión D3. |
 | `edad_maxima` | `int` | — | Edad máxima para pertenecer a la categoría. Ver decisión D3. |
-| `id_entrenador` | `int` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. |
+| `id_entrenador` | `UUID` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. |
 
-### 2.14 `Entrenamiento`
+### 2.15 `Entrenamiento`
 
 **Nuevo (Sprint 2).** Sesión de entrenamiento programada para una categoría (HU-026).
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_entrenamiento` | `int` | PK | Identificador único del entrenamiento. |
-| `id_categoria` | `int` | FK | Categoría que entrena. Referencia `Categoria.id_categoria`. |
-| `id_entrenador` | `int` | FK | Entrenador a cargo de la sesión. Referencia `Entrenador.id_entrenador`. Puede ser distinto del que dirige la categoría (por ejemplo, un reemplazo). |
+| `id_entrenamiento` | `UUID` | PK | Identificador único del entrenamiento. |
+| `id_categoria` | `UUID` | FK | Categoría que entrena. Referencia `Categoria.id_categoria`. |
+| `id_entrenador` | `UUID` | FK | Entrenador a cargo de la sesión. Referencia `Entrenador.id_entrenador`. Puede ser distinto del que dirige la categoría (por ejemplo, un reemplazo). |
 | `fecha` | `date` | — | Fecha del entrenamiento. |
 | `hora_inicio` | `time` | — | Hora de inicio. Las pantallas actuales solo manejan hora de inicio. |
 | `lugar` | `varchar` | — | Cancha o lugar del entrenamiento, por ejemplo `Cancha 1`. Ver decisión D2. |
@@ -221,6 +236,8 @@ Las siguientes relaciones se derivan de las claves foráneas incluidas en el mod
 | `Acudiente` | N:1 | `Deportista` | Cada acudiente se asocia a un deportista; un deportista puede tener varios acudientes. |
 | `Pago` | N:1 | `Deportista` | Cada pago pertenece a un deportista; un deportista puede tener varios pagos. |
 | `NotificacionPago` | N:1 | `Acudiente` | Cada notificación pertenece a un acudiente; un acudiente puede recibir varias notificaciones. |
+| `Notificacion` | N:1 | `Usuario` | Cada notificación general pertenece a un usuario destinatario; un usuario puede recibir varias notificaciones. |
+| `Notificacion` | N:1 | `Entrenamiento` | Los avisos de entrenamiento pueden referenciar el entrenamiento relacionado. |
 | `Asistencia` | N:1 | `Deportista` | Cada registro corresponde a un deportista; un deportista puede tener varios registros. |
 | `Asistencia` | N:1 | `Entrenador` | Cada registro es tomado por un entrenador; un entrenador puede registrar muchas asistencias. |
 | `InscripcionTorneo` | N:1 | `Torneo` | Cada inscripción pertenece a un torneo; un torneo puede tener muchos inscritos. |
@@ -237,29 +254,29 @@ Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es 
 
 ## 4. Observaciones para la implementación
 
-1. `Usuario.rol` y la tabla `UsuarioRol` representan dos formas de asociar roles. Antes de implementar la base de datos se debe elegir una única fuente de verdad o documentar explícitamente el uso de cada una, para evitar inconsistencias.
+1. `UsuarioRol` es la única fuente de verdad para los roles; `Usuario` no almacena un campo `rol`.
 2. Conviene agregar restricciones de unicidad para los documentos de identidad y los correos, según las reglas del negocio.
 3. Para evitar duplicados, se recomienda una restricción compuesta sobre (`id_torneo`, `id_deportista`) en `InscripcionTorneo`.
-4. Para evitar dos registros del mismo deportista en una fecha, se debe evaluar una restricción sobre (`id_deportista`, `fecha`) en `Asistencia`, si el negocio registra una asistencia diaria.
+4. Para evitar duplicados, se debe aplicar una restricción compuesta sobre (`id_deportista`, `id_entrenamiento`) en `Asistencia`.
 5. `long` es un tipo lógico del diagrama. En el motor de base de datos deberá mapearse a un tipo entero equivalente, como `BIGINT`.
-6. Los valores de `estado_pago`, `tipo_documento`, `rol` y `resultado` deberían validarse mediante catálogos o restricciones, en lugar de aceptar cualquier texto.
+6. Los valores de `estado_pago`, `tipo_documento` y `resultado` deberían validarse mediante catálogos o restricciones, en lugar de aceptar cualquier texto. Los roles se validan mediante `Rol`.
 7. Las contraseñas nunca deben almacenarse en texto plano; `Usuario.contraseña` debe contener únicamente un hash generado por un algoritmo seguro.
 8. **Nuevo (Sprint 2).** Para que no se programen dos entrenamientos en el mismo lugar a la misma hora, se recomienda una restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`) en `Entrenamiento`. La pantalla de programación ya detecta este conflicto y ofrece alternativas; la base de datos debe hacerlo cumplir también.
-9. **Nuevo (Sprint 2).** El diccionario usa `int` como identificador, mientras que el diagrama de clases del dominio usa `UUID`. Hay que unificar el tipo antes de crear las tablas (Supabase Auth usa UUID para sus usuarios).
+9. **Nuevo (Sprint 2).** Todas las PK y FK usan `UUID`, compatible con Supabase Auth y con el diagrama de clases del dominio.
 10. **Nuevo (Sprint 2).** `Torneo.categoria` es texto libre. Una vez exista `Categoria`, conviene reemplazarlo por una clave foránea `id_categoria` para que los torneos y los deportistas hablen de las mismas categorías.
-11. **Nuevo (Sprint 2).** El diagrama de clases indica que `Usuario` es la cuenta de un `Entrenador` y de un `Acudiente` (relación 1 a 0..1), pero ni `Entrenador` ni `Acudiente` tienen `id_usuario` en este diccionario. La HU-025 (registrar entrenadores) necesita esa unión para crear su acceso.
+11. **Nuevo (Sprint 2).** `Entrenador.id_usuario` y `Acudiente.id_usuario` permiten asociar cada perfil con su cuenta de acceso; ambos son nullable durante el registro.
 
-## 5. Decisiones pendientes de la ampliación del Sprint 2
+## 5. Decisiones confirmadas de la ampliación del Sprint 2
 
-Estas decisiones las debe confirmar el responsable del modelo de datos. El frontend avanza con datos en memoria detrás de una capa de servicio y se ajusta cuando se decidan.
+Estas decisiones fueron confirmadas para cerrar el modelo antes de crear tablas. El frontend avanza con datos en memoria detrás de una capa de servicio y se ajusta cuando se implementen los endpoints.
 
 | Id | Decisión | Propuesta |
 | :--- | :--- | :--- |
-| D1 | ¿Un entrenador dirige varias categorías y una categoría tiene un solo entrenador, o una categoría puede tener varios entrenadores (por ejemplo, un auxiliar)? | Seguir el diagrama de clases: `Categoria.id_entrenador` (1 entrenador, varias categorías). Si se necesitan varios entrenadores por categoría, crear la tabla intermedia `EntrenadorCategoria` (`id_entrenador`, `id_categoria`). |
-| D2 | ¿`lugar` es texto libre o un catálogo? | Empezar con texto y la restricción de la observación 8. Si hay errores de escritura (`Cancha 1` y `cancha 1`), crear la tabla `Lugar`. |
-| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Guardar `Deportista.id_categoria`, asignada al inscribir según `edad_minima` y `edad_maxima`. Falta definir esas edades y cómo se trata el cambio de año. |
-| D4 | ¿Cómo se guarda el aviso a deportistas y acudientes cuando se crea, cambia o elimina un entrenamiento (tarea 338)? | `NotificacionPago` solo sirve para pagos. Ampliarla a una tabla `Notificacion` con tipo, o enviar el aviso sin guardarlo. |
-| D5 | ¿La asistencia se toma por entrenamiento? | Sí: agregar `Asistencia.id_entrenamiento` y cambiar la restricción de la observación 4 a (`id_deportista`, `id_entrenamiento`). `Asistencia.fecha` quedaría derivable de `Entrenamiento.fecha`. |
+| D1 | ¿Un entrenador dirige varias categorías y una categoría tiene un solo entrenador, o una categoría puede tener varios entrenadores (por ejemplo, un auxiliar)? | Confirmado: seguir el diagrama de clases con `Categoria.id_entrenador` (1 entrenador, varias categorías). No se crea `EntrenadorCategoria`. |
+| D2 | ¿`lugar` es texto libre o un catálogo? | Confirmado: texto, con restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`). |
+| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Confirmado: guardar `Deportista.id_categoria`, asignada al inscribir según `edad_minima` y `edad_maxima`. |
+| D4 | ¿Cómo se guarda el aviso a deportistas y acudientes cuando se crea, cambia o elimina un entrenamiento (tarea 338)? | Confirmado: crear una tabla `Notificacion` general con tipo; `NotificacionPago` queda reservada para pagos. |
+| D5 | ¿La asistencia se toma por entrenamiento? | Confirmado: agregar `Asistencia.id_entrenamiento` y usar la restricción (`id_deportista`, `id_entrenamiento`). `Asistencia.fecha` queda derivable de `Entrenamiento.fecha`. |
 
 ### 5.1 Correspondencia con el frontend (tarea 339)
 
