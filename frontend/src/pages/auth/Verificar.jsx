@@ -7,11 +7,9 @@ import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Button from '../../components/ui/Button.jsx'
 import Card from '../../components/ui/Card.jsx'
 import Icon from '../../components/Icon.jsx'
+import Correo from '../../components/usuarios/Correo.jsx'
 import { useAuth } from '../../context/AuthContext.js'
-import { menus } from '../../config/menus.js'
-
-// Primera pantalla del menú de cada rol (se va directo a ella para conservar el estado de la navegación)
-const inicioDe = (rol) => menus[rol][0].items[0].to
+import { inicioDe } from '../../config/menus.js'
 
 const reloj = (segundos) => `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`
 
@@ -141,7 +139,7 @@ export default function Verificar() {
         <div className="flex flex-col gap-2">
           <h1 ref={titulo} tabIndex={-1} className="break-words text-h2 focus:outline-none">Verifica tu identidad</h1>
           <p className="break-words text-body text-secondary">
-            Enviamos un código de 6 dígitos a {info.correoEnmascarado}. Vence en 10 minutos.
+            Enviamos un código de 6 dígitos a <Correo correo={info.correoEnmascarado} />. Vence en 10 minutos.
           </p>
         </div>
 
@@ -170,17 +168,24 @@ export default function Verificar() {
             )}
           </div>
 
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body">
-            <input
-              type="checkbox"
-              checked={recordar}
-              onChange={(e) => setRecordar(e.target.checked)}
-              className="h-5 w-5 shrink-0 accent-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            />
-            <span className="min-w-0 break-words">Recordar este equipo por 30 días</span>
-          </label>
+          {/* Recordar este equipo (HU-003): no viene marcada. El servicio lo guarda solo si el código es correcto.
+              PENDIENTE: en real será un token/cookie HttpOnly y Secure emitido por el backend */}
+          <div className="flex flex-col gap-1">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body">
+              <input
+                type="checkbox"
+                checked={recordar}
+                onChange={(e) => setRecordar(e.target.checked)}
+                aria-describedby="recordar-ayuda"
+                className="h-5 w-5 shrink-0 accent-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+              />
+              <span className="min-w-0 break-words">Recordar este equipo por 30 días</span>
+            </label>
+            <p id="recordar-ayuda" className="break-words text-small text-secondary">
+              Solo en equipos personales. Podrás cambiarlo en tu perfil.
+            </p>
+          </div>
 
-          {/* PENDIENTE: recordar el equipo será una cookie HttpOnly y Secure emitida por el backend */}
           <Button type="submit" disabled={enviando || bloqueado} className={`w-full ${enviando || bloqueado ? 'cursor-not-allowed opacity-70' : ''}`}>
             {enviando ? 'Verificando…' : 'Verificar'}
           </Button>

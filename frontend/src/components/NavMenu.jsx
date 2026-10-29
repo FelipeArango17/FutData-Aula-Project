@@ -1,5 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { menus } from '../config/menus.js'
+import { useAuth } from '../context/AuthContext.js'
 
 const itemClasses =
   'flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-body-medium text-on-dark ' +
@@ -8,6 +9,16 @@ const itemClasses =
 // Lista de grupos del rol + Accesibilidad y Cerrar sesión al final.
 // La usan Sidebar (escritorio) y Drawer (móvil).
 export default function NavMenu({ role, onNavigate }) {
+  const { cerrarSesion } = useAuth()
+  const navigate = useNavigate()
+
+  // replace: el botón Atrás no regresa a la pantalla desde la que se cerró la sesión
+  function salir() {
+    onNavigate?.() // en el celular, cierra el cajón del menú
+    cerrarSesion()
+    navigate('/login', { replace: true, state: { aviso: 'Sesión cerrada' } })
+  }
+
   return (
     <nav aria-label="Secciones" className="flex flex-1 flex-col gap-4 p-4">
       {menus[role].map((group, index) => (
@@ -43,12 +54,24 @@ export default function NavMenu({ role, onNavigate }) {
 
       <div className="mt-auto flex flex-col gap-1">
         <div className="mb-3 h-px bg-brand-primary-hover" />
-        {/* Sin acción todavía: se conectan cuando existan el menú de accesibilidad y el login */}
+        <NavLink
+          to="/perfil"
+          onClick={onNavigate}
+          className={({ isActive }) => `${itemClasses} ${isActive ? 'bg-brand-primary-hover font-semibold' : ''}`}
+        >
+          {({ isActive }) => (
+            <>
+              <span aria-hidden="true" className={`min-h-5 w-1 shrink-0 rounded-full ${isActive ? 'bg-brand-accent' : ''}`} />
+              <span className="min-w-0 break-words">Mi perfil</span>
+            </>
+          )}
+        </NavLink>
+        {/* Sin acción todavía: se conecta cuando exista el menú de accesibilidad */}
         <button type="button" className={itemClasses}>
           <span aria-hidden="true" className="min-h-5 w-1 shrink-0" />
           Accesibilidad
         </button>
-        <button type="button" className={itemClasses}>
+        <button type="button" onClick={salir} className={itemClasses}>
           <span aria-hidden="true" className="min-h-5 w-1 shrink-0" />
           Cerrar sesión
         </button>

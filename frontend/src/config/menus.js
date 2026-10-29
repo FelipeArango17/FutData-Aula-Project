@@ -109,4 +109,7 @@ export const bottomNavs = {
   ],
 }
 
+// Primera pantalla del menú de un rol: a donde se llega después de iniciar sesión.
+export const inicioDe = (role) => menus[role][0].items[0].to
+
 export const getItems = (role) => menus[role].flatMap((group) => group.items)
