@@ -7,6 +7,12 @@
 FROM eclipse-temurin:21-jdk-noble AS build
 WORKDIR /app
 
+# mvnw descarga Maven como .zip solo si existe unzip; sin él baja el .tar.gz y la suma SHA-256 de
+# .mvn/wrapper/maven-wrapper.properties (que es la del .zip) no coincide. Esta etapa no llega a la imagen final.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+
 # Primero solo el wrapper y el pom: las dependencias quedan en caché mientras no cambie el pom.xml.
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./

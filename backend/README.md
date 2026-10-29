@@ -17,7 +17,8 @@ API REST en JSON de FutData. Sigue la arquitectura en capas del PPI con los patr
 ## Requisitos
 
 - JDK 21 (por ejemplo, Eclipse Temurin). `java -version` debe decir 21.
-- No hace falta instalar Maven: `mvnw` descarga la versión correcta (3.9.16) la primera vez.
+- No hace falta instalar Maven: `mvnw` descarga la versión correcta (3.9.16) la primera vez y comprueba su SHA-256 (`distributionSha256Sum` en `.mvn/wrapper/maven-wrapper.properties`).
+- **En Linux, `unzip`** (`sudo apt install unzip`). Sin `unzip`, `mvnw` descarga el `.tar.gz` de Maven en lugar del `.zip`, y como la suma SHA-256 guardada es la del `.zip`, falla con *Failed to validate Maven distribution SHA-256*. Windows, macOS y los runners de GitHub Actions ya lo traen; el `Dockerfile` lo instala en su etapa de compilación.
 - Opcional: Docker Desktop, para construir la imagen.
 
 ## Correr el backend
