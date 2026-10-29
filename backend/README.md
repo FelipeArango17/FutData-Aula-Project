@@ -64,6 +64,7 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n (cabecera `X-FutData-Token`) | vacío | Obligatoria |
 | `SUPABASE_URL`, `SUPABASE_JWKS_URL` | Para HU-001 (validar el JWT). **Todavía no se usan** | | |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
+| `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
 | `DB_POOL_MAX` | Conexiones máximas del pool | `5` | `5` |
 
 Con el perfil `prod`, si falta una variable obligatoria la aplicación **no arranca** y dice cuáles faltan.
@@ -124,8 +125,8 @@ co.edu.futdata
 │   └── external         Clientes de servicios externos: n8n (INotificador / N8nClient), Wompi
 ├── util
 │   ├── security         JWT, códigos 2FA, auditoría (HU-001, HU-002, HU-005)
-│   └── reports          Reportes y exportaciones
-└── config               CORS, OpenAPI, propiedades tipadas (futdata.cors, futdata.n8n)
+│   └── reports          Reportes y exportaciones: comprobante de pago en PDF (OpenPDF)
+└── config               CORS, OpenAPI, propiedades tipadas (futdata.cors, futdata.n8n, futdata.club)
 ```
 
 Cada paquete tiene un `package-info.java` que explica qué va ahí.
@@ -202,6 +203,99 @@ Reglas para todos los módulos:
 - Nombres de clases, métodos y mensajes en español, como en los diagramas del PPI.
 - No registrar en logs datos sensibles (contraseñas, códigos 2FA, tokens, correos completos).
 
+## Comprobante de pago (PDF)
+
+`util.reports` genera el comprobante de un pago en PDF (HU-018, tarea 327), con [OpenPDF](https://github.com/LibrePDF/OpenPDF) 3.0.5 (licencia LGPL 2.1 / MPL 2.0). **Solo lo genera en memoria** y devuelve los bytes. Guardarlo en Supabase Storage y entregar el enlace de descarga es la **tarea 328**. Enviarlo por n8n y el estado de cuenta en PDF son de otras historias.
+
+| Clase | Qué es |
+| :--- | :--- |
+| `IGeneradorComprobante` | `byte[] generar(ComprobantePagoDTO datos)`. Es lo único que usa el servicio |
+| `ComprobantePdfGenerator` | Implementación con OpenPDF (`@Component`) |
+| `ComprobantePagoDTO` | Datos del comprobante (record). No depende de la base de datos |
+| `ComprobanteInvalidoException` | Datos inválidos; el manejo global de errores responde `400` |
+| `PlantillaReportePdf` | Encabezado, pie, colores y fuentes comunes, para reutilizar en el estado de cuenta |
+| `FormatoColombiano`, `NumeroEnLetras` | `$ 90.000`, `28 de octubre de 2026`, `NIT 811.032.309-1`, `313 731 7366` y "noventa mil pesos M/CTE" |
+
+### Usarlo desde un servicio
+
+El servicio de pagos consulta el pago con sus DAO, arma el DTO solo con lo que puede ver el acudiente y recibe el PDF:
+
+```java
+@Service
+public class PagoServiceImpl implements IPagoService {
+
+    private final IGeneradorComprobante comprobantes;      // util.reports, inyectado por constructor
+    // ... IPagoDAO, IDeportistaDAO
+
+    private byte[] comprobanteDe(Pago pago, Deportista deportista, Acudiente acudiente) {
+        ComprobantePagoDTO datos = new ComprobantePagoDTO(
+                "FD-2026-000123",                            // lo asigna quien llama (ver abajo)
+                Instant.now(),                               // fecha de emisión; se imprime en hora de Colombia
+                deportista.getNombreCompleto(),
+                deportista.getCategoria(),                   // opcional
+                acudiente.getNombreCompleto(),
+                pago.getConcepto(),
+                pago.getMonto(),                             // long, pesos sin decimales
+                pago.getFechaPago(),                         // LocalDate, no futura
+                MetodoPago.desdeEtiqueta(pago.getMetodo()),  // "Efectivo", "Transferencia", "PSE", "Nequi", "Tarjeta"
+                pago.getReferenciaWompi());                  // solo PSE, Nequi o Tarjeta; null en pagos manuales
+        return comprobantes.generar(datos);                  // tarea 328: subirlo a Storage y guardar recibo_url
+    }
+}
+```
+
+Si un dato no es válido, `generar()` lanza `ComprobanteInvalidoException` con todos los errores (`campo: mensaje`, sin los valores). Desde un endpoint, el manejador global responde `400`:
+
+```json
+{ "estado": 400, "mensaje": "Los datos del comprobante no son válidos: concepto: es obligatorio; monto: debe ser mayor que 0", ... }
+```
+
+Reglas: `numeroComprobante` (máximo 40 caracteres), `fechaEmision`, `nombreDeportista`, `nombreAcudiente` (máximo 120), `concepto` (máximo 200), `fechaPago` y `metodo` son obligatorios. `monto` debe ser mayor que 0. `fechaPago` no puede ser posterior a hoy en Colombia. `referenciaWompi` (máximo 100) solo se acepta en pagos en línea.
+
+**Número de comprobante.** Formato sugerido: `FD-AAAA-NNNNNN`, con el año del pago y un consecutivo de 6 dígitos, por ejemplo `FD-2026-000123`. El generador no lo inventa ni comprueba que sea único: el consecutivo lo debe llevar la base de datos (tarea 328 o la tabla `Pago`).
+
+### Qué lleva y qué no
+
+| Lleva | No lleva, a propósito |
+| :--- | :--- |
+| Número y fecha de emisión | Quién registró el pago |
+| Deportista, categoría (si hay) y acudiente | Nota interna |
+| Concepto, fecha y método de pago | Referencia del pago manual |
+| Referencia Wompi (solo pagos en línea) | Documento de identidad del deportista (es menor de edad) |
+| Monto en número (`$ 90.000`) y en letras (`noventa mil pesos M/CTE`) | Datos de tarjeta o cuenta bancaria |
+
+El DTO **no tiene campos** para lo de la segunda columna, así que no se puede imprimir por error; `ComprobantePdfGeneratorTest` lo comprueba. Los metadatos del PDF solo tienen el título (`Comprobante de pago FD-2026-000123`), el autor (el nombre del club) y el creador (`FutData`), sin datos personales.
+
+**Diseño.** Tamaño carta, en español.
+- Encabezado con el club y el título; tabla de datos; el monto en un recuadro.
+- Pie en cada página: fecha y hora de emisión, "Documento generado por FutData", la aclaración de que no es factura electrónica y el número de página.
+- Colores de `docs/design-system/tokens.css`. Se lee bien impreso en blanco y negro: texto oscuro, fondos muy claros, bordes grises medios y nada que dependa solo del color.
+- Fuente Helvetica estándar: tiene tildes y ñ, y no hay que incrustarla.
+
+### Datos del club
+
+Salen de `futdata.club` (`config.ClubProperties`). Son datos públicos, con valor por defecto en `application.yml` en todos los perfiles, y se pueden cambiar con variables de entorno:
+
+| Variable | Por defecto | Se imprime |
+| :--- | :--- | :--- |
+| `CLUB_NOMBRE` | `Asociación Deportiva Prado Fútbol Club` | Igual |
+| `CLUB_NIT` | `811032309-1` | `NIT 811.032.309-1` |
+| `CLUB_DIRECCION` | `Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia` | Igual |
+| `CLUB_TELEFONO` | `3137317366` | `Tel. 313 731 7366` |
+| `CLUB_CORREO` | `prafofutbolclub@gmail.com` | Igual |
+
+- Si una variable queda vacía (`CLUB_NIT=`), esa línea no se imprime.
+- `backend/.env` se lee en ISO-8859-1: para escribir tildes ahí usa `ó` y similares (ver `.env.example`), o define la variable en el sistema.
+
+**Pendiente de confirmar con el club:**
+- El correo `prafofutbolclub@gmail.com`: ¿"prafo" está bien escrito o es "prado"?
+- El logo: no hay un PNG en el repositorio, así que el comprobante sale sin logo. Cuando haya uno, se agrega en `PlantillaReportePdf`.
+- El texto legal del pie ("No es una factura electrónica"), con el tesorero.
+
+### Ver un ejemplo
+
+`./mvnw verify` (o `./mvnw test -Dtest=ComprobantePdfGeneratorTest`) deja PDF de ejemplo en `target/comprobantes-ejemplo/`: `comprobante-pago-manual.pdf`, `comprobante-pago-en-linea.pdf` y `comprobante-concepto-largo.pdf`. `target/` está ignorado por Git.
+
 ## Formato de errores (para el frontend)
 
 Todas las respuestas de error tienen el mismo JSON:
@@ -226,7 +320,7 @@ Todas las respuestas de error tienen el mismo JSON:
 
 | Código | Cuándo | `mensaje` de ejemplo |
 | :--- | :--- | :--- |
-| `400` | Bean Validation falla, el JSON está mal formado, falta un parámetro o tiene un tipo inválido | `nombre: no debe estar vacío` |
+| `400` | Bean Validation falla, el JSON está mal formado, falta un parámetro o tiene un tipo inválido, o el servicio lanza `ComprobanteInvalidoException` | `nombre: no debe estar vacío` |
 | `404` | La ruta no existe o el servicio lanza `RecursoNoEncontradoException` | `No existe la ruta GET /api/no-existe` |
 | `405` / `415` | Método HTTP no permitido o tipo de contenido no soportado | `El método POST no está permitido en esta ruta` |
 | `500` | Cualquier error no controlado. **Nunca incluye la traza ni el mensaje interno**; el detalle queda en el log del servidor | `Ocurrió un error interno. Intenta de nuevo más tarde.` |
@@ -249,6 +343,9 @@ No necesitan base de datos, credenciales ni red: cargan `src/test/resources/prue
 | Prueba | Qué revisa |
 | :--- | :--- |
 | `FutDataApplicationTests` | El contexto arranca sin base de datos y sin JPA; propiedades de n8n (timeout 5 s, token oculto en `toString`); OpenAPI y Swagger UI |
+| `NumeroEnLetrasTest`, `FormatoColombianoTest` | Montos en letras (1, 21, 100, 101, 1.000, 150.000, 1.000.000, 1.250.500...), pesos, fechas en hora de Colombia, NIT y celular |
+| `ComprobantePdfGeneratorTest` | Texto del PDF leído con PDFBox: datos, monto en número y en letras, fechas, club (y líneas vacías), tildes y ñ, concepto largo, metadatos sin datos personales, que no salgan la nota ni quién registró, y DTO inválido. Deja ejemplos en `target/comprobantes-ejemplo/` |
+| `ComprobanteConfiguracionTest` | Valores por defecto de `futdata.club` y el generador como bean |
 | `SaludControllerTest` | `GET /api/health`: `200` con la base de datos arriba, `503` con la base de datos abajo |
 | `SaludDAOImplTest` | `SELECT 1` con timeout de 2 s; `false` si no hay conexión |
 | `ManejadorGlobalErroresTest` | Formato uniforme para `400`, `404`, `405` y `500`, sin traza |
