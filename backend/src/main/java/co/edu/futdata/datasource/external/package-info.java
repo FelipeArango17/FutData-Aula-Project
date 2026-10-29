@@ -3,7 +3,9 @@
  *
  * <p>Interfaces y clientes de los sistemas externos del PPI: n8n para las notificaciones
  * ({@link co.edu.futdata.datasource.external.INotificador} y su implementación
- * {@link co.edu.futdata.datasource.external.N8nClient}), Wompi para los pagos y la API de Supabase. El
+ * {@link co.edu.futdata.datasource.external.N8nClient}), Supabase Storage para los comprobantes
+ * ({@link co.edu.futdata.datasource.external.IAlmacenamientoArchivos} y
+ * {@link co.edu.futdata.datasource.external.SupabaseStorageClient}, tarea 328) y Wompi para los pagos. El
  * servicio depende de la interfaz; la implementación hace la llamada HTTP ({@code RestClient}) con las
  * propiedades tipadas de {@code config}.
  *
@@ -19,6 +21,10 @@
  * <p>Las excepciones de {@code INotificador} ({@code NotificacionException} y sus subclases) viven junto a
  * la interfaz porque son parte de su contrato: el servicio las atrapa y decide qué decirle al usuario. No
  * llegan al controlador.
+ *
+ * <p>{@code IAlmacenamientoArchivos} sigue el mismo criterio que {@code INotificador}: en la Fig. 02-pagos
+ * está en la fila de interfaces y la usa la fachada ({@code IGeneradorComprobante -> IAlmacenamientoArchivos}).
+ * Sus excepciones ({@code AlmacenamientoException} y subclases) también viven aquí.
  *
  * <p>Contrato del webhook de n8n: {@code docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md}.
  */
