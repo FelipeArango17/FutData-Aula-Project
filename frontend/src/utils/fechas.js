@@ -63,3 +63,20 @@ export function sumarMinutos(hora, minutos) {
   if (total >= 24 * 60) return null
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
+
+// "jueves 22 de octubre de 2026"
+export const fechaLargaConAnio = (fecha) => `${diaLargo(fecha).toLowerCase()} de ${fecha.slice(0, 4)}`
+
+// Fecha y hora LOCALES de un instante ISO (por ejemplo new Date().toISOString()): { fecha: "AAAA-MM-DD", hora: "HH:MM" }
+export function partesMomento(iso) {
+  const d = new Date(iso)
+  const dos = (n) => String(n).padStart(2, '0')
+  return { fecha: `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`, hora: `${dos(d.getHours())}:${dos(d.getMinutes())}` }
+}
+
+// "Jueves 22 de octubre de 2026, 4:05 p. m."
+export function momentoLegible(iso) {
+  const { fecha, hora } = partesMomento(iso)
+  const f = fechaLargaConAnio(fecha)
+  return `${f[0].toUpperCase()}${f.slice(1)}, ${formatHora(hora)}`
+}

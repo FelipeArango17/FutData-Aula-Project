@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
@@ -6,8 +6,7 @@ import Button from '../../components/ui/Button.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import FormularioDeportista from '../../components/deportistas/FormularioDeportista.jsx'
-import { useRole } from '../../context/RoleContext.js'
-import { useAuth } from '../../context/AuthContext.js'
+import { useActor } from '../../context/useActor.js'
 import { calcularEdad, crearDeportista, listarCategorias } from '../../services/deportistasService.js'
 
 // Registrar un deportista nuevo (HU-008, tarea 313). Ruta /administrador/deportistas/nuevo.
@@ -15,11 +14,9 @@ import { calcularEdad, crearDeportista, listarCategorias } from '../../services/
 // fecha de nacimiento, categoría). Los pasos de acudiente, documentos, posición, EPS y talla son de otras tareas.
 // PENDIENTE: el rol "secretaria" no existe todavía; solo el administrador registra (lo valida el servicio y luego el backend con el JWT).
 const VOLVER = '/administrador/deportistas'
-const CORREO_DEMO = 'administrador@pradofc.co'
 
 export default function DeportistaNuevo() {
-  const { role } = useRole()
-  const { estado: estadoSesion, usuario } = useAuth()
+  const actor = useActor()
   const navigate = useNavigate()
   const tituloRef = useRef(null)
   const [intento, setIntento] = useState(0)
@@ -27,10 +24,6 @@ export default function DeportistaNuevo() {
   const [carga, setCarga] = useState({ intento: -1, categorias: [], error: false })
   const [creado, setCreado] = useState(null) // { deportista, categoria, aviso }
   const [formulario, setFormulario] = useState(0) // cambia la clave para empezar un formulario en blanco
-
-  // Quién registra: el correo de la sesión verificada (si coincide con el rol activo) o el administrador de demostración
-  const correo = estadoSesion === 'verificada' && usuario?.rol === role && usuario.correo ? usuario.correo : CORREO_DEMO
-  const actor = useMemo(() => ({ rol: role, correo }), [role, correo])
 
   // Al abrir, y al empezar otro registro, el foco va al título
   useEffect(() => {

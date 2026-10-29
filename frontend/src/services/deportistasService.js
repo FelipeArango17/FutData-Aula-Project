@@ -15,7 +15,7 @@
 //     acudiente        correo de la cuenta del acudiente, o null (lo usará el estado de cuenta)
 //
 // Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED' |
-//   'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }).
+//   'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }) | 'SIN_CAMBIOS'.
 //
 // PENDIENTE: confirmar con el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md):
 // - D3: el deportista guarda su categoría (`idCategoria`, no se calcula por edad). Falta definir edad_minima/edad_maxima
@@ -32,6 +32,10 @@
 //   no revela quién es el otro deportista. En producción lo garantiza una restricción única en la base de datos.
 // - Un deportista creado sin categoría (idCategoria null) todavía no aparece en ninguna lista por grupo.
 // - Los tipos de documento de los deportistas son propios (no se mezclan con los de los entrenadores).
+// - HU-010: ver y editar fichas es solo del administrador. Cada edición guarda { fechaHora (ISO), responsable (correo del actor),
+//   cambios: [{ campo, antes, despues }] } con valores crudos (idCategoria como id); el historial nunca se borra.
+//   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
+// - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
 import {
   MENSAJES, enLista, validarCampos, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
@@ -62,7 +66,7 @@ const d = (id, nombre, apellido, documento, fechaNacimiento, idCategoria, activo
 let deportistas = [
   d(1, 'Santiago', 'Ríos Demo', '1100000001', '2018-03-14', 1, true, ACUDIENTE_DEMO),
   d(2, 'Valeria', 'Ríos Demo', '1100000002', '2017-11-02', 1, true, ACUDIENTE_DEMO),
-  d(3, 'Emilio', 'Pardo Ejemplo', '1100000003', '2018-07-21', 1),
+  { ...d(3, 'Emilio', 'Pardo Ejemplo', '1100000003', '2018-07-21', 1), creadoPor: 'administrador@pradofc.co', creadoEn: '2026-09-14T15:20:00.000Z' },
   d(4, 'Isabella', 'Quintero Ejemplo', '1100000004', '2018-01-30', 1),
   d(5, 'Thiago', 'Marín Ejemplo', '1100000005', '2017-10-25', 1, false),
   d(6, 'Mateo', 'Vélez Demo', '1100000006', '2016-05-09', 2),
@@ -83,6 +87,21 @@ let deportistas = [
   d(21, 'Esteban', 'Ocampo Ejemplo', '1100000021', '2012-05-01', 4),
 ]
 let siguienteId = deportistas.length + 1
+
+// Historial de ediciones por deportista (id -> lista, de la más antigua a la más reciente). Se siembra uno en Emilio (3)
+// para probar la ficha: cambió el teléfono y pasó de Sub-10 a Sub-8.
+const historiales = new Map([
+  [3, [
+    {
+      fechaHora: '2026-09-20T16:05:00.000Z',
+      responsable: 'administrador@pradofc.co',
+      cambios: [
+        { campo: 'telefono', antes: '3000000999', despues: '3000000003' },
+        { campo: 'idCategoria', antes: 2, despues: 1 },
+      ],
+    },
+  ]],
+])
 
 // Simulación de red: retardo y fallo se pueden cambiar (pruebas y verificación manual del estado de error).
 let retardoMs = 250
@@ -120,9 +139,12 @@ export async function listarCategorias() {
 }
 
 // idCategoria: solo los de esa categoría (lanza CATEGORIA_NO_EXISTE si no existe). texto: nombre o documento.
-export async function listarDeportistas({ idCategoria, texto } = {}) {
+// estado: 'todos' (por defecto, como siempre: activos e inactivos) | 'activos' | 'inactivos'.
+export async function listarDeportistas({ idCategoria, texto, estado = 'todos' } = {}) {
   await simularRed()
   let lista = deportistas
+  if (estado === 'activos') lista = lista.filter((x) => x.activo)
+  else if (estado === 'inactivos') lista = lista.filter((x) => !x.activo)
   if (idCategoria !== undefined && idCategoria !== null && idCategoria !== '') {
     if (!categorias.some((c) => c.id === Number(idCategoria))) throw error('CATEGORIA_NO_EXISTE', 'La categoría no existe.')
     lista = lista.filter((x) => x.idCategoria === Number(idCategoria))
@@ -213,4 +235,68 @@ export async function crearDeportista(datos, actor) {
   }
   deportistas = [...deportistas, nuevo]
   return copiar(nuevo)
+}
+
+// ---- Ficha del deportista (HU-010): solo el administrador ----
+export const CAMPOS_EDITABLES = ['nombre', 'apellido', 'tipoDocumento', 'documento', 'fechaNacimiento', 'telefono', 'direccion', 'idCategoria']
+
+function exigirAdministrador(actor) {
+  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para ver ni editar fichas de deportistas.')
+}
+
+function buscarDeportista(id) {
+  const encontrado = deportistas.find((x) => x.id === Number(id))
+  if (!encontrado) throw error('DEPORTISTA_NO_EXISTE', 'El deportista no existe.')
+  return encontrado
+}
+
+const copiaHistorial = (id) => structuredClone(historiales.get(id) ?? [])
+
+// Ficha completa con su historial de cambios. Lanza SIN_PERMISO (si no es administrador) o DEPORTISTA_NO_EXISTE.
+export async function obtenerFichaDeportista(id, actor) {
+  await simularRed()
+  exigirAdministrador(actor)
+  const deportista = buscarDeportista(id)
+  return { deportista: copiar(deportista), historial: copiaHistorial(deportista.id) }
+}
+
+export async function obtenerHistorial(id, actor) {
+  await simularRed()
+  exigirAdministrador(actor)
+  return copiaHistorial(buscarDeportista(id).id)
+}
+
+// Valor tal como se guarda: texto sin espacios en los bordes; la categoría, un número o null ('' y null son lo mismo)
+function valorLimpio(campo, valor) {
+  if (campo === 'idCategoria') return valor === undefined || valor === null || valor === '' ? null : Number(valor)
+  return String(valor ?? '').trim()
+}
+
+// Edita solo los campos del formulario (CAMPOS_EDITABLES); cualquier otro (id, acudiente, creadoPor, creadoEn, activo) se ignora.
+// `cambios` puede traer solo algunos campos. Orden de las comprobaciones: permiso, existencia, validación, documento duplicado
+// (en OTRO deportista), categoría vigente (solo si cambia) y, al final, SIN_CAMBIOS. Si algo falla no se guarda nada ni se
+// agrega historial. Devuelve { deportista, historial }.
+export async function actualizarDeportista(id, cambios, actor) {
+  await simularRed()
+  exigirAdministrador(actor)
+  const actual = buscarDeportista(id)
+
+  const propuesto = Object.fromEntries(CAMPOS_EDITABLES.map((campo) => [campo, campo in (cambios ?? {}) ? cambios[campo] : actual[campo]]))
+  const errores = validarDatosDeportista(propuesto)
+  if (Object.keys(errores).length > 0) throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores })
+  if (deportistas.some((x) => x.id !== actual.id && mismoDocumento(x.documento, propuesto.documento))) {
+    throw error('DOCUMENTO_DUPLICADO', 'Ya existe un deportista registrado con este documento.')
+  }
+
+  const nuevos = Object.fromEntries(CAMPOS_EDITABLES.map((campo) => [campo, valorLimpio(campo, propuesto[campo])]))
+  const detalle = CAMPOS_EDITABLES
+    .filter((campo) => nuevos[campo] !== valorLimpio(campo, actual[campo]))
+    .map((campo) => ({ campo, antes: valorLimpio(campo, actual[campo]), despues: nuevos[campo] }))
+  if (detalle.some((c) => c.campo === 'idCategoria' && c.despues !== null)) categoriaVigente(nuevos.idCategoria)
+  if (detalle.length === 0) throw error('SIN_CAMBIOS', 'No hiciste ningún cambio.')
+
+  const actualizado = { ...actual, ...nuevos }
+  deportistas = deportistas.map((x) => (x.id === actual.id ? actualizado : x))
+  historiales.set(actual.id, [...(historiales.get(actual.id) ?? []), { fechaHora: new Date().toISOString(), responsable: actor.correo ?? null, cambios: detalle }])
+  return { deportista: copiar(actualizado), historial: copiaHistorial(actual.id) }
 }

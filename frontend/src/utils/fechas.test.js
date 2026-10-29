@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  diaCorto, diaLargo, diasDeSemana, esDomingo, esFechaValida, esHoraValida,
-  formatHora, lunesDe, rangoSemana, sumarDias, sumarMinutos,
+  diaCorto, diaLargo, diasDeSemana, esDomingo, esFechaValida, esHoraValida, fechaLargaConAnio,
+  formatHora, lunesDe, momentoLegible, partesMomento, rangoSemana, sumarDias, sumarMinutos,
 } from './fechas.js'
 
 describe('esFechaValida', () => {
@@ -131,5 +131,18 @@ describe('sumarMinutos', () => {
     expect(sumarMinutos('23:59', 1)).toBeNull()
     expect(sumarMinutos('23:00', 90)).toBeNull()
     expect(sumarMinutos('22:30', 90)).toBeNull()
+  })
+})
+
+describe('fechaLargaConAnio y momentoLegible', () => {
+  it('fecha larga con año, en minúscula', () => {
+    expect(fechaLargaConAnio('2026-10-22')).toBe('jueves 22 de octubre de 2026')
+    expect(fechaLargaConAnio('2026-01-01')).toBe('jueves 1 de enero de 2026')
+  })
+
+  it('momento legible a partir de un instante ISO (hora local)', () => {
+    expect(momentoLegible(new Date(2026, 9, 22, 16, 5).toISOString())).toBe('Jueves 22 de octubre de 2026, 4:05 p. m.')
+    expect(momentoLegible(new Date(2026, 0, 3, 0, 30).toISOString())).toBe('Sábado 3 de enero de 2026, 12:30 a. m.')
+    expect(partesMomento(new Date(2026, 9, 22, 9, 7).toISOString())).toEqual({ fecha: '2026-10-22', hora: '09:07' })
   })
 })
