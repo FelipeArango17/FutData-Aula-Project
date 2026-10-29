@@ -9,9 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
+import co.edu.futdata.util.reports.ComprobanteInvalidoException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -52,6 +54,13 @@ class ManejadorGlobalErroresTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{no es json")), 400, "Bad Request", "/api/pruebas-errores")
                 .andExpect(jsonPath("$.mensaje").value("El cuerpo de la petición falta o no es un JSON válido"));
+    }
+
+    @Test
+    void comprobanteInvalidoResponde400ConLosErrores() throws Exception {
+        formatoUniforme(mvc.perform(get("/api/pruebas-errores/comprobante")), 400, "Bad Request", "/api/pruebas-errores/comprobante")
+                .andExpect(jsonPath("$.mensaje").value(
+                        "Los datos del comprobante no son válidos: concepto: es obligatorio; monto: debe ser mayor que 0"));
     }
 
     @Test
@@ -105,6 +114,11 @@ class ManejadorGlobalErroresTest {
         @GetMapping("/api/pruebas-errores/falla")
         String fallar() {
             throw new IllegalStateException("detalle secreto que no debe salir");
+        }
+
+        @GetMapping("/api/pruebas-errores/comprobante")
+        String comprobante() {
+            throw new ComprobanteInvalidoException(List.of("monto: debe ser mayor que 0", "concepto: es obligatorio"));
         }
 
         @GetMapping("/api/pruebas-errores/{id}")

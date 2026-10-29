@@ -2,6 +2,7 @@ package co.edu.futdata.api.controllers;
 
 import co.edu.futdata.api.dto.ErrorResponseDTO;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
+import co.edu.futdata.util.reports.ComprobanteInvalidoException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -29,7 +30,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * Convierte las excepciones en la respuesta JSON uniforme {@link ErrorResponseDTO}.
  *
  * <ul>
- *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros).</li>
+ *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros) o
+ *       {@link ComprobanteInvalidoException}.</li>
  *   <li>{@code 404}: ruta inexistente o {@link RecursoNoEncontradoException}.</li>
  *   <li>Otros errores de Spring MVC ({@code 405}, {@code 415}...): su código, con un mensaje en español.</li>
  *   <li>{@code 500}: cualquier otra excepción. La traza solo va al log del servidor.</li>
@@ -73,6 +75,11 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponseDTO> tipoInvalido(MethodArgumentTypeMismatchException e, HttpServletRequest peticion) {
         return responder(HttpStatus.BAD_REQUEST, "El parámetro '" + e.getName() + "' tiene un valor inválido", peticion);
+    }
+
+    @ExceptionHandler(ComprobanteInvalidoException.class)
+    public ResponseEntity<ErrorResponseDTO> comprobanteInvalido(ComprobanteInvalidoException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, e.getMessage(), peticion);
     }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
