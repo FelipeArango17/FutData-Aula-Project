@@ -7,14 +7,13 @@ import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useAuth } from '../../context/AuthContext.js'
-import { esCorreoValido } from '../../utils/validaciones.js'
+import { MENSAJES as MENSAJES_VALIDACION, requerido, validarCampos, validarCorreo } from '../../utils/validaciones.js'
 
-function validar({ correo, contrasena }) {
-  const errores = {}
-  if (!correo.trim()) errores.correo = 'Escribe tu correo electrónico.'
-  else if (!esCorreoValido(correo)) errores.correo = 'El correo no es válido. Ejemplo: nombre@correo.com.'
-  if (!contrasena) errores.contrasena = 'Escribe tu contraseña.'
-  return errores
+function validar(valores) {
+  return validarCampos(valores, {
+    correo: [(correo) => validarCorreo(correo, { obligatorio: MENSAJES_VALIDACION.loginCorreoObligatorio, formato: MENSAJES_VALIDACION.loginCorreoFormato })],
+    contrasena: [requerido(MENSAJES_VALIDACION.loginContrasenaObligatoria, { recortar: false })],
+  })
 }
 
 // Un mismo mensaje para correo desconocido y contraseña incorrecta: no se revela cuál falló.

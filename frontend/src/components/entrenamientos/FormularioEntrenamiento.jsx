@@ -3,19 +3,17 @@ import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import Icon from '../Icon.jsx'
 import { LUGARES, ENTRENADORES } from '../../services/entrenamientosService.js'
-import { diaLargo, esDomingo, esFechaValida, esHoraValida, formatHora } from '../../utils/fechas.js'
+import { diaLargo, formatHora } from '../../utils/fechas.js'
+import { MENSAJES, enLista, validarCampos, validarFechaEntrenamiento, validarHoraEntrenamiento } from '../../utils/validaciones.js'
 
 function validar(v, categorias) {
-  const errores = {}
-  if (!categorias.includes(v.categoria)) errores.categoria = 'Selecciona una categoría.'
-  if (!ENTRENADORES.some((e) => String(e.id) === v.idEntrenador)) errores.idEntrenador = 'Selecciona el entrenador.'
-  if (!v.fecha) errores.fecha = 'Indica la fecha del entrenamiento.'
-  else if (!esFechaValida(v.fecha)) errores.fecha = 'La fecha no es válida. Usa el formato día/mes/año.'
-  else if (esDomingo(v.fecha)) errores.fecha = 'Los entrenamientos se programan de lunes a sábado.'
-  if (!v.hora) errores.hora = 'Indica la hora del entrenamiento.'
-  else if (!esHoraValida(v.hora)) errores.hora = 'La hora no es válida. Usa el formato HH:MM.'
-  if (!LUGARES.includes(v.lugar)) errores.lugar = 'Selecciona el lugar.'
-  return errores
+  return validarCampos(v, {
+    categoria: [enLista(categorias, MENSAJES.entrenamientoCategoria)],
+    idEntrenador: [enLista(ENTRENADORES.map((e) => String(e.id)), MENSAJES.entrenamientoEntrenador)],
+    fecha: [validarFechaEntrenamiento],
+    hora: [validarHoraEntrenamiento],
+    lugar: [enLista(LUGARES, MENSAJES.entrenamientoLugar)],
+  })
 }
 
 // Para buscar conflicto solo hacen falta fecha, hora y lugar válidos
