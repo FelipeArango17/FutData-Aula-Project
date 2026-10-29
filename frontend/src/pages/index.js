@@ -23,6 +23,9 @@ import AdmInscribir from './administrador/Inscribir.jsx'
 import AdmDocumentos from './administrador/Documentos.jsx'
 import AdmTorneos from './administrador/Torneos.jsx'
 import AdmUsuarios from './administrador/Usuarios.jsx'
+import AdmUsuarioNuevo from './administrador/UsuarioNuevo.jsx'
+import AdmUsuarioDetalle from './administrador/UsuarioDetalle.jsx'
+import AdmEntrenadores from './administrador/Entrenadores.jsx'
 import AdmEntrenadorFormulario from './administrador/EntrenadorFormulario.jsx'
 import AdmRespaldo from './administrador/Respaldo.jsx'
 import AdmReportes from './administrador/Reportes.jsx'
@@ -70,8 +73,12 @@ export const extraScreens = {
   administrador: [
     { path: '/administrador/horarios/nuevo', Screen: Programacion },
     { path: '/administrador/horarios/:id/editar', Screen: Programacion },
+    // Rutas fijas de usuarios antes de /:id, para que :id no capture "nuevo" ni "entrenadores"
+    { path: '/administrador/usuarios/nuevo', Screen: AdmUsuarioNuevo },
+    { path: '/administrador/usuarios/entrenadores', Screen: AdmEntrenadores },
     { path: '/administrador/usuarios/entrenadores/nuevo', Screen: AdmEntrenadorFormulario },
     { path: '/administrador/usuarios/entrenadores/:id/editar', Screen: AdmEntrenadorFormulario },
+    { path: '/administrador/usuarios/:id', Screen: AdmUsuarioDetalle },
     { path: '/administrador/deportistas/inscribir', Screen: AdmInscribir },
     { path: '/administrador/deportistas/nuevo', Screen: DeportistaNuevo },
     { path: '/administrador/deportistas/:id', Screen: FichaDeportista }, // después de /nuevo e /inscribir (rutas fijas)

@@ -5,7 +5,7 @@ import Card from '../../components/ui/Card.jsx'
 import FormularioEntrenador from '../../components/entrenadores/FormularioEntrenador.jsx'
 import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 
-const VOLVER = '/administrador/usuarios'
+const VOLVER = '/administrador/usuarios/entrenadores' // la lista de entrenadores (antes era /administrador/usuarios)
 const VACIO = {
   nombre: '', apellido: '', tipoDocumento: '', documento: '', telefono: '', correo: '',
   especialidad: '', categorias: [], horarioTrabajo: '',
@@ -25,7 +25,7 @@ export default function EntrenadorFormulario() {
     if (listo) titulo.current?.focus()
   }, [listo, editando?.id])
 
-  // Un id que no existe vuelve a la lista de usuarios
+  // Un id que no existe vuelve a la lista de entrenadores
   if (id && cargado && !editando) return <Navigate to={VOLVER} replace />
   if (!listo) return null
 

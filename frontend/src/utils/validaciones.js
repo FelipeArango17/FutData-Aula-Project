@@ -47,6 +47,8 @@ export const MENSAJES = {
   pagoReferenciaObligatoria: 'Escribe la referencia de la transferencia.',
   pagoReferenciaLarga: 'La referencia no puede superar los 60 caracteres.',
   pagoNotaLarga: 'La nota no puede superar los 200 caracteres.',
+  // Usuarios y roles
+  usuarioRol: 'Selecciona el rol.',
   // Nuevos (para los formularios de deportista, inscripción y pago)
   nombreLongitud: 'El nombre debe tener entre 2 y 60 caracteres.',
   nombreCaracteres: 'El nombre solo puede tener letras, espacios, guion y apóstrofo.',
