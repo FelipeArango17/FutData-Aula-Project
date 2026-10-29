@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.env.MockEnvironment;
 
 class VerificadorVariablesProdTest {
@@ -28,6 +30,20 @@ class VerificadorVariablesProdTest {
         entorno.setActiveProfiles("prod");
 
         assertThatCode(() -> verificador.postProcessEnvironment(entorno, null)).doesNotThrowAnyException();
+    }
+
+    /** Sin la URL o el token de n8n, prod no arranca: N8nClient no podría enviar el código 2FA. */
+    @ParameterizedTest
+    @ValueSource(strings = {"N8N_BASE_URL", "N8N_WEBHOOK_TOKEN"})
+    void enProdSinUnaVariableDeN8nNoArranca(String variable) {
+        MockEnvironment entorno = new MockEnvironment();
+        VerificadorVariablesProd.OBLIGATORIAS.forEach(obligatoria -> entorno.setProperty(obligatoria, "valor"));
+        entorno.setProperty(variable, " ");
+        entorno.setActiveProfiles("prod");
+
+        assertThatThrownBy(() -> verificador.postProcessEnvironment(entorno, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Perfil prod: faltan las variables de entorno " + variable + ". Ver backend/.env.example.");
     }
 
     @Test
