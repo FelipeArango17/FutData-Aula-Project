@@ -18,6 +18,8 @@
 //   red@pradofc.co       -> el primer intento simula una falla de red; el siguiente funciona
 // Código de verificación de la demostración: CODIGO_DEMO (no se muestra en la pantalla).
 
+import { accesoVigente } from './usuariosService.js'
+
 export const RETARDO_MS = 400
 export const VIGENCIA_CODIGO_MS = 10 * 60 * 1000
 export const MAX_INTENTOS = 5
@@ -91,7 +93,9 @@ export async function iniciarSesion(correo, contrasena) {
 
   const cuenta = CUENTAS.find((c) => c.correo === clave)
   if (!cuenta || contrasena !== PASSWORD_DEMO) throw fallo('CREDENCIALES')
-  if (!cuenta.activa) throw fallo('INACTIVA')
+  // Si la cuenta también es un usuario de usuariosService, manda su acceso (revocado = INACTIVA, igual que inactivo@).
+  // PENDIENTE: en real lo decide Supabase Auth; revocar tampoco cierra sesiones ya abiertas.
+  if (!(accesoVigente(clave) ?? cuenta.activa)) throw fallo('INACTIVA')
 
   // Si ya hay un código enviado hace menos de un minuto no se genera otro: así volver a iniciar sesión
   // no sirve para recuperar los intentos del código.
