@@ -185,7 +185,7 @@ Mientras un evento no tenga rama, cae en la salida por defecto del Switch y resp
 
 ## Cómo debe llamarlo `N8nClient` (Spring Boot)
 
-Referencia para cuando se implemente el backend. No hay código Java en esta historia.
+Referencia para el backend. La implementación (`INotificador` y `N8nClient`, tarea 340), con un ejemplo de uso de cada evento y de cada excepción, está en [`backend/README.md`, sección "Notificaciones (n8n)"](../../../backend/README.md#notificaciones-n8n).
 
 **Configuración** (`application.yml`, con valores desde variables de entorno):
 
