@@ -62,6 +62,15 @@ futdata:
     base-url: ${N8N_BASE_URL}
     webhook-token: ${N8N_WEBHOOK_TOKEN}
     timeout: 5s
+  club:
+    # Datos públicos del club que salen en los comprobantes y reportes en PDF (util.reports). No son secretos:
+    # tienen valor por defecto en todos los perfiles y se cambian con variables de entorno. Si uno queda
+    # vacío, esa línea no se imprime.
+    nombre: ${CLUB_NOMBRE:Asociación Deportiva Prado Fútbol Club}
+    nit: ${CLUB_NIT:811032309-1}
+    direccion: ${CLUB_DIRECCION:Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia}
+    telefono: ${CLUB_TELEFONO:3137317366}
+    correo: ${CLUB_CORREO:prafofutbolclub@gmail.com}
 
 ---
 # Perfil local: valores por defecto para poder trabajar sin credenciales.
