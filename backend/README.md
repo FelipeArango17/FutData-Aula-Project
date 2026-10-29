@@ -62,7 +62,10 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `CORS_ORIGINS` | Orígenes del frontend permitidos, separados por coma | `http://localhost:5173` | Obligatoria |
 | `N8N_BASE_URL` | URL de n8n, sin barra final ([Notificaciones](#notificaciones-n8n)) | `http://localhost:5678` | Obligatoria |
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n (cabecera `X-FutData-Token`) | vacío: la app arranca, pero no envía notificaciones | Obligatoria |
-| `SUPABASE_URL`, `SUPABASE_JWKS_URL` | Para HU-001 (validar el JWT). **Todavía no se usan** | | |
+| `SUPABASE_URL` | URL del proyecto de Supabase ([Storage](#almacenamiento-de-comprobantes-supabase-storage); con HU-001, también Auth) | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
+| `SUPABASE_SERVICE_ROLE_KEY` | Llave `service_role` para Storage. **Secreta, solo backend** | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
+| `SUPABASE_BUCKET_COMPROBANTES`, `SUPABASE_VIGENCIA_URL_FIRMADA` | Bucket de comprobantes y vigencia de las URL firmadas | `comprobantes`, `5m` | Igual |
+| `SUPABASE_JWKS_URL` | Para HU-001 (validar el JWT). **Todavía no se usa** | | |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
 | `DB_POOL_MAX` | Conexiones máximas del pool | `5` | `5` |
@@ -122,7 +125,8 @@ co.edu.futdata
 │   └── impl             <Recurso>DAOImpl: SQL con JdbcTemplate y RowMapper
 ├── datasource
 │   ├── db               Pool HikariCP de Supabase (lo configura Spring Boot; "ConexionPool" en el PPI)
-│   └── external         Clientes de servicios externos: n8n (INotificador / N8nClient), Wompi
+│   └── external         Clientes de servicios externos: n8n (INotificador / N8nClient), Supabase Storage
+│                        (IAlmacenamientoArchivos / SupabaseStorageClient), Wompi
 ├── util
 │   ├── security         JWT, códigos 2FA, auditoría (HU-001, HU-002, HU-005)
 │   └── reports          Reportes y exportaciones: comprobante de pago en PDF (OpenPDF)
@@ -205,7 +209,7 @@ Reglas para todos los módulos:
 
 ## Comprobante de pago (PDF)
 
-`util.reports` genera el comprobante de un pago en PDF (HU-018, tarea 327), con [OpenPDF](https://github.com/LibrePDF/OpenPDF) 3.0.5 (licencia LGPL 2.1 / MPL 2.0). **Solo lo genera en memoria** y devuelve los bytes. Guardarlo en Supabase Storage y entregar el enlace de descarga es la **tarea 328**. Enviarlo por n8n y el estado de cuenta en PDF son de otras historias.
+`util.reports` genera el comprobante de un pago en PDF (HU-018, tarea 327), con [OpenPDF](https://github.com/LibrePDF/OpenPDF) 3.0.5 (licencia LGPL 2.1 / MPL 2.0). `util.reports` **solo lo genera en memoria** y devuelve los bytes. Guardarlo en Supabase Storage y firmar el enlace lo hace `IComprobanteService` (tarea 328, ver [Almacenamiento de comprobantes](#almacenamiento-de-comprobantes-supabase-storage)). Enviarlo por n8n y el estado de cuenta en PDF son de otras historias.
 
 | Clase | Qué es |
 | :--- | :--- |
@@ -239,7 +243,7 @@ public class PagoServiceImpl implements IPagoService {
                 pago.getFechaPago(),                         // LocalDate, ni futura ni posterior a la emisión
                 MetodoPago.desdeEtiqueta(pago.getMetodo()),  // "Efectivo", "Transferencia", "PSE", "Nequi", "Tarjeta"
                 pago.getReferenciaWompi());                  // obligatoria en PSE, Nequi o Tarjeta; null en pagos manuales
-        return comprobantes.generar(datos);                  // tarea 328: subirlo a Storage y guardar recibo_url
+        return comprobantes.generar(datos);                  // o IComprobanteService.generarYGuardar(datos): sube y devuelve la ruta
     }
 }
 ```
@@ -297,6 +301,119 @@ Salen de `futdata.club` (`config.ClubProperties`). Son datos públicos, con valo
 ### Ver un ejemplo
 
 `./mvnw verify` (o `./mvnw test -Dtest=ComprobantePdfGeneratorTest`) deja PDF de ejemplo en `target/comprobantes-ejemplo/`: `comprobante-pago-manual.pdf`, `comprobante-pago-en-linea.pdf` y `comprobante-concepto-largo.pdf`. `target/` está ignorado por Git.
+
+## Almacenamiento de comprobantes (Supabase Storage)
+
+Los comprobantes en PDF se guardan en **Supabase Storage**, en un bucket **privado**. Solo el backend los sube y solo el backend entrega enlaces de descarga: **URL firmadas de corta duración**, según el rol de quien pide (HU-018, tarea 328). Todo funciona y se prueba **sin Supabase**: en local la app arranca igual, y usar Storage lanza `AlmacenamientoNoConfiguradoException`.
+
+| Clase | Capa | Qué hace |
+| :--- | :--- | :--- |
+| `IAlmacenamientoArchivos` | `datasource.external` | `subir(bucket, ruta, contenido, contentType)` y `urlFirmada(bucket, ruta, vigencia)` |
+| `SupabaseStorageClient` | `datasource.external` | Implementación con `RestClient` contra la API REST de Storage |
+| `IComprobanteService` / `ComprobanteServiceImpl` | `services` | `generarYGuardar(ComprobantePagoDTO)` (genera con `IGeneradorComprobante` y sube) y `enlaceDescarga(ruta)` |
+| `SupabaseProperties` | `config` | `futdata.supabase.*` |
+
+### Lo que debe configurar Juan Sebastián en Supabase
+
+1. **Crear el bucket** en *Storage → New bucket*:
+   - nombre `comprobantes`;
+   - **Public bucket desactivado** (privado);
+   - *Restrict file size* en **5 MB**;
+   - *Allowed MIME types*: `application/pdf`.
+2. **No crear políticas** (RLS) para ese bucket en `storage.objects`. Sin políticas, nadie con la llave `anon` ni con la sesión de un usuario puede leer, listar ni subir. El backend entra con la llave `service_role`, que salta RLS.
+3. **Pasar al backend**, por un canal privado (nunca por el chat del grupo ni por el repositorio):
+   - `SUPABASE_URL`: *Project Settings → API → Project URL*.
+   - `SUPABASE_SERVICE_ROLE_KEY`: *Project Settings → API Keys → `service_role` / secret*.
+4. Cuando exista, avisar para correr la prueba real (`SupabaseStorageContraSupabaseTest`, ver abajo).
+
+### Variables
+
+| Variable | Por defecto | Perfil `prod` |
+| :--- | :--- | :--- |
+| `SUPABASE_URL` | vacía en local | Obligatoria |
+| `SUPABASE_SERVICE_ROLE_KEY` | vacía en local | Obligatoria |
+| `SUPABASE_BUCKET_COMPROBANTES` | `comprobantes` | Opcional |
+| `SUPABASE_VIGENCIA_URL_FIRMADA` | `5m` (de 10 s a 1 h) | Opcional |
+
+El timeout de conexión y de lectura es de 10 s (`futdata.supabase.timeout`, en `application.yml`). Es más largo que el de n8n porque un PDF puede pesar hasta 5 MB.
+
+**La `service_role` key nunca va al frontend.** Salta todas las políticas de acceso: quien la tenga puede leer, cambiar y borrar **cualquier** archivo y **cualquier** fila de la base de datos. Por eso:
+- Solo vive en las variables de entorno del backend. Nunca en el frontend (Vercel), en n8n, en el repositorio ni en un mensaje.
+- El cliente la manda en las cabeceras `Authorization: Bearer` y `apikey`. **Nunca** aparece en logs, mensajes de excepción ni `toString` (`SupabaseStorageClientTest` lo comprueba con los logs en TRACE).
+- El frontend recibe solo URL firmadas que vencen en minutos. Si la llave se filtra, hay que rotarla en Supabase de inmediato.
+
+### Rutas: qué se guarda en `Pago.recibo_url`
+
+Ruta: `AAAA/FD-AAAA-NNNNNN.pdf`, con el año de la fecha de pago y el número del comprobante. Ejemplo: `2026/FD-2026-000123.pdf`.
+- No lleva nombres, documentos ni correos.
+- El servicio exige que el número tenga el formato `FD-AAAA-NNNNNN` y el mismo año de la fecha de pago.
+
+**En `Pago.recibo_url` se guarda la ruta, no una URL.** El diccionario de datos lo llama "URL del recibo", pero las URL firmadas vencen a los pocos minutos: guardar una no serviría. Con la ruta, cada descarga pide una URL nueva.
+
+Reglas del cliente, que se revisan antes de llamar a Storage (`ArchivoInvalidoException`):
+- solo `application/pdf`;
+- de 1 byte a 5 MB;
+- bucket en minúsculas;
+- ruta sin barra inicial, sin `..`, sin `//`, sin barra final y solo con letras sin tilde, dígitos, `.`, `-` y `_`.
+
+El cliente **nunca sobrescribe**: sube con `x-upsert: false`, y si la ruta ya existe lanza `ArchivoYaExisteException`.
+
+### URL firmadas
+
+- Duran `SUPABASE_VIGENCIA_URL_FIRMADA` (5 min). Se piden con `POST /storage/v1/object/sign/{bucket}/{ruta}`.
+- Llevan `download=FD-AAAA-NNNNNN.pdf`, para que el navegador descargue el archivo con ese nombre.
+- **Quien tenga la URL puede descargar el archivo hasta que venza**: solo se entrega a quien ya pasó la verificación de rol, y nunca se guarda ni se registra en logs.
+
+### Excepciones (`AlmacenamientoException` y subclases)
+
+| Situación | Excepción |
+| :--- | :--- |
+| Tipo, tamaño, bucket o ruta inválidos (no se llama a Storage) | `ArchivoInvalidoException` |
+| Falta `SUPABASE_URL` o `SUPABASE_SERVICE_ROLE_KEY`; `401` / `403` (llave inválida); `404` al subir (no existe el bucket) | `AlmacenamientoNoConfiguradoException` |
+| `409`: ya hay un archivo en esa ruta | `ArchivoYaExisteException` |
+| `404` al firmar: no existe el archivo | `ArchivoNoEncontradoException` |
+| `400`, `413` u otro `4xx` | `AlmacenamientoRechazadoException` |
+| `5xx`, `429`, tiempo de espera agotado, error de red o respuesta sin `signedURL` | `AlmacenamientoNoDisponibleException` |
+
+Algunas versiones de Storage responden `400` con el código real en el cuerpo, por ejemplo `{"statusCode": "409", "error": "Duplicate"}`. El cliente lee ese código (y los campos `code` / `error`, como `KeyAlreadyExists` o `NoSuchKey`) para elegir la excepción. Sin reintentos automáticos.
+
+### Endpoint de descarga (pendiente)
+
+**Todavía no existe.** Depende de HU-001 (JWT), HU-005 (roles) y de la tabla `Pago`. Así será:
+
+```text
+GET /api/pagos/{id}/comprobante
+  1. Busca el pago (404 si no existe o no tiene comprobante).
+  2. Verifica el rol con el JWT: ADMINISTRADOR o TESORERO, o el ACUDIENTE de ese deportista. Si no, 403.
+  3. comprobantes.enlaceDescarga(pago.reciboUrl)  ->  responde {"url": ...} o un 302 hacia la URL firmada.
+```
+
+El `// TODO` está en `ComprobanteServiceImpl.enlaceDescarga`. Cómo responder cada excepción (por ejemplo `ArchivoNoEncontradoException` → `404`, `AlmacenamientoNoDisponibleException` → `503`) se decidirá con ese endpoint; hoy el manejador global las convierte en `500`.
+
+### Prueba real (opcional)
+
+`SupabaseStorageContraSupabaseTest` llama al Supabase de verdad. Está **desactivada por defecto** (no corre en `./mvnw verify` ni en el CI). Hace lo siguiente:
+1. Genera un comprobante de ejemplo y lo sube a `pruebas/comprobante-prueba-<marca de tiempo>.pdf`.
+2. Comprueba que subirlo otra vez lanza `ArchivoYaExisteException`.
+3. Pide la URL firmada, descarga el archivo y compara los bytes.
+4. Comprueba que firmar un archivo que no existe lanza `ArchivoNoEncontradoException`.
+5. Al final borra el archivo de prueba.
+
+```powershell
+$env:FUTDATA_PRUEBA_SUPABASE_REAL = "true"
+$env:SUPABASE_URL = "https://tu-ref.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY = "..."
+.\mvnw.cmd test -Dtest=SupabaseStorageContraSupabaseTest
+```
+
+Lee las variables del sistema, no `backend/.env`. `SUPABASE_BUCKET_COMPROBANTES` es opcional.
+
+### Pendientes
+
+- **Proyecto de Supabase y bucket** (Juan Sebastián, lista de arriba). Después, correr la prueba real.
+- **Tabla `Pago`:** la columna `recibo_url` guardará la ruta. Se propone llamarla `recibo_ruta` en el diccionario de datos. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
+- **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con HU-001 y HU-005.
+- **Respuestas HTTP de las excepciones de Storage**, en `ManejadorGlobalErrores`, junto con el endpoint.
 
 ## Formato de errores (para el frontend)
 
@@ -475,7 +592,7 @@ Esta prueba lee las variables del sistema, no `backend/.env`.
 ./mvnw verify
 ```
 
-No necesitan base de datos, credenciales ni red (salvo `N8nClientContraN8nLocalTest`, desactivada por defecto): cargan `src/test/resources/pruebas.properties`, que tiene prioridad sobre `backend/.env`, y simulan la base de datos con Mockito.
+No necesitan base de datos, credenciales ni red (salvo `N8nClientContraN8nLocalTest` y `SupabaseStorageContraSupabaseTest`, desactivadas por defecto): cargan `src/test/resources/pruebas.properties`, que tiene prioridad sobre `backend/.env`, y simulan la base de datos con Mockito.
 
 | Prueba | Qué revisa |
 | :--- | :--- |
@@ -483,6 +600,11 @@ No necesitan base de datos, credenciales ni red (salvo `N8nClientContraN8nLocalT
 | `NumeroEnLetrasTest`, `FormatoColombianoTest` | Montos en letras (1, 21, 100, 101, 1.000, 150.000, 1.000.000, 1.250.500...), pesos, fechas en hora de Colombia, NIT y celular |
 | `ComprobantePdfGeneratorTest` | Texto del PDF leído con PDFBox: datos, monto en número y en letras, fechas, club (y líneas vacías), tildes y ñ, concepto largo, metadatos sin datos personales, que no salgan la nota ni quién registró, y DTO inválido (incluida la referencia Wompi obligatoria en línea y la fecha de pago posterior a la emisión). Deja ejemplos en `target/comprobantes-ejemplo/` |
 | `ComprobanteConfiguracionTest` | Valores por defecto de `futdata.club` y el generador como bean |
+| `SupabaseStorageClientTest` | Peticiones a Storage (URL, método, `Authorization`, `apikey`, `x-upsert`, cuerpo), cada respuesta (`200`, `400`, `401`, `403`, `404`, `409`, `413`, `5xx`, timeout, red), validaciones de tipo, tamaño y ruta, y que la llave ni la URL firmada salgan en logs (TRACE) ni excepciones |
+| `SupabaseStorageClientConfiguracionTest` | Sin `SUPABASE_URL` ni la llave en local, la app arranca y usar Storage lanza `AlmacenamientoNoConfiguradoException`; valores por defecto |
+| `ComprobanteServiceImplTest` | Generar y guardar con dobles de prueba: ruta `AAAA/FD-AAAA-NNNNNN.pdf`, formato y año del número, bucket y vigencia del enlace |
+| `SupabaseStorageContraSupabaseTest` | Opcional y desactivada: contra un Supabase real (ver [Almacenamiento](#almacenamiento-de-comprobantes-supabase-storage)) |
+| `EnvExampleTest` | Los datos del club de `.env.example` se leen con tildes (escapes `\u`) |
 | `SaludControllerTest` | `GET /api/health`: `200` con la base de datos arriba, `503` con la base de datos abajo |
 | `SaludDAOImplTest` | `SELECT 1` con timeout de 2 s; `false` si no hay conexión |
 | `ManejadorGlobalErroresTest` | Formato uniforme para `400`, `404`, `405` y `500`, sin traza |
