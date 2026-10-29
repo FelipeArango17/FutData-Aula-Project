@@ -122,7 +122,8 @@ async function simularRed() {
   }
 }
 
-const copiar = (x) => ({ ...x })
+// Copia profunda (los deportistas de la inscripción en línea traen objetos anidados: contactoAcudiente y consentimiento)
+const copiar = (x) => structuredClone(x)
 // Sin mayúsculas ni tildes: "ríos" == "RIOS"
 const normalizar = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
@@ -235,6 +236,39 @@ export async function crearDeportista(datos, actor) {
   }
   deportistas = [...deportistas, nuevo]
   return copiar(nuevo)
+}
+
+export const ORIGEN_INSCRIPCION_EN_LINEA = 'Inscripción en línea'
+
+// Registro que llega de la inscripción en línea (HU-009, services/inscripcionService.js). No tiene actor (es público):
+// quien llama ya validó los datos. Nace SIN categoría, activo, sin acudiente vinculado y con origen "Inscripción en línea".
+// Si el documento ya existe NO crea nada, y por la misma razón NO devuelve nada: quien llama no puede saber si hubo registro
+// nuevo o no (no se revela qué documentos están registrados). Tarda lo mismo en los dos casos.
+// El correo del acudiente NO se vincula con ninguna cuenta (PENDIENTE: lo hace el administrador o el backend).
+export async function crearDeportistaDesdeInscripcion({ deportista, contactoAcudiente, consentimiento }) {
+  await simularRed()
+  if (deportistas.some((x) => mismoDocumento(x.documento, deportista.documento))) return
+  deportistas = [
+    ...deportistas,
+    {
+      id: siguienteId++,
+      nombre: deportista.nombre.trim(),
+      apellido: deportista.apellido.trim(),
+      tipoDocumento: deportista.tipoDocumento,
+      documento: deportista.documento.trim(),
+      fechaNacimiento: deportista.fechaNacimiento.trim(),
+      telefono: deportista.telefono.trim(),
+      direccion: deportista.direccion.trim(),
+      idCategoria: null,
+      activo: true,
+      acudiente: null,
+      origen: ORIGEN_INSCRIPCION_EN_LINEA,
+      contactoAcudiente: { ...contactoAcudiente },
+      consentimiento: { ...consentimiento },
+      creadoPor: null,
+      creadoEn: new Date().toISOString(),
+    },
+  ]
 }
 
 // ---- Ficha del deportista (HU-010): solo el administrador ----
