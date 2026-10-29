@@ -256,13 +256,27 @@ Los correos los envía n8n. El backend se los pide con `INotificador.notificar(e
 | :--- | :--- | :--- |
 | `200` (`CODIGO_2FA`) | Retorna | El SMTP aceptó el correo |
 | `202` (`CAMBIO_ENTRENAMIENTO`) | Retorna | n8n **recibió** el aviso y lo envía en segundo plano. No significa "entregado" |
-| `400` | `NotificacionRechazadaException` | Los `datos` no cumplen el contrato: error de programación. `getDetalle()` trae la explicación de n8n, o `null` si parecía tener datos sensibles |
+| `400` | `NotificacionRechazadaException` | Los `datos` no cumplen el contrato: error de programación. `getDetalle()` trae la explicación de n8n, o `null` si parecía tener datos sensibles (correos, 6 dígitos seguidos o un valor de `datos`; los valores de `evento` y `tipoCambio` no cuentan, porque son fijos) |
 | `401` | `NotificadorMalConfiguradoException` | `N8N_WEBHOOK_TOKEN` no coincide con el de n8n |
 | Falta `N8N_BASE_URL` o `N8N_WEBHOOK_TOKEN` (perfil local) | `NotificadorMalConfiguradoException` | La app arranca, pero no puede enviar. En `prod` la app ni siquiera arranca |
 | `502`, timeout, error de red u otro código | `NotificacionNoEnviadaException` | No se pudo confirmar el envío. `getCodigoHttp()` está vacío si no hubo respuesta |
 | `evento` o `datos` vacíos | `IllegalArgumentException` | Error de programación; no se llama a n8n |
 
 Los mensajes de las excepciones están en español y nunca contienen el código, correos, nombres, destinatarios ni el token, así que se pueden registrar. **No se muestran tal cual al usuario**: el servicio decide qué decirle.
+
+### Auditoría: la hace el servicio
+
+`N8nClient` no conoce al usuario, así que **no escribe en la auditoría**. La registra el servicio que llama a `notificar()`, al atrapar la excepción, porque él sí tiene el `usuarioId`. Ante `NotificacionNoEnviadaException` es obligatorio: si fue un timeout o un error de red, n8n pudo no registrar nada y ese es el único registro. Se registra el evento, el `usuarioId`, el código HTTP (si hubo respuesta) y la fecha; nunca los `datos`.
+
+```java
+} catch (NotificacionNoEnviadaException e) {
+    auditoria.registrar(e.getEvento(), usuario.getId(),
+            e.getCodigoHttp().isPresent() ? String.valueOf(e.getCodigoHttp().getAsInt()) : "sin respuesta");
+    throw ...;
+}
+```
+
+`AuditoriaLogger` y su firma llegan con HU-005; la llamada de arriba es ilustrativa.
 
 ### Ejemplo: `CODIGO_2FA` (HU-002, `AutenticacionServiceImpl`)
 
@@ -335,7 +349,7 @@ INFO  Notificación CAMBIO_ENTRENAMIENTO aceptada por n8n: HTTP 202, 9 ms, 3 des
 WARN  Notificación CODIGO_2FA no enviada: HTTP 502, 1840 ms
 ```
 
-Nunca el cuerpo, el código 2FA, correos, nombres, destinatarios ni el token. El cuerpo se serializa a bytes antes de dárselo a `RestClient` para que tampoco aparezca si alguien activa `logging.level.org.springframework.web=DEBUG`. **No agregues un interceptor ni un log de peticiones HTTP que incluya esta llamada.** La auditoría (`AuditoriaLogger`) todavía no existe; los puntos donde va están marcados con `// TODO auditoría (AuditoriaLogger)` en `N8nClient`.
+Nunca el cuerpo, el código 2FA, correos, nombres, destinatarios ni el token. El cuerpo se serializa a bytes antes de dárselo a `RestClient` para que tampoco aparezca si alguien activa `logging.level.org.springframework.web=DEBUG`. **No agregues un interceptor ni un log de peticiones HTTP que incluya esta llamada.** Los `// TODO auditoría (AuditoriaLogger)` de `N8nClient` marcan en qué fallas debe registrarse la auditoría; la escribe el servicio (ver [Auditoría: la hace el servicio](#auditoría-la-hace-el-servicio)).
 
 ### Probar contra el n8n local (opcional)
 
