@@ -247,7 +247,21 @@ Después, sigue la sección 6 de `docs/design-system/equivalencias-tailwind.md`:
 
 ### 8.4 Backend (Spring Boot)
 
-El proyecto del backend aún no está creado. Cuando exista, aquí irá el comando para ejecutarlo (por ejemplo `./mvnw spring-boot:run`) y las variables de entorno necesarias (conexión a Supabase, llaves de Wompi y de n8n). **Nunca se suben llaves ni contraseñas al repositorio:** van en variables de entorno o en un archivo `.env`, que ya está ignorado por Git.
+Proyecto Spring Boot 3.5 (Java 21, Maven con wrapper) en `backend/`, con JDBC sobre HikariCP hacia PostgreSQL de Supabase y la API documentada con Swagger. Guía completa (variables, capas, cómo agregar un módulo, formato de errores, Docker): [`backend/README.md`](backend/README.md).
+
+```bash
+cd backend
+./mvnw spring-boot:run          # PowerShell: .\mvnw.cmd spring-boot:run
+```
+
+- Arranca en http://localhost:8080 con el perfil `local`, **sin necesitar credenciales**: sin base de datos, `GET /api/health` responde `503` con `"baseDeDatos": "DOWN"`.
+- Swagger UI: http://localhost:8080/swagger-ui.html.
+- Para conectarse a Supabase, copia `backend/.env.example` como `backend/.env` y completa `DB_URL`, `DB_USER` y `DB_PASSWORD`. El backend lee ese archivo al arrancar.
+- Pruebas: `./mvnw verify` (no necesitan base de datos).
+
+> **La API todavía no tiene autenticación** (llega con HU-001, HU-002 y HU-005): no debe desplegarse en un entorno público hasta entonces.
+
+**Nunca se suben llaves ni contraseñas al repositorio:** van en variables de entorno o en `backend/.env`, que está ignorado por Git.
 
 ### 8.5 Base de datos y autenticación (Supabase)
 

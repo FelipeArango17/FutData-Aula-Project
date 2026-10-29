@@ -1,0 +1,12 @@
+# Solo se envía al build lo necesario: .mvn/, mvnw, pom.xml y src/.
+# Nunca los secretos ni lo compilado en el equipo.
+.env
+.env.*
+target/
+.idea/
+.vscode/
+*.iml
+*.log
+Dockerfile
+.dockerignore
+README.md

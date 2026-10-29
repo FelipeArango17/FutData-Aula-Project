@@ -1,0 +1,104 @@
+# Configuración del backend de FutData. Los valores salen de variables de entorno (ver backend/.env.example);
+# aquí no va ningún secreto. Perfiles: "local" (por defecto, para desarrollo) y "prod" (contenedor Docker).
+
+spring:
+  application:
+    name: futdata-backend
+  profiles:
+    default: local
+  config:
+    # Carga backend/.env si existe (formato KEY=valor, sin comillas). Las variables de entorno del sistema
+    # tienen prioridad sobre el archivo. La segunda ruta sirve si se ejecuta desde la raíz del repositorio.
+    import: "optional:file:.env[.properties],optional:file:backend/.env[.properties]"
+
+  # PostgreSQL de Supabase por JDBC con SSL. El pool es HikariCP (ConexionPool en los diagramas del PPI).
+  # El pool se abre con la primera consulta, así que la aplicación arranca aunque la base de datos no responda.
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      pool-name: futdata-pool
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      # Milisegundos (HikariCP no acepta "3s"). Tiempo máximo para obtener una conexión: corto, para que
+      # /api/health responda rápido si la base de datos no está.
+      connection-timeout: 3000
+      validation-timeout: 2000
+      # -1: crear el pool sin esperar a la primera conexión. Si no, cada consulta con la base caída esperaría
+      # el timeout del driver (10 s) en vez de connection-timeout.
+      initialization-fail-timeout: -1
+      data-source-properties:
+        # Segundos que el driver de PostgreSQL espera para abrir el socket (por defecto 10).
+        connectTimeout: 3
+  jdbc:
+    template:
+      query-timeout: 10s
+
+  # Mensajes de validación en español, sin depender del idioma del navegador o del equipo.
+  web:
+    locale: es
+    locale-resolver: fixed
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  paths-to-match: /api/**
+
+futdata:
+  cors:
+    # Orígenes permitidos, separados por coma.
+    origins: ${CORS_ORIGINS}
+  n8n:
+    # Ver docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md
+    base-url: ${N8N_BASE_URL}
+    webhook-token: ${N8N_WEBHOOK_TOKEN}
+    timeout: 5s
+
+---
+# Perfil local: valores por defecto para poder trabajar sin credenciales.
+# Sin DB_URL apunta a un PostgreSQL local; si no existe, /api/health responde 503 y el resto sigue funcionando.
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:}
+
+futdata:
+  cors:
+    origins: ${CORS_ORIGINS:http://localhost:5173}
+  n8n:
+    base-url: ${N8N_BASE_URL:http://localhost:5678}
+    webhook-token: ${N8N_WEBHOOK_TOKEN:}
+
+logging:
+  level:
+    co.edu.futdata: DEBUG
+
+---
+# Perfil prod: sin valores por defecto. Si falta DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL o
+# N8N_WEBHOOK_TOKEN, la aplicación no arranca y dice cuáles faltan (config.VerificadorVariablesProd).
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    hikari:
+      data-source-properties:
+        # SSL obligatorio si DB_URL no indica sslmode (si lo indica, manda el de la URL).
+        sslmode: require
+
+logging:
+  level:
+    root: INFO
