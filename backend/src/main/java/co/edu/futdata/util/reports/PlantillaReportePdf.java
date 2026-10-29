@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import org.openpdf.text.Chunk;
 import org.openpdf.text.Document;
 import org.openpdf.text.Element;
 import org.openpdf.text.Font;
@@ -20,7 +19,6 @@ import org.openpdf.text.pdf.PdfPCell;
 import org.openpdf.text.pdf.PdfPTable;
 import org.openpdf.text.pdf.PdfPageEventHelper;
 import org.openpdf.text.pdf.PdfWriter;
-import org.openpdf.text.pdf.draw.LineSeparator;
 
 /**
  * Encabezado, pie, colores y fuentes comunes a los PDF de FutData (tamaño carta). La usa el comprobante de
@@ -116,11 +114,25 @@ public class PlantillaReportePdf {
             derecha.addElement(parrafo);
         }
         tabla.addCell(derecha);
-        tabla.setSpacingAfter(8);
-
         documento.add(tabla);
-        documento.add(new Chunk(new LineSeparator(2f, 100f, VERDE_ACENTO, Element.ALIGN_CENTER, -4)));
-        documento.add(new Paragraph(" ", PEQUENA));
+        documento.add(lineaDeAcento());
+    }
+
+    /**
+     * Línea del color de acento con el mismo ancho que las tablas del cuerpo (100 %): es el borde inferior de
+     * una tabla vacía, así los dos extremos coinciden.
+     */
+    private static PdfPTable lineaDeAcento() {
+        PdfPCell celda = new PdfPCell();
+        celda.setBorder(Rectangle.BOTTOM);
+        celda.setBorderColorBottom(VERDE_ACENTO);
+        celda.setBorderWidthBottom(2f);
+        celda.setFixedHeight(8);
+        PdfPTable linea = new PdfPTable(1);
+        linea.setWidthPercentage(100);
+        linea.addCell(celda);
+        linea.setSpacingAfter(14);
+        return linea;
     }
 
     /** NIT, dirección, teléfono y correo, ya con formato. Los vacíos no aparecen. */
