@@ -44,7 +44,7 @@
 <polygon fill="#f9a825" stroke="transparent" points="410.5,-870.5 410.5,-871.5 515.5,-871.5 515.5,-870.5 410.5,-870.5"/>
 <text text-anchor="start" x="462.88" y="-870.6" font-family="Inter" font-size="1.00" fill="white"> </text>
 <text text-anchor="start" x="452" y="-855.3" font-family="Inter" font-weight="bold" font-size="14.00">Rol</text>
-<text text-anchor="start" x="414.5" y="-833.5" font-family="Inter" font-size="10.00">&#45;id int</text>
+<text text-anchor="start" x="414.5" y="-833.5" font-family="Inter" font-size="10.00">&#45;id UUID</text>
 <text text-anchor="start" x="414.5" y="-820.5" font-family="Inter" font-size="10.00">&#45;nombre NombreRol</text>
 <polygon fill="none" stroke="#f9a825" stroke-width="2" points="409,-812.5 409,-872.5 516,-872.5 516,-812.5 409,-812.5"/>
 </g>
@@ -150,7 +150,7 @@
 <text text-anchor="start" x="608.5" y="-841.5" font-family="Inter" font-size="10.00">ADMINISTRADOR</text>
 <text text-anchor="start" x="608.5" y="-828.5" font-family="Inter" font-size="10.00">TESORERO</text>
 <text text-anchor="start" x="608.5" y="-815.5" font-family="Inter" font-size="10.00">ENTRENADOR</text>
-<text text-anchor="start" x="608.5" y="-802.5" font-family="Inter" font-size="10.00">PADRE</text>
+<text text-anchor="start" x="608.5" y="-802.5" font-family="Inter" font-size="10.00">ACUDIENTE</text>
 <polygon fill="none" stroke="#f9a825" stroke-width="2" points="603.5,-795 603.5,-890 699.5,-890 699.5,-795 603.5,-795"/>
 </g>
 <!-- Rol&#45;&gt;NombreRol -->

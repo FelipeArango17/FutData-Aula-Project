@@ -3,16 +3,19 @@
 **Sprint:** Sprint 1  
 **Proyecto:** FutData - Asociación Deportiva Prado Fútbol Club  
 **Origen:** Modelo Entidad-Relación definido para la HU de modelado de datos  
-**Ampliación Sprint 2:** se agregan las tablas `Categoria` y `Entrenamiento` y los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).
+**Ampliación Sprint 2:** se agregan las tablas `Categoria`, `Entrenamiento` y `Notificacion`, además de los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).
 
 ## 1. Convenciones
 
 - `PK` identifica de forma única cada registro.
 - `FK` referencia la clave primaria de otra tabla.
 - `NOT NULL` indica un campo obligatorio. Las restricciones de obligatoriedad no están expresadas en el código del diagrama y deberán definirse durante la implementación de la base de datos.
-- `UUID` identifica registros y relaciones entre tablas; `varchar` almacena texto corto; `text`, texto de longitud variable; `int`, números enteros; `long`, enteros de mayor capacidad; `decimal`, valores numéricos con decimales; `date`, fecha; `time`, hora del día; `datetime`, fecha y hora; y `boolean`, valores verdadero/falso.
+- `UUID` identifica registros y relaciones entre tablas; `varchar` almacena texto corto; `text`, texto de longitud variable; `int`, números enteros; `decimal`, valores numéricos con decimales; `date`, fecha; `time`, hora del día; `datetime`, fecha y hora; y `boolean`, valores verdadero/falso.
+- En PostgreSQL/Supabase, `UUID` se implementa como `uuid`, `decimal` como `numeric`, `datetime` como `timestamp with time zone` y `boolean` como `boolean`.
 - Los campos `edad` son calculados a partir de `fecha_nacimiento`; no deben mantenerse como un valor independiente sin una regla de actualización.
 - Los campos `foto`, `documentos` y `recibo_url` almacenan URLs o rutas al almacenamiento de archivos, no el contenido binario.
+- La autenticación y las contraseñas pertenecen a Supabase Auth. `Usuario.id_usuario` usa el mismo UUID de `auth.users.id`; la tabla `Usuario` solo almacena el perfil y estado de la cuenta.
+- Los nombres de rol se almacenan en la base de datos en mayúsculas: `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR` y `ACUDIENTE`. La API puede exponerlos en minúsculas para coincidir con el frontend.
 
 ## 2. Tablas y atributos
 
@@ -26,7 +29,7 @@ Registro principal de los jugadores del club.
 | `nombre` | `varchar` | — | Nombres del deportista. |
 | `apellido` | `varchar` | — | Apellidos del deportista. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
-| `documento_identidad` | `long` | — | Número del documento de identidad. |
+| `documento_identidad` | `varchar` | — | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. |
 | `fecha_nacimiento` | `date` | — | Fecha de nacimiento. |
 | `edad` | `int` | Calculado | Edad calculada a partir de `fecha_nacimiento`. |
 | `posicion` | `varchar` | — | Posición habitual de juego. |
@@ -49,7 +52,7 @@ Personas responsables o acudientes asociados a un deportista.
 | `nombre` | `varchar` | — | Nombres del acudiente. |
 | `apellido` | `varchar` | — | Apellidos del acudiente. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
-| `documento_identidad` | `long` | — | Número del documento de identidad. |
+| `documento_identidad` | `varchar` | — | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. |
 | `fecha_nacimiento` | `date` | — | Fecha de nacimiento. |
 | `edad` | `int` | Calculado | Edad calculada a partir de `fecha_nacimiento`. |
 | `telefono` | `varchar` | — | Teléfono de contacto. |
@@ -68,7 +71,7 @@ Información personal y laboral de los entrenadores.
 | `nombre` | `varchar` | — | Nombres del entrenador. |
 | `apellido` | `varchar` | — | Apellidos del entrenador. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
-| `documento_identidad` | `long` | — | Número del documento de identidad. |
+| `documento_identidad` | `varchar` | — | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. |
 | `fecha_nacimiento` | `date` | — | Fecha de nacimiento. |
 | `edad` | `int` | Calculado | Edad calculada a partir de `fecha_nacimiento`. |
 | `telefono` | `varchar` | — | Teléfono de contacto. |
@@ -81,14 +84,14 @@ Información personal y laboral de los entrenadores.
 
 ### 2.4 `Usuario`
 
-Credenciales y datos básicos de acceso al sistema.
+Perfil y estado de una cuenta administrada por Supabase Auth.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
 | `id_usuario` | `UUID` | PK | Identificador único del usuario. |
 | `nombre` | `varchar` | — | Nombre visible del usuario. |
 | `correo` | `varchar` | — | Correo utilizado para el acceso. |
-| `contraseña` | `varchar` | — | Contraseña almacenada de forma segura mediante hash. |
+| `activo` | `boolean` | — | Indica si el acceso de la cuenta está vigente. Revocar el acceso no elimina la cuenta de Supabase Auth. |
 
 ### 2.5 `Pago`
 
@@ -112,7 +115,7 @@ Información de los torneos en los que puede participar el club.
 | :--- | :--- | :--- | :--- |
 | `id_torneo` | `UUID` | PK | Identificador único del torneo. |
 | `nombre_torneo` | `varchar` | — | Nombre del torneo. |
-| `categoria` | `varchar` | — | Categoría participante. |
+| `id_categoria` | `UUID` | FK | Categoría participante. Referencia `Categoria.id_categoria`. |
 | `lugar` | `varchar` | — | Lugar donde se realiza el torneo. |
 | `fecha_inicio` | `date` | — | Fecha de inicio. |
 | `fecha_fin` | `date` | — | Fecha de finalización. |
@@ -176,7 +179,7 @@ Catálogo de roles disponibles en el sistema.
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
 | `id_rol` | `UUID` | PK | Identificador único del rol. |
-| `nombre` | `varchar` | — | Nombre del rol. |
+| `nombre` | `varchar` | — | Nombre del rol. Único; valores: `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR` y `ACUDIENTE`. |
 
 ### 2.12 `ReporteFinanciero`
 
@@ -209,9 +212,9 @@ Tabla intermedia para asociar usuarios con roles.
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
 | `id_categoria` | `UUID` | PK | Identificador único de la categoría. |
-| `nombre` | `varchar` | — | Nombre de la categoría, por ejemplo `Sub-12`. Único. |
-| `edad_minima` | `int` | — | Edad mínima para pertenecer a la categoría. Ver decisión D3. |
-| `edad_maxima` | `int` | — | Edad máxima para pertenecer a la categoría. Ver decisión D3. |
+| `nombre` | `varchar` | — | Nombre de la categoría: `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14` o `Sub-16`. Único. |
+| `edad_minima` | `int` | — | Edad mínima cumplida: 0, 8, 10, 12 o 14, respectivamente. |
+| `edad_maxima` | `int` | — | Edad máxima cumplida: 7, 9, 11, 13 o 15, respectivamente. |
 | `id_entrenador` | `UUID` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. |
 
 ### 2.15 `Entrenamiento`
@@ -255,16 +258,17 @@ Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es 
 ## 4. Observaciones para la implementación
 
 1. `UsuarioRol` es la única fuente de verdad para los roles; `Usuario` no almacena un campo `rol`.
-2. Conviene agregar restricciones de unicidad para los documentos de identidad y los correos, según las reglas del negocio.
-3. Para evitar duplicados, se recomienda una restricción compuesta sobre (`id_torneo`, `id_deportista`) en `InscripcionTorneo`.
-4. Para evitar duplicados, se debe aplicar una restricción compuesta sobre (`id_deportista`, `id_entrenamiento`) en `Asistencia`.
-5. `long` es un tipo lógico del diagrama. En el motor de base de datos deberá mapearse a un tipo entero equivalente, como `BIGINT`.
-6. Los valores de `estado_pago`, `tipo_documento` y `resultado` deberían validarse mediante catálogos o restricciones, en lugar de aceptar cualquier texto. Los roles se validan mediante `Rol`.
-7. Las contraseñas nunca deben almacenarse en texto plano; `Usuario.contraseña` debe contener únicamente un hash generado por un algoritmo seguro.
-8. **Nuevo (Sprint 2).** Para que no se programen dos entrenamientos en el mismo lugar a la misma hora, se recomienda una restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`) en `Entrenamiento`. La pantalla de programación ya detecta este conflicto y ofrece alternativas; la base de datos debe hacerlo cumplir también.
+2. Se debe aplicar `UNIQUE` a `correo` en `Usuario`, a (`tipo_documento`, `documento_identidad`) en `Deportista`, `Acudiente` y `Entrenador`, y a `correo` en cada perfil que lo almacene.
+3. Para evitar duplicados, se debe aplicar `UNIQUE (id_torneo, id_deportista)` en `InscripcionTorneo`.
+4. Para evitar duplicados, se debe aplicar `UNIQUE (id_deportista, id_entrenamiento)` en `Asistencia`.
+5. `documento_identidad` se almacena como `varchar`, no como entero, para conservar ceros iniciales y soportar documentos alfanuméricos.
+6. Los valores permitidos son `tipo_documento`: `CC`, `TI`, `CE`, `PASAPORTE`; `estado_pago`: `PENDIENTE`, `APROBADO`, `RECHAZADO`; `resultado`: `PENDIENTE`, `CAMPEON`, `SUBCAMPEON`, `TERCER_LUGAR`, `OTRO`. Deben validarse con `CHECK` o catálogos equivalentes.
+7. Las contraseñas no se almacenan en el esquema de la aplicación: Supabase Auth las gestiona en `auth.users`. `Usuario.id_usuario` es una FK/PK hacia `auth.users.id`.
+8. **Nuevo (Sprint 2).** Para que no se programen dos entrenamientos en el mismo lugar a la misma hora, se debe aplicar `UNIQUE (lugar, fecha, hora_inicio)` en `Entrenamiento`. La pantalla de programación ya detecta este conflicto y ofrece alternativas; la base de datos debe hacerlo cumplir también.
 9. **Nuevo (Sprint 2).** Todas las PK y FK usan `UUID`, compatible con Supabase Auth y con el diagrama de clases del dominio.
-10. **Nuevo (Sprint 2).** `Torneo.categoria` es texto libre. Una vez exista `Categoria`, conviene reemplazarlo por una clave foránea `id_categoria` para que los torneos y los deportistas hablen de las mismas categorías.
+10. **Nuevo (Sprint 2).** `Torneo.id_categoria` referencia `Categoria.id_categoria`, por lo que torneos y deportistas usan el mismo catálogo.
 11. **Nuevo (Sprint 2).** `Entrenador.id_usuario` y `Acudiente.id_usuario` permiten asociar cada perfil con su cuenta de acceso; ambos son nullable durante el registro.
+12. `Entrenador.id_usuario` y `Acudiente.id_usuario` deben ser `UNIQUE` para que una cuenta no se vincule a dos perfiles del mismo tipo.
 
 ## 5. Decisiones confirmadas de la ampliación del Sprint 2
 
@@ -274,7 +278,7 @@ Estas decisiones fueron confirmadas para cerrar el modelo antes de crear tablas.
 | :--- | :--- | :--- |
 | D1 | ¿Un entrenador dirige varias categorías y una categoría tiene un solo entrenador, o una categoría puede tener varios entrenadores (por ejemplo, un auxiliar)? | Confirmado: seguir el diagrama de clases con `Categoria.id_entrenador` (1 entrenador, varias categorías). No se crea `EntrenadorCategoria`. |
 | D2 | ¿`lugar` es texto libre o un catálogo? | Confirmado: texto, con restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`). |
-| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Confirmado: guardar `Deportista.id_categoria`, asignada al inscribir según `edad_minima` y `edad_maxima`. |
+| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Confirmado: guardar `Deportista.id_categoria` y asignarla según la edad cumplida: `Sub-8` (0–7), `Sub-10` (8–9), `Sub-12` (10–11), `Sub-14` (12–13) y `Sub-16` (14–15). Se recalcula al registrar y se actualiza explícitamente cuando cambie la edad; no se cambia silenciosamente durante una consulta. |
 | D4 | ¿Cómo se guarda el aviso a deportistas y acudientes cuando se crea, cambia o elimina un entrenamiento (tarea 338)? | Confirmado: crear una tabla `Notificacion` general con tipo; `NotificacionPago` queda reservada para pagos. |
 | D5 | ¿La asistencia se toma por entrenamiento? | Confirmado: agregar `Asistencia.id_entrenamiento` y usar la restricción (`id_deportista`, `id_entrenamiento`). `Asistencia.fecha` queda derivable de `Entrenamiento.fecha`. |
 
