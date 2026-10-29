@@ -80,3 +80,6 @@ export function momentoLegible(iso) {
   const f = fechaLargaConAnio(fecha)
   return `${f[0].toUpperCase()}${f.slice(1)}, ${formatHora(hora)}`
 }
+
+// Nombre del mes de una fecha "AAAA-MM-DD" (o "AAAA-MM-DD..."): "octubre"
+export const mesEnTexto = (fecha) => MESES[Number(fecha.slice(5, 7)) - 1]

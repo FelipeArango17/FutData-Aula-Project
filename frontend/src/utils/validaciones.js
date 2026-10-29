@@ -35,6 +35,18 @@ export const MENSAJES = {
   entrenamientoLugar: 'Selecciona el lugar.',
   // Inscripción en línea
   consentimientoObligatorio: 'Debes aceptar el tratamiento de datos para enviar la inscripción.',
+  // Registro manual de pagos
+  pagoDeportista: 'Selecciona un deportista.',
+  pagoMesObligatorio: 'Selecciona el mes que se paga.',
+  pagoMesInvalido: 'El mes no es válido.',
+  pagoMesFuturo: 'No se puede registrar el pago de un mes futuro.',
+  pagoFechaObligatoria: 'Indica la fecha en que se pagó.',
+  pagoFechaInvalida: 'La fecha de pago no es válida. Usa el formato día/mes/año.',
+  pagoFechaFutura: 'La fecha de pago no puede ser futura.',
+  pagoMetodo: 'Selecciona el método de pago.',
+  pagoReferenciaObligatoria: 'Escribe la referencia de la transferencia.',
+  pagoReferenciaLarga: 'La referencia no puede superar los 60 caracteres.',
+  pagoNotaLarga: 'La nota no puede superar los 200 caracteres.',
   // Nuevos (para los formularios de deportista, inscripción y pago)
   nombreLongitud: 'El nombre debe tener entre 2 y 60 caracteres.',
   nombreCaracteres: 'El nombre solo puede tener letras, espacios, guion y apóstrofo.',
@@ -133,6 +145,25 @@ export function validarMonto(valor) {
   return Number(monto) > 0 ? null : MENSAJES.montoPositivo
 }
 
+// Una fecha "AAAA-MM-DD" que existe. Se revisa mes 01-12 y día 01-31 antes de esFechaValida, que lanza RangeError con un mes 13.
+const fechaReal = (fecha) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(fecha) && esFechaValida(fecha)
+
+// Mes "AAAA-MM" que se paga: no puede ser posterior al mes de `hoy` (quien llama pasa HOY_EJEMPLO; sin él, la fecha del sistema).
+export function validarMes(valor, hoy = hoySistema()) {
+  const mes = texto(valor)
+  if (!mes) return MENSAJES.pagoMesObligatorio
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return MENSAJES.pagoMesInvalido
+  return mes > hoy.slice(0, 7) ? MENSAJES.pagoMesFuturo : null
+}
+
+// Fecha en que se pagó: "AAAA-MM-DD", que exista y no sea futura respecto a `hoy`.
+export function validarFechaPago(valor, hoy = hoySistema()) {
+  const fecha = texto(valor)
+  if (!fecha) return MENSAJES.pagoFechaObligatoria
+  if (!fechaReal(fecha)) return MENSAJES.pagoFechaInvalida
+  return fecha > hoy ? MENSAJES.pagoFechaFutura : null
+}
+
 // Reglas del formulario de entrenamientos
 export function validarFechaEntrenamiento(valor) {
   if (!valor) return MENSAJES.entrenamientoFechaObligatoria
@@ -151,6 +182,10 @@ export const requerido = (mensaje, { recortar = true } = {}) => (valor) => {
   const t = String(valor ?? '')
   return (recortar ? t.trim() : t) ? null : mensaje
 }
+// maximoCaracteres: el texto (sin espacios en los bordes) no puede superar `max` caracteres; vacío es válido
+export const maximoCaracteres = (max, mensaje) => (valor) => (texto(valor).length > max ? mensaje : null)
+// requeridoSi: obligatorio solo cuando condicion(todos) es verdadera (por ejemplo, la referencia si el método es transferencia)
+export const requeridoSi = (condicion, mensaje) => (valor, todos) => (condicion(todos) && !texto(valor) ? mensaje : null)
 // casillaMarcada: una casilla obligatoria (por ejemplo el consentimiento) debe valer exactamente true
 export const casillaMarcada = (mensaje) => (valor) => (valor === true ? null : mensaje)
 // enLista: el valor debe ser una de las opciones permitidas
