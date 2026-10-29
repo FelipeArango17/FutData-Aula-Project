@@ -236,9 +236,9 @@ public class PagoServiceImpl implements IPagoService {
                 acudiente.getNombreCompleto(),
                 pago.getConcepto(),
                 pago.getMonto(),                             // long, pesos sin decimales
-                pago.getFechaPago(),                         // LocalDate, no futura
+                pago.getFechaPago(),                         // LocalDate, ni futura ni posterior a la emisión
                 MetodoPago.desdeEtiqueta(pago.getMetodo()),  // "Efectivo", "Transferencia", "PSE", "Nequi", "Tarjeta"
-                pago.getReferenciaWompi());                  // solo PSE, Nequi o Tarjeta; null en pagos manuales
+                pago.getReferenciaWompi());                  // obligatoria en PSE, Nequi o Tarjeta; null en pagos manuales
         return comprobantes.generar(datos);                  // tarea 328: subirlo a Storage y guardar recibo_url
     }
 }
@@ -250,9 +250,9 @@ Si un dato no es válido, `generar()` lanza `ComprobanteInvalidoException` con t
 { "estado": 400, "mensaje": "Los datos del comprobante no son válidos: concepto: es obligatorio; monto: debe ser mayor que 0", ... }
 ```
 
-Reglas: `numeroComprobante` (máximo 40 caracteres), `fechaEmision`, `nombreDeportista`, `nombreAcudiente` (máximo 120), `concepto` (máximo 200), `fechaPago` y `metodo` son obligatorios. `monto` debe ser mayor que 0. `fechaPago` no puede ser posterior a hoy en Colombia. `referenciaWompi` (máximo 100) solo se acepta en pagos en línea.
+Reglas: `numeroComprobante` (máximo 40 caracteres), `fechaEmision`, `nombreDeportista`, `nombreAcudiente` (máximo 120), `concepto` (máximo 200), `fechaPago` y `metodo` son obligatorios. `monto` debe ser mayor que 0. `fechaPago` no puede ser posterior a hoy ni a la fecha de emisión, las dos en hora de Colombia. `referenciaWompi` (máximo 100) es **obligatoria** en los pagos en línea (PSE, Nequi o Tarjeta), porque todos llegan por el webhook de Wompi, y se **rechaza** en los manuales (Efectivo o Transferencia).
 
-**Número de comprobante.** Formato sugerido: `FD-AAAA-NNNNNN`, con el año del pago y un consecutivo de 6 dígitos, por ejemplo `FD-2026-000123`. El generador no lo inventa ni comprueba que sea único: el consecutivo lo debe llevar la base de datos (tarea 328 o la tabla `Pago`).
+**Número de comprobante.** Formato: `FD-AAAA-NNNNNN`, con el año del pago y un consecutivo de 6 dígitos, por ejemplo `FD-2026-000123`. El generador no lo inventa ni comprueba que sea único (ver *Pendientes*).
 
 ### Qué lleva y qué no
 
@@ -261,7 +261,7 @@ Reglas: `numeroComprobante` (máximo 40 caracteres), `fechaEmision`, `nombreDepo
 | Número y fecha de emisión | Quién registró el pago |
 | Deportista, categoría (si hay) y acudiente | Nota interna |
 | Concepto, fecha y método de pago | Referencia del pago manual |
-| Referencia Wompi (solo pagos en línea) | Documento de identidad del deportista (es menor de edad) |
+| Referencia Wompi (obligatoria en pagos en línea) | Documento de identidad del deportista (es menor de edad) |
 | Monto en número (`$ 90.000`) y en letras (`noventa mil pesos M/CTE`) | Datos de tarjeta o cuenta bancaria |
 
 El DTO **no tiene campos** para lo de la segunda columna, así que no se puede imprimir por error; `ComprobantePdfGeneratorTest` lo comprueba. Los metadatos del PDF solo tienen el título (`Comprobante de pago FD-2026-000123`), el autor (el nombre del club) y el creador (`FutData`), sin datos personales.
@@ -282,15 +282,17 @@ Salen de `futdata.club` (`config.ClubProperties`). Son datos públicos, con valo
 | `CLUB_NIT` | `811032309-1` | `NIT 811.032.309-1` |
 | `CLUB_DIRECCION` | `Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia` | Igual |
 | `CLUB_TELEFONO` | `3137317366` | `Tel. 313 731 7366` |
-| `CLUB_CORREO` | `prafofutbolclub@gmail.com` | Igual |
+| `CLUB_CORREO` | `pradofutbolclub@gmail.com` | Igual |
 
 - Si una variable queda vacía (`CLUB_NIT=`), esa línea no se imprime.
 - `backend/.env` se lee en ISO-8859-1: para escribir tildes ahí usa `ó` y similares (ver `.env.example`), o define la variable en el sistema.
 
-**Pendiente de confirmar con el club:**
-- El correo `prafofutbolclub@gmail.com`: ¿"prafo" está bien escrito o es "prado"?
-- El logo: no hay un PNG en el repositorio, así que el comprobante sale sin logo. Cuando haya uno, se agrega en `PlantillaReportePdf`.
-- El texto legal del pie ("No es una factura electrónica"), con el tesorero.
+### Pendientes
+
+- **Diagrama 02-pagos (propuesta, no aplicada).** Cambiar `IGeneradorComprobante +generarPdf(Pago) byte[]` por `+generar(ComprobantePagoDTO) byte[]`. Razón: el generador no debe recibir la entidad `Pago`. Con el DTO no depende de la base de datos (se prueba sin ella) y solo recibe lo que puede ver el acudiente: así no puede imprimir por error quién registró el pago, la nota interna ni la referencia manual, que sí están en el pago.
+- **Consecutivo del comprobante.** El número `FD-AAAA-NNNNNN` lo generará la base de datos con una secuencia, al crear la tabla `Pago`. Así es único aunque dos pagos se registren al mismo tiempo.
+- **Texto del pie, por confirmar con el tesorero:** "Este comprobante es un soporte del pago recibido por el club. No es una factura electrónica."
+- **Logo.** No hay un PNG en el repositorio, así que el comprobante sale sin logo. Cuando haya uno, se agrega en `PlantillaReportePdf`.
 
 ### Ver un ejemplo
 
@@ -344,7 +346,7 @@ No necesitan base de datos, credenciales ni red: cargan `src/test/resources/prue
 | :--- | :--- |
 | `FutDataApplicationTests` | El contexto arranca sin base de datos y sin JPA; propiedades de n8n (timeout 5 s, token oculto en `toString`); OpenAPI y Swagger UI |
 | `NumeroEnLetrasTest`, `FormatoColombianoTest` | Montos en letras (1, 21, 100, 101, 1.000, 150.000, 1.000.000, 1.250.500...), pesos, fechas en hora de Colombia, NIT y celular |
-| `ComprobantePdfGeneratorTest` | Texto del PDF leído con PDFBox: datos, monto en número y en letras, fechas, club (y líneas vacías), tildes y ñ, concepto largo, metadatos sin datos personales, que no salgan la nota ni quién registró, y DTO inválido. Deja ejemplos en `target/comprobantes-ejemplo/` |
+| `ComprobantePdfGeneratorTest` | Texto del PDF leído con PDFBox: datos, monto en número y en letras, fechas, club (y líneas vacías), tildes y ñ, concepto largo, metadatos sin datos personales, que no salgan la nota ni quién registró, y DTO inválido (incluida la referencia Wompi obligatoria en línea y la fecha de pago posterior a la emisión). Deja ejemplos en `target/comprobantes-ejemplo/` |
 | `ComprobanteConfiguracionTest` | Valores por defecto de `futdata.club` y el generador como bean |
 | `SaludControllerTest` | `GET /api/health`: `200` con la base de datos arriba, `503` con la base de datos abajo |
 | `SaludDAOImplTest` | `SELECT 1` con timeout de 2 s; `false` si no hay conexión |
