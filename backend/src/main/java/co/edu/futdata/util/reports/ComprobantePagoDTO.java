@@ -21,9 +21,10 @@ import java.util.List;
  * @param nombreAcudiente   nombre y apellido del acudiente
  * @param concepto          concepto del pago, por ejemplo {@code Mensualidad octubre}
  * @param monto             pesos colombianos, entero y sin decimales (como el frontend)
- * @param fechaPago         día del pago; no puede ser posterior a hoy (hora de Colombia)
+ * @param fechaPago         día del pago; no puede ser posterior a hoy ni a la fecha de emisión (hora de Colombia)
  * @param metodo            medio de pago
- * @param referenciaWompi   referencia de la transacción en Wompi; opcional y solo para pagos en línea
+ * @param referenciaWompi   referencia de la transacción en Wompi: obligatoria en los pagos en línea (todos llegan
+ *                          por el webhook de Wompi) y prohibida en los manuales
  */
 public record ComprobantePagoDTO(
         String numeroComprobante,
@@ -63,7 +64,7 @@ public record ComprobantePagoDTO(
             return etiqueta;
         }
 
-        /** {@code true} si el pago se hace por Wompi y puede tener referencia. */
+        /** {@code true} si el pago se hace por Wompi y por eso lleva referencia. */
         public boolean enLinea() {
             return enLinea;
         }
@@ -105,11 +106,15 @@ public record ComprobantePagoDTO(
             errores.add("fechaPago: es obligatoria");
         } else if (fechaPago.isAfter(hoy)) {
             errores.add("fechaPago: no puede ser posterior a hoy");
+        } else if (fechaEmision != null && fechaPago.isAfter(fechaEmision.atZone(FormatoColombiano.ZONA).toLocalDate())) {
+            errores.add("fechaPago: no puede ser posterior a la fecha de emisión");
         }
         if (metodo == null) {
             errores.add("metodo: es obligatorio");
         } else if (!metodo.enLinea() && tieneTexto(referenciaWompi)) {
             errores.add("referenciaWompi: solo aplica a pagos en línea (PSE, Nequi o Tarjeta)");
+        } else if (metodo.enLinea() && !tieneTexto(referenciaWompi)) {
+            errores.add("referenciaWompi: es obligatoria en pagos en línea (PSE, Nequi o Tarjeta)");
         }
         if (!errores.isEmpty()) {
             throw new ComprobanteInvalidoException(errores);

@@ -210,6 +210,7 @@ class ComprobantePdfGeneratorTest {
             "fechaPago: es obligatoria",
             "fechaPago: no puede ser posterior a hoy",
             "metodo: es obligatorio",
+            "fechaPago: no puede ser posterior a la fecha de emisión",
             "referenciaWompi: solo aplica a pagos en línea (PSE, Nequi o Tarjeta)"})
     void unDtoInvalidoLanzaUnaExcepcionClara(String caso) {
         ComprobantePagoDTO invalido = switch (caso) {
@@ -224,6 +225,8 @@ class ComprobantePdfGeneratorTest {
             case "fechaPago: es obligatoria" -> con(pagoManual(), b -> b.fechaPago(null));
             case "fechaPago: no puede ser posterior a hoy" -> con(pagoManual(), b -> b.fechaPago(LocalDate.of(2026, 10, 29)));
             case "metodo: es obligatorio" -> con(pagoManual(), b -> b.metodo(null));
+            case "fechaPago: no puede ser posterior a la fecha de emisión" ->
+                    con(pagoManual(), b -> b.fechaEmision(Instant.parse("2026-10-20T15:00:00Z")));
             default -> con(pagoManual(), b -> b.referenciaWompi("12345-1698765432-49201"));
         };
         String esperado = caso.equals("monto: negativo") ? "monto: debe ser mayor que 0" : caso;
@@ -234,6 +237,36 @@ class ComprobantePdfGeneratorTest {
         assertThat(e.getMessage()).isEqualTo("Los datos del comprobante no son válidos: " + esperado);
         // Nombra campos, nunca valores
         assertThat(e.getMessage()).doesNotContain("Santiago", "Marta", "90000");
+    }
+
+    /** Todo pago en línea llega por el webhook de Wompi: sin referencia es un error. */
+    @ParameterizedTest
+    @ValueSource(strings = {"PSE", "NEQUI", "TARJETA"})
+    void unPagoEnLineaSinReferenciaWompiEsInvalido(String metodo) {
+        for (String sinReferencia : new String[] {null, "", "  "}) {
+            ComprobanteInvalidoException e = catchThrowableOfType(ComprobanteInvalidoException.class, () -> generador.generar(
+                    con(pagoManual(), b -> b.metodo(MetodoPago.valueOf(metodo)).referenciaWompi(sinReferencia))));
+            assertThat(e.getErrores()).containsExactly("referenciaWompi: es obligatoria en pagos en línea (PSE, Nequi o Tarjeta)");
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PSE", "NEQUI", "TARJETA"})
+    void unPagoEnLineaConReferenciaEsValido(String metodo) throws IOException {
+        byte[] pdf = generador.generar(con(pagoManual(), b -> b.metodo(MetodoPago.valueOf(metodo)).referenciaWompi("12345-1698765432-49201")));
+        assertThat(texto(pdf)).contains(MetodoPago.valueOf(metodo).etiqueta(), "12345-1698765432-49201");
+    }
+
+    /** La fecha de emisión se pasa a hora de Colombia antes de comparar. */
+    @Test
+    void laFechaDePagoNoPuedeSerPosteriorALaEmisionEnColombia() {
+        // 2026-10-29 03:00 UTC = 28 de octubre, 10:00 p. m. en Bogotá: un pago del 28 es válido
+        assertThat(generador(CLUB, Instant.parse("2026-10-29T12:00:00Z")).generar(con(pagoManual(), b -> b
+                .fechaEmision(Instant.parse("2026-10-29T03:00:00Z")).fechaPago(LocalDate.of(2026, 10, 28))))).isNotEmpty();
+        // 2026-10-28 03:00 UTC = 27 de octubre en Bogotá, aunque en UTC ya sea 28: un pago del 28 es posterior
+        ComprobanteInvalidoException e = catchThrowableOfType(ComprobanteInvalidoException.class, () -> generador.generar(
+                con(pagoManual(), b -> b.fechaEmision(Instant.parse("2026-10-28T03:00:00Z")).fechaPago(LocalDate.of(2026, 10, 28)))));
+        assertThat(e.getErrores()).containsExactly("fechaPago: no puede ser posterior a la fecha de emisión");
     }
 
     @Test
