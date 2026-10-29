@@ -293,7 +293,7 @@ Copy-Item n8n\.env.example n8n\.env
 
 - `n8n/.env`: `N8N_ENCRYPTION_KEY`, `N8N_WEBHOOK_TOKEN` y `SMTP_FROM` (ver [`n8n/README.md`](n8n/README.md), paso 1). Un valor aleatorio se genera con `openssl rand -hex 32` (PowerShell: ver el comentario de `n8n/.env.example`).
 - `backend/.env`: `DB_URL`, `DB_USER` y `DB_PASSWORD` de Supabase y `CORS_ORIGINS`. **`N8N_WEBHOOK_TOKEN` debe ser el MISMO valor en los dos archivos**; si difieren, n8n rechaza al backend con `401`.
-- Perfil de Spring: la imagen usa `prod`, que **exige las seis variables** (`DB_URL`, `DB_USER`, `DB_PASSWORD`, `CORS_ORIGINS`, `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN`) y si falta alguna el contenedor se detiene diciendo cuál. Para trabajar sin base de datos agrega `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
+- Perfil de Spring: la imagen usa `prod`, que **exige las ocho variables** (`DB_URL`, `DB_USER`, `DB_PASSWORD`, `CORS_ORIGINS`, `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) y si falta alguna el contenedor se detiene diciendo cuál. Para trabajar sin base de datos ni Supabase agrega `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
 
 > **Hay dos `N8N_BASE_URL` y no son lo mismo:**
 >

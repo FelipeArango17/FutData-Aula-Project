@@ -71,6 +71,13 @@ futdata:
     direccion: ${CLUB_DIRECCION:Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia}
     telefono: ${CLUB_TELEFONO:3137317366}
     correo: ${CLUB_CORREO:pradofutbolclub@gmail.com}
+  supabase:
+    # Supabase Storage: comprobantes de pago en un bucket privado (datasource.external.SupabaseStorageClient).
+    url: ${SUPABASE_URL}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+    bucket-comprobantes: ${SUPABASE_BUCKET_COMPROBANTES:comprobantes}
+    vigencia-url-firmada: ${SUPABASE_VIGENCIA_URL_FIRMADA:5m}
+    timeout: 10s
 
 ---
 # Perfil local: valores por defecto para poder trabajar sin credenciales.
@@ -90,14 +97,18 @@ futdata:
   n8n:
     base-url: ${N8N_BASE_URL:http://localhost:5678}
     webhook-token: ${N8N_WEBHOOK_TOKEN:}
+  supabase:
+    url: ${SUPABASE_URL:}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
 
 logging:
   level:
     co.edu.futdata: DEBUG
 
 ---
-# Perfil prod: sin valores por defecto. Si falta DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL o
-# N8N_WEBHOOK_TOKEN, la aplicación no arranca y dice cuáles faltan (config.VerificadorVariablesProd).
+# Perfil prod: sin valores por defecto. Si falta DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL,
+# N8N_WEBHOOK_TOKEN, SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY, la aplicación no arranca y dice cuáles faltan
+# (config.VerificadorVariablesProd).
 spring:
   config:
     activate:

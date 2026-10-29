@@ -18,7 +18,8 @@ import org.springframework.util.StringUtils;
 public class VerificadorVariablesProd implements EnvironmentPostProcessor, Ordered {
 
     static final List<String> OBLIGATORIAS = List.of(
-            "DB_URL", "DB_USER", "DB_PASSWORD", "CORS_ORIGINS", "N8N_BASE_URL", "N8N_WEBHOOK_TOKEN");
+            "DB_URL", "DB_USER", "DB_PASSWORD", "CORS_ORIGINS", "N8N_BASE_URL", "N8N_WEBHOOK_TOKEN",
+            "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY");
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment entorno, SpringApplication aplicacion) {
