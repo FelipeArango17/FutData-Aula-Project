@@ -50,6 +50,9 @@ jobs:
       - name: Compilar (build)
         run: npm run build
 
+  # Pruebas y empaquetado del backend (TEC-01). Solo trabaja si el push o el PR cambian backend/** (o este
+  # archivo); si no, termina en verde sin compilar. El job siempre se ejecuta para que el check exista
+  # aunque no haya cambios de backend (un check requerido que nunca aparece bloquearía el PR).
   backend:
     name: Backend (compilar)
     runs-on: ubuntu-latest
@@ -60,21 +63,28 @@ jobs:
     steps:
       - name: Descargar el código
         uses: actions/checkout@v4
+        with:
+          # Historial completo para comparar con la base del PR o con el push anterior
+          fetch-depth: 0
 
-      # Mientras el proyecto Spring Boot no exista (backend/pom.xml), este job termina en verde sin compilar
-      - name: Detectar el proyecto Maven
-        id: detectar
+      - name: Detectar cambios en el backend
+        id: cambios
         working-directory: .
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
-          if [ -f backend/pom.xml ]; then
-            echo "existe=true" >> "$GITHUB_OUTPUT"
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            # Sin un commit base para comparar (por ejemplo, una rama nueva): se prueba por si acaso
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BASE" HEAD -- backend/ .github/workflows/ci.yml; then
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Backend::No hay cambios en backend/; no se compila el backend."
           else
-            echo "existe=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Backend::Todavía no hay backend/pom.xml; no se compila el backend."
+            echo "backend=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Instalar Java 21
-        if: steps.detectar.outputs.existe == 'true'
+        if: steps.cambios.outputs.backend == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -82,6 +92,7 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
 
-      - name: Compilar y empaquetar
-        if: steps.detectar.outputs.existe == 'true'
-        run: mvn -B -ntp verify
+      # Compila, corre las pruebas (sin base de datos ni credenciales) y genera futdata-backend.jar
+      - name: Pruebas y empaquetado
+        if: steps.cambios.outputs.backend == 'true'
+        run: ./mvnw -B -ntp verify
