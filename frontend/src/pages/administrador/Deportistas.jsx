@@ -1,46 +1,195 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
-import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
+import Avatar from '../../components/ui/Avatar.jsx'
+import Field from '../../components/ui/Field.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
+import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
+import Icon from '../../components/Icon.jsx'
+import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
+import { calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
 
-const filtros = ['Todos', 'Sub-8', 'Sub-10', 'Sub-12']
-const jugadores = [
-  { nombre: 'Santiago Ríos', cat: 'Sub-10', acudiente: 'María Torres', estado: 'Al día', tone: 'success' },
-  { nombre: 'Mateo Vélez', cat: 'Sub-10', acudiente: 'Ana Vélez', estado: 'Mora', tone: 'danger' },
-  { nombre: 'Emmanuel Arias', cat: 'Sub-12', acudiente: 'Luis Arias', estado: 'Mora', tone: 'danger' },
-  { nombre: 'Juan Pablo Cano', cat: 'Sub-10', acudiente: 'Rosa Cano', estado: 'Docs pendientes', tone: 'warning' },
-  { nombre: 'Samuel Londoño', cat: 'Sub-10', acudiente: 'Pedro Londoño', estado: 'Al día', tone: 'success' },
-]
+// Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
+// filtra por estado y lleva a la ficha. Reemplaza la maqueta con datos fijos; Figma no tiene una pantalla de esta lista.
+// Privacidad: la lista no muestra teléfono ni dirección; esos datos solo están en la ficha.
+const FILTROS = { Todos: 'todos', Activos: 'activos', Inactivos: 'inactivos' }
+const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
+const textoEdad = (d) => {
+  const edad = calcularEdad(d.fechaNacimiento)
+  return `${edad} ${edad === 1 ? 'año' : 'años'}`
+}
+
+function Mensaje({ icono = 'info', children }) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border bg-surface p-4">
+      <Icon name={icono} className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
+      <div className="flex min-w-0 flex-1 flex-col gap-3 break-words text-body">{children}</div>
+    </div>
+  )
+}
 
 export default function Deportistas() {
+  const tituloRef = useRef(null)
+  const zonaLista = useRef(null)
+  const [intento, setIntento] = useState(0)
+  const [texto, setTexto] = useState('')
   const [filtro, setFiltro] = useState('Todos')
-  const visibles = jugadores.filter((j) => filtro === 'Todos' || j.cat === filtro)
+  const [conTabla, setConTabla] = useState(false)
+  // Resultados con la clave de la petición que los produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
+  const [base, setBase] = useState({ intento: -1, categorias: {}, total: 0, activos: 0, error: false })
+  const [lista, setLista] = useState({ clave: null, items: null, error: false })
+
+  useEffect(() => {
+    tituloRef.current?.focus()
+  }, [])
+
+  // La tabla necesita unos 40 rem de ancho. Si la zona es más angosta (móvil, tablet vertical, texto grande)
+  // se usan tarjetas. Se mide en rem, así que depende del tamaño de letra y no solo de los píxeles.
+  useEffect(() => {
+    const zona = zonaLista.current
+    const observador = new ResizeObserver(([entrada]) => {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+      setConTabla(entrada.contentRect.width / rem >= 40)
+    })
+    observador.observe(zona)
+    return () => observador.disconnect()
+  }, [])
+
+  // Nombres de las categorías y totales reales (para el subtítulo)
+  useEffect(() => {
+    let activo = true
+    Promise.all([listarCategorias(), listarDeportistas()])
+      .then(([categorias, todos]) => {
+        if (!activo) return
+        setBase({
+          intento,
+          categorias: Object.fromEntries(categorias.map((c) => [c.id, c.nombre])),
+          total: todos.length,
+          activos: todos.filter((d) => d.activo).length,
+          error: false,
+        })
+      })
+      .catch(() => activo && setBase({ intento, categorias: {}, total: 0, activos: 0, error: true }))
+    return () => {
+      activo = false
+    }
+  }, [intento])
+
+  const busqueda = texto.trim()
+  const estado = FILTROS[filtro]
+  const clave = `${intento}|${estado}|${busqueda}`
+
+  // Resultados de la búsqueda; mientras llegan los nuevos se conservan los anteriores
+  useEffect(() => {
+    let activo = true
+    listarDeportistas({ texto: busqueda, estado })
+      .then((items) => activo && setLista({ clave, items, error: false }))
+      .catch(() => activo && setLista({ clave, items: null, error: true }))
+    return () => {
+      activo = false
+    }
+  }, [busqueda, estado, clave])
+
+  const cargandoBase = base.intento !== intento
+  const actualizando = lista.clave !== clave
+  const error = base.error || (!actualizando && lista.error)
+  const items = lista.items
+  const categoriaDe = (d) => base.categorias[d.idCategoria] ?? 'Sin asignar'
+
+  const aviso = error ? { texto: 'No se pudo cargar la lista de deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } } : null
+  const cuenta = items === null || error ? '' : items.length === 0 ? 'Sin resultados' : `${items.length} ${items.length === 1 ? 'resultado' : 'resultados'}`
+  const subtitulo = cargandoBase || base.error ? 'Consulta y edita la ficha de cada deportista.' : `${base.total} ${base.total === 1 ? 'deportista registrado' : 'deportistas registrados'} · ${base.activos} ${base.activos === 1 ? 'activo' : 'activos'}`
+
+  let contenido
+  if (error) {
+    contenido = null
+  } else if (items === null) {
+    contenido = (
+      <Mensaje icono="clock">
+        <p role="status">Cargando deportistas…</p>
+      </Mensaje>
+    )
+  } else if (items.length === 0) {
+    contenido = (
+      <Mensaje>
+        <p>{busqueda ? `No hay deportistas que coincidan con «${busqueda}»${filtro === 'Todos' ? '' : ` entre los ${filtro.toLowerCase()}`}.` : `No hay deportistas ${filtro === 'Todos' ? '' : filtro.toLowerCase()}.`}</p>
+        {(busqueda || filtro !== 'Todos') && (
+          <Button variant="secondary" onClick={() => { setTexto(''); setFiltro('Todos') }} className="sm:self-start">Limpiar búsqueda y filtro</Button>
+        )}
+      </Mensaje>
+    )
+  } else if (conTabla) {
+    contenido = (
+      <table aria-busy={actualizando} className="w-full table-fixed border-collapse rounded-lg border bg-surface text-left text-body">
+        <caption className="sr-only">Deportistas registrados</caption>
+        <thead>
+          <tr className="border-b bg-app">
+            <th scope="col" className="p-3 text-body-medium">Deportista</th>
+            <th scope="col" className="w-[5.5rem] p-3 text-body-medium">Edad</th>
+            <th scope="col" className="w-[8.5rem] p-3 text-body-medium">Documento</th>
+            <th scope="col" className="w-[6.5rem] p-3 text-body-medium">Categoría</th>
+            <th scope="col" className="w-[7.5rem] p-3 text-body-medium">Estado</th>
+            <th scope="col" className="w-[8rem] p-3 text-body-medium"><span className="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((d) => (
+            <tr key={d.id} className="border-b last:border-b-0">
+              <th scope="row" className="p-3 font-normal">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar name={nombreCompleto(d)} />
+                  <span className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</span>
+                </div>
+              </th>
+              <td className="p-3">{textoEdad(d)}</td>
+              <td className="break-words p-3">{d.documento}</td>
+              <td className="break-words p-3">{categoriaDe(d)}</td>
+              <td className="p-3"><EstadoDeportista activo={d.activo} /></td>
+              <td className="p-3">
+                <Button to={`/administrador/deportistas/${d.id}`} variant="secondary" aria-label={`Ver ficha de ${nombreCompleto(d)}`}>Ver ficha</Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  } else {
+    contenido = (
+      <ul aria-busy={actualizando} aria-label="Deportistas registrados" className="grid grid-cols-1 gap-4">
+        {items.map((d) => (
+          <Card as="li" key={d.id} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-start gap-3">
+              <Avatar name={nombreCompleto(d)} />
+              <div className="flex min-w-0 grow basis-[12rem] flex-col gap-1">
+                <h2 className="break-words text-h3">{nombreCompleto(d)}</h2>
+                <p className="break-words text-small text-secondary">{textoEdad(d)} · Documento: {d.documento}</p>
+                <p className="break-words text-small text-secondary">Categoría: {categoriaDe(d)}</p>
+                <div className="flex flex-wrap pt-1"><EstadoDeportista activo={d.activo} /></div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button to={`/administrador/deportistas/${d.id}`} variant="secondary" aria-label={`Ver ficha de ${nombreCompleto(d)}`}>Ver ficha</Button>
+            </div>
+          </Card>
+        ))}
+      </ul>
+    )
+  }
 
   return (
-    <Page title="Deportistas" subtitle="86 jugadores inscritos">
+    <Page title="Deportistas" subtitle={subtitulo} tituloRef={tituloRef}>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:self-start">
         <Button to="/administrador/deportistas/inscribir">Inscribir jugador</Button>
         <Button to="/administrador/deportistas/nuevo" variant="secondary">Nuevo deportista</Button>
       </div>
-      <FilterChips label="Categoría" options={filtros} value={filtro} onChange={setFiltro} />
-      {visibles.length === 0 && <p className="text-body text-secondary">No hay jugadores de ejemplo en esta categoría.</p>}
-      <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {visibles.map((j) => (
-          <Card as="li" key={j.nombre} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h2 className="break-words text-h3">{j.nombre}</h2>
-                <p className="text-body text-secondary">{j.cat} · Acudiente: {j.acudiente}</p>
-              </div>
-              <Badge tone={j.tone}>{j.estado}</Badge>
-            </div>
-            {/* La ficha del administrador no está en Figma todavía: botón sin destino */}
-            <Button variant="secondary">Ver ficha</Button>
-          </Card>
-        ))}
-      </ul>
+      <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
+      <div className="grid grid-cols-1 gap-4">
+        <Field label="Buscar por nombre o documento" id="buscar" type="search" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} />
+        <FilterChips label="Estado" options={Object.keys(FILTROS)} value={filtro} onChange={setFiltro} />
+        <p role="status" className="min-h-[1.125rem] text-small text-secondary">{cuenta}</p>
+      </div>
+      <div ref={zonaLista} className="min-w-0">{contenido}</div>
     </Page>
   )
 }

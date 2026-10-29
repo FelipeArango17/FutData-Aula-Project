@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
-import Badge from '../../components/ui/Badge.jsx'
+import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
 import Avatar from '../../components/ui/Avatar.jsx'
 import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
@@ -21,10 +21,6 @@ import { ID_ENTRENADOR_EJEMPLO } from '../../services/entrenamientosService.js'
 // No se muestran datos sensibles (ficha médica, teléfono del menor).
 
 const plural = (n) => `${n} ${n === 1 ? 'deportista' : 'deportistas'}`
-
-function EstadoDeportista({ activo }) {
-  return <Badge tone={activo ? 'success' : 'neutral'}>{activo ? 'Activo' : 'Inactivo'}</Badge>
-}
 
 const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
 const textoEdad = (d) => `${calcularEdad(d.fechaNacimiento)} años`

@@ -3,6 +3,7 @@ import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
+import Icon from '../Icon.jsx'
 import { DEPORTISTA_VACIO, HOY_EJEMPLO, TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad, validarDatosDeportista } from '../../services/deportistasService.js'
 import { validarFechaNacimiento } from '../../utils/validaciones.js'
 
@@ -23,6 +24,7 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
   const [valores, setValores] = useState(inicial)
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null)
+  const [sinCambios, setSinCambios] = useState(false) // al editar: el servicio dijo que no hay cambios reales
   const [guardando, setGuardando] = useState(false)
   const [intentos, setIntentos] = useState(0)
   const [confirmarDescartar, setConfirmarDescartar] = useState(false)
@@ -36,6 +38,7 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
 
   function cambiar(campo, valor) {
     setValores({ ...valores, [campo]: valor })
+    setSinCambios(false)
     if (errores[campo]) setErrores({ ...errores, [campo]: undefined })
   }
 
@@ -45,6 +48,7 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
     event.preventDefault()
     if (enVuelo.current) return
     setErrorGeneral(null)
+    setSinCambios(false)
     const encontrados = validarDatosDeportista(valores)
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return setIntentos((n) => n + 1)
@@ -57,7 +61,10 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
       if (error.codigo === 'VALIDACION') setErrores(error.errores)
       else if (error.codigo === 'DOCUMENTO_DUPLICADO') setErrores({ documento: error.message })
       else if (error.codigo === 'CATEGORIA_NO_VIGENTE' || error.codigo === 'CATEGORIA_NO_EXISTE') setErrores({ idCategoria: error.message })
-      else {
+      else if (error.codigo === 'SIN_CAMBIOS') {
+        setSinCambios(true)
+        return
+      } else {
         setErrorGeneral(error.codigo === 'SIN_PERMISO' ? error.message : 'No se pudo guardar el deportista. Intenta de nuevo.')
         return
       }
@@ -112,6 +119,14 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
         {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
       </Field>
 
+      <div role="status">
+        {sinCambios && (
+          <p className="flex items-center gap-2 text-body-medium">
+            <Icon name="info" className="h-5 w-5 shrink-0" />
+            No hiciste ningún cambio.
+          </p>
+        )}
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button type="submit" disabled={guardando} aria-busy={guardando} className="disabled:opacity-60">
           {guardando ? 'Guardando…' : textoGuardar}

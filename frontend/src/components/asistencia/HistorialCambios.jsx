@@ -1,7 +1,9 @@
+import HistorialBase from '../ui/HistorialCambios.jsx'
 import { ESTADOS_ASISTENCIA } from './estados.js'
 
-// Historial de ediciones, en orden cronológico (de la más antigua a la más reciente).
+// Historial de ediciones de una asistencia, en orden cronológico (de la más antigua a la más reciente).
 // momento(fechaHora) devuelve el texto de fecha y hora; nombres: { idDeportista: nombre completo }.
+// Solo adapta los datos de asistencia al historial genérico (components/ui/HistorialCambios.jsx).
 const verObs = (texto) => (texto ? `«${texto}»` : 'sin observación')
 
 function textoCambio({ antes, despues }) {
@@ -12,27 +14,10 @@ function textoCambio({ antes, despues }) {
 }
 
 export default function HistorialCambios({ historial, nombres, momento }) {
-  return (
-    <section aria-labelledby="titulo-historial" className="flex flex-col gap-3">
-      <h2 id="titulo-historial" className="break-words text-h3">Historial de cambios</h2>
-      {historial.length === 0 ? (
-        <p className="text-body text-secondary">Todavía no se ha corregido esta asistencia.</p>
-      ) : (
-        <ol className="flex flex-col gap-3">
-          {historial.map((entrada, i) => (
-            <li key={`${entrada.fechaHora}-${i}`} className="flex flex-col gap-1 rounded-lg border bg-surface p-4">
-              <p className="break-words text-body-medium">{momento(entrada.fechaHora)} · {entrada.responsable}</p>
-              <ul className="flex flex-col gap-1">
-                {entrada.cambios.map((c) => (
-                  <li key={c.idDeportista} className="break-words text-body">
-                    {nombres[c.idDeportista]}: {textoCambio(c)}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  )
+  const entradas = historial.map((entrada, i) => ({
+    clave: `${entrada.fechaHora}-${i}`,
+    encabezado: `${momento(entrada.fechaHora)} · ${entrada.responsable}`,
+    lineas: entrada.cambios.map((c) => ({ clave: c.idDeportista, texto: `${nombres[c.idDeportista]}: ${textoCambio(c)}` })),
+  }))
+  return <HistorialBase entradas={entradas} vacio="Todavía no se ha corregido esta asistencia." />
 }

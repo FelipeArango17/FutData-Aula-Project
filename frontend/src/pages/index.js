@@ -9,6 +9,7 @@ import EntInicio from './entrenador/Inicio.jsx'
 import EntAsistencia from './entrenador/Asistencia.jsx'
 import ListaPorGrupo from './deportistas/ListaPorGrupo.jsx'
 import DeportistaNuevo from './deportistas/DeportistaNuevo.jsx'
+import FichaDeportista from './deportistas/FichaDeportista.jsx'
 import Programacion from './entrenamientos/Programacion.jsx'
 import EntTorneos from './entrenador/Torneos.jsx'
 import TesInicio from './tesorero/Inicio.jsx'
@@ -73,6 +74,7 @@ export const extraScreens = {
     { path: '/administrador/usuarios/entrenadores/:id/editar', Screen: AdmEntrenadorFormulario },
     { path: '/administrador/deportistas/inscribir', Screen: AdmInscribir },
     { path: '/administrador/deportistas/nuevo', Screen: DeportistaNuevo },
+    { path: '/administrador/deportistas/:id', Screen: FichaDeportista }, // después de /nuevo e /inscribir (rutas fijas)
     { path: '/administrador/pagos/registrar', Screen: AdmRegistrarPago },
   ],
 }
