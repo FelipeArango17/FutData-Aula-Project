@@ -10,7 +10,9 @@ Guía de referencia para ponerse al día con el estado actual del proyecto, leva
 
 n8n --> Docker Activo - http://localhost:5678
 Frontend --> http://localhost:5173
-Backend --> http://localhost:8080
+Desde la terminal: npm run dev
+Backend --> http://localhost:8080/api/health o http://localhost:8080/swagger-ui.html
+Desde la terminal: .\mvnw.cmd spring-boot:run
 
 ## Credenciales para pruebas del login
 
