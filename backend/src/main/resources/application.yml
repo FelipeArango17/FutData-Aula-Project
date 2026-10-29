@@ -24,6 +24,12 @@ spring:
       # /api/health responda rápido si la base de datos no está.
       connection-timeout: 3000
       validation-timeout: 2000
+      # -1: crear el pool sin esperar a la primera conexión. Si no, cada consulta con la base caída esperaría
+      # el timeout del driver (10 s) en vez de connection-timeout.
+      initialization-fail-timeout: -1
+      data-source-properties:
+        # Segundos que el driver de PostgreSQL espera para abrir el socket (por defecto 10).
+        connectTimeout: 3
   jdbc:
     template:
       query-timeout: 10s
