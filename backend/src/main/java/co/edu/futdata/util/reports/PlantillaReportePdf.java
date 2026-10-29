@@ -116,6 +116,7 @@ public class PlantillaReportePdf {
             derecha.addElement(parrafo);
         }
         tabla.addCell(derecha);
+        tabla.setSpacingAfter(8);
 
         documento.add(tabla);
         documento.add(new Chunk(new LineSeparator(2f, 100f, VERDE_ACENTO, Element.ALIGN_CENTER, -4)));
