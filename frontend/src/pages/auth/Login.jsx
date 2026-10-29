@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout from '../../components/auth/AuthLayout.jsx'
 import { claseEnlace } from '../../components/auth/enlaces.js'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useAuth } from '../../context/AuthContext.js'
+import { inicioDe } from '../../config/menus.js'
 import { MENSAJES as MENSAJES_VALIDACION, requerido, validarCampos, validarCorreo } from '../../utils/validaciones.js'
 
 function validar(valores) {
@@ -32,6 +33,7 @@ function textoBloqueo(msRestantes) {
 export default function Login() {
   const { estado, usuario, iniciarSesion } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const titulo = useRef(null)
   const formulario = useRef(null)
   const enviandoRef = useRef(false)
@@ -41,16 +43,23 @@ export default function Login() {
   const [verContrasena, setVerContrasena] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [aviso, setAviso] = useState(null)
+  // Aviso de éxito que llega al cerrar sesión ("Sesión cerrada"). El foco se queda en el título; el aviso es role="status".
+  const [avisoOk, setAvisoOk] = useState(() => (location.state?.aviso ? { id: 'aviso-ruta', texto: location.state.aviso } : null))
 
   // Al abrir, el foco va al título (en /verificar también)
   useEffect(() => titulo.current?.focus(), [])
+
+  // El aviso viaja en el estado de la ruta: se limpia para que no reaparezca al recargar
+  useEffect(() => {
+    if (location.state?.aviso) navigate(location.pathname, { replace: true, state: null })
+  }, [location.pathname, location.state, navigate])
 
   // Tras un envío con errores, el foco va al primer campo inválido
   useEffect(() => {
     if (intentos > 0) formulario.current?.querySelector('[aria-invalid="true"]')?.focus()
   }, [intentos])
 
-  if (estado === 'verificada') return <Navigate to={`/${usuario.rol}`} replace />
+  if (estado === 'verificada') return <Navigate to={inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
 
   function cambiar(campo, valor) {
     setValores({ ...valores, [campo]: valor })
@@ -68,8 +77,10 @@ export default function Login() {
     setEnviando(true)
     setAviso(null)
     try {
-      await iniciarSesion(valores.correo, valores.contrasena)
-      navigate('/verificar')
+      setAvisoOk(null)
+      const resultado = await iniciarSesion(valores.correo, valores.contrasena)
+      // Equipo de confianza vigente: la sesión ya queda verificada y la guardia de arriba lleva al panel, sin pedir el código
+      if (resultado === 'pendiente') navigate('/verificar')
     } catch (error) {
       const id = Date.now()
       if (error.codigo === 'RED') {
@@ -94,6 +105,7 @@ export default function Login() {
         <p className="break-words text-body text-secondary">Ingresa con la cuenta que te creó el administrador del club.</p>
       </div>
 
+      <AvisoEstado aviso={avisoOk} rol="status" enfocar={false} onCerrar={() => setAvisoOk(null)} />
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" onCerrar={() => setAviso(null)} />
 
       <form ref={formulario} noValidate onSubmit={enviar} aria-busy={enviando} className="flex flex-col gap-4">
