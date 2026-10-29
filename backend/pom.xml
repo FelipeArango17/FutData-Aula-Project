@@ -19,6 +19,8 @@
     <properties>
         <java.version>21</java.version>
         <springdoc.version>2.10.0</springdoc.version>
+        <openpdf.version>3.0.5</openpdf.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencies>
@@ -50,6 +52,21 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Comprobantes y reportes en PDF (util.reports). Licencia LGPL 2.1 / MPL 2.0 -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>${openpdf.version}</version>
+            <exclusions>
+                <!-- Solo sirve para LEER PDF comprimidos con Brotli y trae una librería nativa por sistema
+                     operativo; para generar comprobantes no hace falta. -->
+                <exclusion>
+                    <groupId>com.aayushatharva.brotli4j</groupId>
+                    <artifactId>brotli4j</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <!-- Metadatos de las propiedades futdata.* para el autocompletado del IDE -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -60,6 +77,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Lee el texto de los PDF generados en las pruebas -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
