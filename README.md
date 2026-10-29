@@ -293,6 +293,11 @@ Copy-Item n8n\.env.example n8n\.env
 
 - `n8n/.env`: `N8N_ENCRYPTION_KEY`, `N8N_WEBHOOK_TOKEN` y `SMTP_FROM` (ver [`n8n/README.md`](n8n/README.md), paso 1). Un valor aleatorio se genera con `openssl rand -hex 32` (PowerShell: ver el comentario de `n8n/.env.example`).
 - `backend/.env`: `DB_URL`, `DB_USER` y `DB_PASSWORD` de Supabase y `CORS_ORIGINS`. **`N8N_WEBHOOK_TOKEN` debe ser el MISMO valor en los dos archivos**; si difieren, n8n rechaza al backend con `401`.
+
+> [!WARNING]
+> **Desde la tarea 328, `docker compose up` deja el backend detenido si no hay Supabase.** El perfil `prod` de la imagen exige `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`, y el proyecto de Supabase todavía no existe. El contenedor sale con *Perfil prod: faltan las variables de entorno SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY*.
+> **Alternativa:** agrega `SPRING_PROFILES_ACTIVE=local` en `backend/.env` y vuelve a ejecutar `docker compose up -d`. Con `local` el backend arranca sin Supabase ni base de datos; guardar comprobantes falla con un mensaje claro.
+
 - Perfil de Spring: la imagen usa `prod`, que **exige las ocho variables** (`DB_URL`, `DB_USER`, `DB_PASSWORD`, `CORS_ORIGINS`, `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) y si falta alguna el contenedor se detiene diciendo cuál. Para trabajar sin base de datos ni Supabase agrega `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
 
 > **Hay dos `N8N_BASE_URL` y no son lo mismo:**
