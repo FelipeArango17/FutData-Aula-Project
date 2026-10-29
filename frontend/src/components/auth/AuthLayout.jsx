@@ -9,12 +9,13 @@ const beneficios = [
 
 // Diseño de las pantallas públicas (fuera del AppShell: sin menú).
 // variante "dividido" (inicio de sesión): panel de marca a la izquierda desde md; en móvil solo el logo arriba.
-// variante "centrado" (código 2FA y recuperación): tarjeta centrada.
-export default function AuthLayout({ variante = 'dividido', children }) {
+// variante "centrado" (código 2FA, recuperación e inscripción en línea): tarjeta centrada.
+// ancho (solo en "centrado"): "angosto" (por defecto) o "amplio", para formularios largos como la inscripción.
+export default function AuthLayout({ variante = 'dividido', ancho = 'angosto', children }) {
   if (variante === 'centrado') {
     return (
       <main className="flex min-h-app items-center justify-center bg-app p-4 pb-safe pt-safe">
-        <div className="w-full max-w-md">{children}</div>
+        <div className={`w-full ${ancho === 'amplio' ? 'max-w-2xl' : 'max-w-md'}`}>{children}</div>
       </main>
     )
   }

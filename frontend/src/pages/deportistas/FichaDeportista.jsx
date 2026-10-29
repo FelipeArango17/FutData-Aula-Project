@@ -170,6 +170,15 @@ function Ficha({ id }) {
             <Dato etiqueta="Dirección">{deportista.direccion}</Dato>
             <Dato etiqueta="Categoría">{nombreCategoria(deportista.idCategoria) ?? 'Sin asignar'}</Dato>
             <Dato etiqueta="Estado"><EstadoDeportista activo={deportista.activo} /></Dato>
+            {/* Solo los inscritos en línea traen origen y contacto del acudiente (los registros del administrador no) */}
+            {deportista.origen && <Dato etiqueta="Origen">{deportista.origen}</Dato>}
+            {deportista.contactoAcudiente && (
+              <Dato etiqueta="Contacto del acudiente">
+                {deportista.contactoAcudiente.nombre} {deportista.contactoAcudiente.apellido}
+                <span className="block">{deportista.contactoAcudiente.correo}</span>
+                <span className="block">{deportista.contactoAcudiente.telefono}</span>
+              </Dato>
+            )}
           </dl>
           {registro && (
             <p className="break-words text-small text-secondary">

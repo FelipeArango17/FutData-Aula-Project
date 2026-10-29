@@ -33,6 +33,8 @@ export const MENSAJES = {
   entrenamientoHoraObligatoria: 'Indica la hora del entrenamiento.',
   entrenamientoHoraInvalida: 'La hora no es válida. Usa el formato HH:MM.',
   entrenamientoLugar: 'Selecciona el lugar.',
+  // Inscripción en línea
+  consentimientoObligatorio: 'Debes aceptar el tratamiento de datos para enviar la inscripción.',
   // Nuevos (para los formularios de deportista, inscripción y pago)
   nombreLongitud: 'El nombre debe tener entre 2 y 60 caracteres.',
   nombreCaracteres: 'El nombre solo puede tener letras, espacios, guion y apóstrofo.',
@@ -149,6 +151,8 @@ export const requerido = (mensaje, { recortar = true } = {}) => (valor) => {
   const t = String(valor ?? '')
   return (recortar ? t.trim() : t) ? null : mensaje
 }
+// casillaMarcada: una casilla obligatoria (por ejemplo el consentimiento) debe valer exactamente true
+export const casillaMarcada = (mensaje) => (valor) => (valor === true ? null : mensaje)
 // enLista: el valor debe ser una de las opciones permitidas
 export const enLista = (opciones, mensaje) => (valor) => (opciones.includes(valor) ? null : mensaje)
 // noVacia: una lista (por ejemplo de casillas marcadas) con al menos un elemento

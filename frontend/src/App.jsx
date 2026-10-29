@@ -8,6 +8,7 @@ import AuthProvider from './context/AuthProvider.jsx'
 import Login from './pages/auth/Login.jsx'
 import Verificar from './pages/auth/Verificar.jsx'
 import Recuperar from './pages/auth/Recuperar.jsx'
+import Inscripcion from './pages/inscripcion/Inscripcion.jsx'
 import { useAuth } from './context/AuthContext.js'
 import EntrenadoresProvider from './context/EntrenadoresProvider.jsx'
 import EntrenamientosProvider from './context/EntrenamientosProvider.jsx'
@@ -38,6 +39,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/verificar" element={<Verificar />} />
               <Route path="/recuperar" element={<Recuperar />} />
+              <Route path="/inscripcion" element={<Inscripcion />} />
               <Route element={<AppShell />}>
                 {roles.map((role) => (
                   <Route key={role} path={`/${role}`} element={role === 'administrador' ? <EntrenadoresProvider><RoleRoute role={role} /></EntrenadoresProvider> : <RoleRoute role={role} />}>

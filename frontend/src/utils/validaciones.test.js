@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MENSAJES, enLista, esCorreoValido, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
+  MENSAJES, casillaMarcada, enLista, esCorreoValido, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
   validarFechaEntrenamiento, validarFechaNacimiento, validarHoraEntrenamiento, validarMonto, validarNombre, validarTelefono,
 } from './validaciones.js'
 
@@ -273,6 +273,12 @@ describe('reglas genéricas', () => {
     expect(requerido('falta')(' a ')).toBeNull()
     expect(requerido('falta', { recortar: false })('   ')).toBeNull()
     expect(requerido('falta', { recortar: false })('')).toBe('falta')
+  })
+
+  it('casillaMarcada solo acepta true (no "true", 1 ni undefined)', () => {
+    const regla = casillaMarcada('Marca la casilla.')
+    expect(regla(true)).toBeNull()
+    for (const malo of [false, undefined, null, 'true', 1, '']) expect(regla(malo), String(malo)).toBe('Marca la casilla.')
   })
 
   it('enLista y noVacia', () => {

@@ -143,6 +143,7 @@ export default function Login() {
           Después de la contraseña te enviaremos un código de 6 dígitos a tu correo (verificación en dos pasos).
         </span>
       </p>
+      <Link to="/inscripcion" className={`${claseEnlace} self-start`}>¿Quieres inscribir a un deportista?</Link>
     </AuthLayout>
   )
 }
