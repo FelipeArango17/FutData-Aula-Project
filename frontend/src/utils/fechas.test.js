@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   diaCorto, diaLargo, diasDeSemana, esDomingo, esFechaValida, esHoraValida, fechaLargaConAnio,
-  formatHora, lunesDe, momentoLegible, partesMomento, rangoSemana, sumarDias, sumarMinutos,
+  formatHora, lunesDe, mesEnTexto, momentoLegible, partesMomento, rangoSemana, sumarDias, sumarMinutos,
 } from './fechas.js'
 
 describe('esFechaValida', () => {
@@ -144,5 +144,13 @@ describe('fechaLargaConAnio y momentoLegible', () => {
     expect(momentoLegible(new Date(2026, 9, 22, 16, 5).toISOString())).toBe('Jueves 22 de octubre de 2026, 4:05 p. m.')
     expect(momentoLegible(new Date(2026, 0, 3, 0, 30).toISOString())).toBe('Sábado 3 de enero de 2026, 12:30 a. m.')
     expect(partesMomento(new Date(2026, 9, 22, 9, 7).toISOString())).toEqual({ fecha: '2026-10-22', hora: '09:07' })
+  })
+})
+
+describe('mesEnTexto', () => {
+  it('da el nombre del mes en minúscula', () => {
+    expect(mesEnTexto('2026-10-22')).toBe('octubre')
+    expect(mesEnTexto('2026-01-01')).toBe('enero')
+    expect(mesEnTexto('2026-12-31')).toBe('diciembre')
   })
 })

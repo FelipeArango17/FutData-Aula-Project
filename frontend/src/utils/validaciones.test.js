@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MENSAJES, casillaMarcada, enLista, esCorreoValido, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
+  MENSAJES, casillaMarcada, enLista, esCorreoValido, maximoCaracteres, requeridoSi, validarFechaPago, validarMes, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
   validarFechaEntrenamiento, validarFechaNacimiento, validarHoraEntrenamiento, validarMonto, validarNombre, validarTelefono,
 } from './validaciones.js'
 
@@ -329,5 +329,78 @@ describe('validarCampos', () => {
 
   it('un campo sin valor en `valores` se trata como vacío', () => {
     expect(validarCampos({}, { nombre: [requerido('Escribe el nombre.')] })).toEqual({ nombre: 'Escribe el nombre.' })
+  })
+})
+
+describe('validarMes', () => {
+  it('acepta el mes actual y los anteriores', () => {
+    expect(validarMes('2026-10', HOY)).toBeNull()
+    expect(validarMes('2026-01', HOY)).toBeNull()
+    expect(validarMes(' 2025-12 ', HOY)).toBeNull()
+  })
+
+  it('un mes futuro no vale (noviembre de 2026 y enero de 2027)', () => {
+    expect(validarMes('2026-11', HOY)).toBe('No se puede registrar el pago de un mes futuro.')
+    expect(validarMes('2027-01', HOY)).toBe(MENSAJES.pagoMesFuturo)
+  })
+
+  it('formato inválido, mes 13, mes 00, con día y texto', () => {
+    for (const malo of ['2026-13', '2026-00', '2026-1', '2026-10-01', 'octubre', '26-10']) expect(validarMes(malo, HOY), malo).toBe('El mes no es válido.')
+  })
+
+  it('vacío o solo espacios: obligatorio', () => {
+    expect(validarMes('', HOY)).toBe('Selecciona el mes que se paga.')
+    expect(validarMes('   ', HOY)).toBe('Selecciona el mes que se paga.')
+    expect(validarMes(undefined, HOY)).toBe('Selecciona el mes que se paga.')
+  })
+})
+
+describe('validarFechaPago', () => {
+  it('acepta hoy y fechas pasadas reales', () => {
+    expect(validarFechaPago('2026-10-22', HOY)).toBeNull()
+    expect(validarFechaPago('2026-10-01', HOY)).toBeNull()
+    expect(validarFechaPago('2026-02-28', HOY)).toBeNull()
+  })
+
+  it('mañana (2026-10-23) es futura', () => {
+    expect(validarFechaPago('2026-10-23', HOY)).toBe('La fecha de pago no puede ser futura.')
+    expect(validarFechaPago('2027-01-01', HOY)).toBe(MENSAJES.pagoFechaFutura)
+  })
+
+  it('fechas que no existen o con otro formato (30 de febrero, mes 13, día/mes/año)', () => {
+    for (const mala of ['2026-02-30', '2026-13-01', '2026-10-32', '22/10/2026', '2026-10', 'hoy']) {
+      expect(validarFechaPago(mala, HOY), mala).toBe('La fecha de pago no es válida. Usa el formato día/mes/año.')
+    }
+  })
+
+  it('vacío: obligatoria', () => {
+    expect(validarFechaPago('', HOY)).toBe('Indica la fecha en que se pagó.')
+    expect(validarFechaPago('  ', HOY)).toBe('Indica la fecha en que se pagó.')
+  })
+})
+
+describe('maximoCaracteres y requeridoSi', () => {
+  it('maximoCaracteres: el límite exacto pasa, uno más no, vacío pasa y se recortan los bordes', () => {
+    const regla = maximoCaracteres(60, 'larga')
+    expect(regla('a'.repeat(60))).toBeNull()
+    expect(regla('a'.repeat(61))).toBe('larga')
+    expect(regla('')).toBeNull()
+    expect(regla(undefined)).toBeNull()
+    expect(regla(`  ${'a'.repeat(60)}  `)).toBeNull()
+  })
+
+  it('requeridoSi: solo exige cuando se cumple la condición', () => {
+    const regla = requeridoSi((todos) => todos.metodo === 'Transferencia', 'Falta la referencia.')
+    expect(regla('', { metodo: 'Transferencia' })).toBe('Falta la referencia.')
+    expect(regla('   ', { metodo: 'Transferencia' })).toBe('Falta la referencia.')
+    expect(regla('ABC123', { metodo: 'Transferencia' })).toBeNull()
+    expect(regla('', { metodo: 'Efectivo' })).toBeNull()
+  })
+
+  it('funcionan dentro de validarCampos', () => {
+    const reglas = { referencia: [requeridoSi((t) => t.metodo === 'Transferencia', 'Falta la referencia.'), maximoCaracteres(5, 'larga')] }
+    expect(validarCampos({ metodo: 'Transferencia', referencia: '' }, reglas)).toEqual({ referencia: 'Falta la referencia.' })
+    expect(validarCampos({ metodo: 'Transferencia', referencia: 'abcdef' }, reglas)).toEqual({ referencia: 'larga' })
+    expect(validarCampos({ metodo: 'Efectivo', referencia: '' }, reglas)).toEqual({})
   })
 })

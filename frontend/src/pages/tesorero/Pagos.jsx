@@ -21,6 +21,7 @@ export default function Pagos({ base = '/tesorero' }) {
 
   return (
     <Page title="Pagos y facturación" subtitle="Cartera del club · Octubre 2026">
+      <Button to={`${base}/pagos/registrar`} className="md:self-start">Registrar pago</Button>
       <FilterChips label="Filtrar pagos" options={filtros} value={filtro} onChange={setFiltro} />
       <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {visibles.map((p) => (
