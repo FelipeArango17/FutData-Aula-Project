@@ -29,7 +29,7 @@ class ComprobantePdfGeneratorTest {
 
     private static final ClubProperties CLUB = new ClubProperties("Asociación Deportiva Prado Fútbol Club",
             "811032309-1", "Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia", "3137317366",
-            "prafofutbolclub@gmail.com");
+            "pradofutbolclub@gmail.com");
     /** 4:35 p. m. del 28 de octubre de 2026 en Colombia. */
     private static final Instant AHORA = Instant.parse("2026-10-28T21:35:00Z");
     private static final Path EJEMPLOS = Path.of("target", "comprobantes-ejemplo");
@@ -91,7 +91,7 @@ class ComprobantePdfGeneratorTest {
                 "NIT 811.032.309-1",
                 "Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia",
                 "Tel. 313 731 7366",
-                "prafofutbolclub@gmail.com");
+                "pradofutbolclub@gmail.com");
     }
 
     /** Cada dato del club vacío deja de imprimirse, sin afectar a los demás. */
@@ -100,7 +100,7 @@ class ComprobantePdfGeneratorTest {
     void unDatoDelClubVacioNoSeImprime(String vacio) throws IOException {
         Map<String, String> valores = Map.of(
                 "nombre", "Asociación Deportiva Prado Fútbol Club", "nit", "NIT 811.032.309-1",
-                "direccion", "Calle 40 Sur 75b-81", "telefono", "Tel. 313 731 7366", "correo", "prafofutbolclub@gmail.com");
+                "direccion", "Calle 40 Sur 75b-81", "telefono", "Tel. 313 731 7366", "correo", "pradofutbolclub@gmail.com");
         ClubProperties club = new ClubProperties(
                 vacio.equals("nombre") ? "" : CLUB.nombre(),
                 vacio.equals("nit") ? " " : CLUB.nit(),

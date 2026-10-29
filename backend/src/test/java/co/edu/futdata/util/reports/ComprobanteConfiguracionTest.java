@@ -22,7 +22,7 @@ class ComprobanteConfiguracionTest {
     @Test
     void losDatosDelClubTienenValorPorDefecto() {
         assertThat(club).isEqualTo(new ClubProperties("Asociación Deportiva Prado Fútbol Club", "811032309-1",
-                "Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia", "3137317366", "prafofutbolclub@gmail.com"));
+                "Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia", "3137317366", "pradofutbolclub@gmail.com"));
     }
 
     @Test

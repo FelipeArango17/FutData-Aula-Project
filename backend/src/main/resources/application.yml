@@ -70,7 +70,7 @@ futdata:
     nit: ${CLUB_NIT:811032309-1}
     direccion: ${CLUB_DIRECCION:Calle 40 Sur 75b-81, San Antonio de Prado, Medellín, Antioquia}
     telefono: ${CLUB_TELEFONO:3137317366}
-    correo: ${CLUB_CORREO:prafofutbolclub@gmail.com}
+    correo: ${CLUB_CORREO:pradofutbolclub@gmail.com}
 
 ---
 # Perfil local: valores por defecto para poder trabajar sin credenciales.
