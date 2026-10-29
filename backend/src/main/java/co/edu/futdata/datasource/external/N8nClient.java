@@ -46,6 +46,8 @@ public class N8nClient implements INotificador {
     /** Correos y números de 6 dígitos o más: si el detalle de un 400 los trae, no se usa. */
     private static final Pattern DATO_SENSIBLE = Pattern.compile("@|\\d{6}");
     private static final int MAXIMO_DETALLE = 200;
+    /** Campos de {@code datos} con valores fijos y no sensibles: que aparezcan en el detalle no lo descarta. */
+    private static final Set<String> CAMPOS_NO_SENSIBLES = Set.of("evento", "tipoCambio");
 
     private final RestClient http;
     private final N8nProperties propiedades;
@@ -99,14 +101,14 @@ public class N8nClient implements INotificador {
         } catch (ResourceAccessException e) {
             long ms = milisegundos(inicio);
             log.warn("Notificación {} no enviada: sin respuesta de n8n ({} ms)", evento, ms);
-            // TODO auditoría (AuditoriaLogger): registrar evento, usuarioId, "sin respuesta" y fecha.
-            // Aquí n8n pudo no registrar nada: el registro del backend es el único.
+            // TODO auditoría (AuditoriaLogger): la registra el servicio que atrapa esta excepción (tiene el usuarioId):
+            // evento, usuarioId, "sin respuesta" y fecha. Aquí n8n pudo no registrar nada: es el único registro.
             throw new NotificacionNoEnviadaException("No se pudo contactar a n8n para enviar la notificación " + evento
                     + " (tiempo de espera agotado o error de red)", evento, null, e);
         } catch (RestClientException e) {
             long ms = milisegundos(inicio);
             log.error("Notificación {} no enviada: error del cliente HTTP {} ({} ms)", evento, e.getClass().getSimpleName(), ms);
-            // TODO auditoría (AuditoriaLogger): registrar evento, usuarioId, "error del cliente" y fecha.
+            // TODO auditoría (AuditoriaLogger): la registra el servicio que atrapa esta excepción (tiene el usuarioId).
             throw new NotificacionNoEnviadaException("No se pudo enviar la notificación " + evento
                     + " por un error del cliente HTTP", evento, null, null);
         }
@@ -133,7 +135,8 @@ public class N8nClient implements INotificador {
             }
             default -> {
                 log.warn("Notificación {} no enviada: HTTP {}, {} ms", evento, codigo, ms);
-                // TODO auditoría (AuditoriaLogger): registrar evento, usuarioId, código HTTP y fecha (obligatorio ante 502).
+                // TODO auditoría (AuditoriaLogger): la registra el servicio que atrapa esta excepción (tiene el usuarioId):
+                // evento, usuarioId, código HTTP y fecha. Obligatorio ante 502.
                 String motivo = codigo == 502 ? "n8n no pudo enviar el correo" : "n8n respondió un código inesperado";
                 throw new NotificacionNoEnviadaException("No se pudo enviar la notificación " + evento
                         + " (" + codigo + "): " + motivo, evento, codigo, null);
@@ -168,7 +171,8 @@ public class N8nClient implements INotificador {
 
     /**
      * {@code detalle} (o {@code error}) del 400, recortado, solo si no parece tener datos sensibles: ni
-     * correos, ni números de 6 dígitos, ni ningún texto que el servicio haya puesto en {@code datos}.
+     * correos, ni números de 6 dígitos, ni ningún texto que el servicio haya puesto en {@code datos}, salvo
+     * los de {@link #CAMPOS_NO_SENSIBLES} (por ejemplo, "tipoCambio debe ser CREADO, MODIFICADO o CANCELADO").
      */
     static String detalleSeguro(Map<String, Object> cuerpo, Map<String, Object> datos) {
         Object valor = cuerpo.get("detalle") instanceof String d && !d.isBlank() ? d : cuerpo.get("error");
@@ -191,7 +195,11 @@ public class N8nClient implements INotificador {
     private static void recolectarTextos(Object valor, Set<String> textos) {
         switch (valor) {
             case String s when s.strip().length() >= 3 -> textos.add(s.strip().toLowerCase(Locale.ROOT));
-            case Map<?, ?> mapa -> mapa.values().forEach(v -> recolectarTextos(v, textos));
+            case Map<?, ?> mapa -> mapa.forEach((campo, v) -> {
+                if (!CAMPOS_NO_SENSIBLES.contains(campo)) {
+                    recolectarTextos(v, textos);
+                }
+            });
             case Collection<?> lista -> lista.forEach(v -> recolectarTextos(v, textos));
             case null, default -> { }
         }

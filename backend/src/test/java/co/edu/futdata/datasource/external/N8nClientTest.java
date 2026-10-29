@@ -183,6 +183,32 @@ class N8nClientTest {
         sinSecretos(e);
     }
 
+    /** tipoCambio y evento tienen valores fijos y no sensibles: que aparezcan no descarta el detalle. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "tipoCambio debe ser CREADO, MODIFICADO o CANCELADO",
+            "El evento CAMBIO_ENTRENAMIENTO no admite el tipo MODIFICADO sin anterior"})
+    void conservaElDetalleSiSoloTraeValoresDeEventoOTipoCambio(String detalle) {
+        servidor.expect(requestTo(URL_WEBHOOK))
+                .andRespond(json(HttpStatus.BAD_REQUEST, "{\"aceptado\": false, \"detalle\": \"" + detalle + "\"}"));
+
+        NotificacionRechazadaException e = catchThrowableOfType(NotificacionRechazadaException.class,
+                () -> cliente.notificar(INotificador.CAMBIO_ENTRENAMIENTO, datosEntrenamiento()));
+        assertThat(e.getDetalle()).isEqualTo(detalle);
+        assertThat(e.getMessage()).contains(detalle);
+    }
+
+    @Test
+    void descartaElDetalleSiAdemasDelTipoCambioTraeOtroValorDeLosDatos() {
+        servidor.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.BAD_REQUEST,
+                "{\"aceptado\": false, \"detalle\": \"MODIFICADO no aplica a Marta Gómez\"}"));
+
+        NotificacionRechazadaException e = catchThrowableOfType(NotificacionRechazadaException.class,
+                () -> cliente.notificar(INotificador.CAMBIO_ENTRENAMIENTO, datosEntrenamiento()));
+        assertThat(e.getDetalle()).isNull();
+        sinSecretos(e);
+    }
+
     @Test
     void respuesta400SinCuerpoJsonLanzaRechazadaSinDetalle() {
         servidor.expect(requestTo(URL_WEBHOOK)).andRespond(withStatus(HttpStatus.BAD_REQUEST).body("no es json"));
