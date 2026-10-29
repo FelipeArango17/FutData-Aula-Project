@@ -20,9 +20,10 @@ spring:
     hikari:
       pool-name: futdata-pool
       maximum-pool-size: ${DB_POOL_MAX:5}
-      # Tiempo máximo para obtener una conexión. Corto, para que /api/health responda rápido si la base no está.
-      connection-timeout: 3s
-      validation-timeout: 2s
+      # Milisegundos (HikariCP no acepta "3s"). Tiempo máximo para obtener una conexión: corto, para que
+      # /api/health responda rápido si la base de datos no está.
+      connection-timeout: 3000
+      validation-timeout: 2000
   jdbc:
     template:
       query-timeout: 10s
