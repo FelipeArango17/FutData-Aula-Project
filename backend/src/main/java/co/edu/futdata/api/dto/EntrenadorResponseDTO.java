@@ -15,7 +15,7 @@ public record EntrenadorResponseDTO(
         @Schema(example = "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b") UUID id,
         @Schema(example = "Luis") String nombre,
         @Schema(example = "Pérez") String apellido,
-        @Schema(example = "CC", allowableValues = {"CC", "TI", "CE", "PASAPORTE"}) String tipoDocumento,
+        @Schema(example = "CC", allowableValues = {"CC", "CE", "PASAPORTE"}) String tipoDocumento,
         @Schema(example = "1098765432") String documento,
         @Schema(example = "1990-05-14") LocalDate fechaNacimiento,
         @Schema(example = "3001112233") String telefono,

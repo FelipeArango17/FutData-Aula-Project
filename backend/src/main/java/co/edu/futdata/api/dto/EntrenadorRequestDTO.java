@@ -17,9 +17,10 @@ public record EntrenadorRequestDTO(
         @Schema(example = "Luis", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100) String nombre,
         @Schema(example = "Pérez", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100) String apellido,
         @Schema(example = "CC", requiredMode = Schema.RequiredMode.REQUIRED,
-                allowableValues = {"CC", "TI", "CE", "PASAPORTE"}) String tipoDocumento,
+                allowableValues = {"CC", "CE", "PASAPORTE"}) String tipoDocumento,
         @Schema(example = "1098765432", requiredMode = Schema.RequiredMode.REQUIRED,
-                description = "Solo dígitos, de 6 a 12") String documento,
+                description = "CC y CE: solo dígitos, de 6 a 12. PASAPORTE: letras y números, de 6 a 12, se guarda en mayúsculas")
+                String documento,
         @Schema(example = "1990-05-14", requiredMode = Schema.RequiredMode.REQUIRED,
                 description = "AAAA-MM-DD; no futura y de alguien con al menos 18 años") LocalDate fechaNacimiento,
         @Schema(example = "3001112233", requiredMode = Schema.RequiredMode.REQUIRED,

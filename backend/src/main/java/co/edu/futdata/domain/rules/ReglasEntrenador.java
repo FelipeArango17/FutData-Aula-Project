@@ -23,8 +23,14 @@ public final class ReglasEntrenador {
     /** Nombres de las categorías del club en el orden oficial (de menor a mayor edad). */
     public static final List<String> CATEGORIAS = List.of("Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16");
 
-    /** Códigos de {@code entrenador_tipo_documento_ck}. */
-    public static final List<String> TIPOS_DOCUMENTO = List.of("CC", "TI", "CE", "PASAPORTE");
+    /**
+     * Tipos de documento que se aceptan para un entrenador. La tabla ({@code entrenador_tipo_documento_ck}) también
+     * permite {@code TI}, pero la tarjeta de identidad es de menores de edad y un entrenador tiene al menos 18 años.
+     */
+    public static final List<String> TIPOS_DOCUMENTO = List.of("CC", "CE", "PASAPORTE");
+
+    public static final String PASAPORTE = "PASAPORTE";
+    static final String TARJETA_IDENTIDAD = "TI";
 
     public static final int EDAD_MINIMA = 18;
 
@@ -37,6 +43,7 @@ public final class ReglasEntrenador {
     public static final int MAX_HORARIO_TRABAJO = 250;
 
     private static final Pattern SOLO_DIGITOS = Pattern.compile("\\d+");
+    private static final Pattern LETRAS_Y_DIGITOS = Pattern.compile("[A-Z0-9]+");
     private static final Pattern TELEFONO = Pattern.compile("\\d{10}");
     // Igual que esCorreoValido del frontend: algo@dominio.ext, sin espacios
     private static final Pattern CORREO = Pattern.compile("[^\\s@]+@[^\\s@]+\\.[^\\s@]+");
@@ -57,7 +64,10 @@ public final class ReglasEntrenador {
         limpio.setApellido(texto(datos.getApellido()));
         String tipo = recortar(datos.getTipoDocumento());
         limpio.setTipoDocumento(tipo == null ? null : tipo.toUpperCase(Locale.ROOT));
-        limpio.setDocumento(recortar(datos.getDocumento()));
+        String documento = recortar(datos.getDocumento());
+        // El pasaporte puede tener letras: se guarda en mayúsculas para que "ab123456" y "AB123456" sean el mismo
+        limpio.setDocumento(documento != null && PASAPORTE.equals(limpio.getTipoDocumento())
+                ? documento.toUpperCase(Locale.ROOT) : documento);
         limpio.setFechaNacimiento(datos.getFechaNacimiento());
         limpio.setTelefono(recortar(datos.getTelefono()));
         String correo = recortar(datos.getCorreo());
@@ -82,16 +92,12 @@ public final class ReglasEntrenador {
         obligatorio(errores, "apellido", e.getApellido(), MAX_APELLIDO, "es obligatorio");
         if (e.getTipoDocumento() == null) {
             errores.put("tipoDocumento", "es obligatorio");
+        } else if (TARJETA_IDENTIDAD.equals(e.getTipoDocumento())) {
+            errores.put("tipoDocumento", "TI no se acepta: la tarjeta de identidad es de menores de edad");
         } else if (!TIPOS_DOCUMENTO.contains(e.getTipoDocumento())) {
-            errores.put("tipoDocumento", "debe ser CC, TI, CE o PASAPORTE");
+            errores.put("tipoDocumento", "debe ser CC, CE o PASAPORTE");
         }
-        if (e.getDocumento() == null) {
-            errores.put("documento", "es obligatorio");
-        } else if (!SOLO_DIGITOS.matcher(e.getDocumento()).matches()) {
-            errores.put("documento", "solo puede tener números, sin puntos ni espacios");
-        } else if (e.getDocumento().length() < 6 || e.getDocumento().length() > 12) {
-            errores.put("documento", "debe tener entre 6 y 12 dígitos");
-        }
+        validarDocumento(errores, e.getTipoDocumento(), e.getDocumento());
         if (e.getTelefono() == null) {
             errores.put("telefono", "es obligatorio");
         } else if (!TELEFONO.matcher(e.getTelefono()).matches()) {
@@ -126,6 +132,20 @@ public final class ReglasEntrenador {
     private static int posicion(String nombre) {
         int i = CATEGORIAS.indexOf(nombre);
         return i < 0 ? CATEGORIAS.size() : i;
+    }
+
+    /** CC y CE: solo dígitos. PASAPORTE: letras sin tilde y dígitos (ya en mayúsculas). De 6 a 12 en los dos. */
+    private static void validarDocumento(Map<String, String> errores, String tipo, String documento) {
+        boolean pasaporte = PASAPORTE.equals(tipo);
+        if (documento == null) {
+            errores.put("documento", "es obligatorio");
+        } else if (pasaporte && !LETRAS_Y_DIGITOS.matcher(documento).matches()) {
+            errores.put("documento", "solo puede tener letras y números, sin espacios ni otros signos");
+        } else if (!pasaporte && !SOLO_DIGITOS.matcher(documento).matches()) {
+            errores.put("documento", "solo puede tener números, sin puntos ni espacios");
+        } else if (documento.length() < 6 || documento.length() > 12) {
+            errores.put("documento", pasaporte ? "debe tener entre 6 y 12 caracteres" : "debe tener entre 6 y 12 dígitos");
+        }
     }
 
     private static void validarFechaNacimiento(Map<String, String> errores, LocalDate fecha, LocalDate hoy) {
