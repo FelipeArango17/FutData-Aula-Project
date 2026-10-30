@@ -1,5 +1,14 @@
 -- Ajustes de compatibilidad para bases que ya ejecutaron el esquema inicial.
 
+alter table public.usuario
+    add column if not exists apellido varchar(100);
+
+update public.usuario
+set apellido = substring(nombre from position(' ' in nombre) + 1),
+    nombre = split_part(nombre, ' ', 1)
+where apellido is null
+  and position(' ' in nombre) > 0;
+
 alter table public.asistencia
     add column if not exists estado varchar(20);
 

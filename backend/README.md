@@ -230,6 +230,23 @@ Content-Type: application/json
  "fechaNacimiento":"2012-04-10","telefono":"3001234567","direccion":"Calle 10 # 20-30"}
 ```
 
+## Usuarios y roles (HU-004)
+
+La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`, `entrenador` y `acudiente`). Al crear un usuario, el backend crea la cuenta en Supabase Auth mediante la invitación por correo y luego registra su perfil en `public.usuario` y `public.usuario_rol`. La llave `SUPABASE_SERVICE_ROLE_KEY` solo se usa en el backend.
+
+| Método y ruta | Descripción | Respuestas |
+| :--- | :--- | :--- |
+| `GET /api/usuarios` | Lista usuarios y su rol | `200` |
+| `GET /api/usuarios/{id}` | Consulta un usuario | `200`, `400`, `404` |
+| `POST /api/usuarios` | Crea e invita un usuario | `201`, `400`, `409` |
+| `PUT /api/usuarios/{id}/rol` | Cambia el rol | `200`, `400`, `404`, `409` |
+| `POST /api/usuarios/{id}/revocar` | Revoca el acceso sin borrar la cuenta | `200`, `404`, `409` |
+| `POST /api/usuarios/{id}/restablecer` | Restablece el acceso | `200`, `404`, `409` |
+
+El cuerpo de creación contiene `nombre`, `apellido`, `correo` y `rol`. Los errores de validación y conflictos incluyen `campos`; un correo existente responde `409` con `campos: ["correo"]`. La API no permite dejar el sistema sin un administrador activo.
+
+> **Supabase:** la migración `002_modelo_datos.sql` añade `public.usuario.apellido` para conservar nombres y apellidos por separado. Ejecútala antes de usar `POST /api/usuarios` sobre una base existente y confirma que `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` estén configuradas.
+
 ## Entrenadores (HU-025)
 
 API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
