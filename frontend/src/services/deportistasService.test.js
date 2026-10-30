@@ -455,3 +455,51 @@ describe('actualizarDeportista', () => {
     expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: null, despues: 5 }])
   })
 })
+
+describe('listarDeportistas: filtro por categoría y «Sin asignar» (HU-010)', () => {
+  const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
+  const nuevoSinCategoria = () => resolver(servicio.crearDeportista({
+    nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001',
+    fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '',
+  }, admin))
+
+  it('sin deportistas sin grupo, «Sin asignar» devuelve una lista vacía', async () => {
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: servicio.SIN_CATEGORIA }))).toEqual([])
+  })
+
+  it('«Sin asignar» devuelve solo a quienes tienen idCategoria null', async () => {
+    const creado = await nuevoSinCategoria()
+    const r = await resolver(servicio.listarDeportistas({ idCategoria: servicio.SIN_CATEGORIA }))
+    expect(r.map((x) => x.id)).toEqual([creado.id])
+    expect(r.every((x) => x.idCategoria === null)).toBe(true)
+  })
+
+  it('una categoría concreta no incluye a los sin asignar', async () => {
+    await nuevoSinCategoria()
+    const r = await resolver(servicio.listarDeportistas({ idCategoria: 1 }))
+    expect(r).toHaveLength(5)
+    expect(r.every((x) => x.idCategoria === 1)).toBe(true)
+  })
+
+  it('la categoría se combina (AND) con el texto', async () => {
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3, texto: 'sebastian' }))).map((x) => x.id)).toEqual([15])
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: 1, texto: 'sebastian' }))).toEqual([])
+  })
+
+  it('la categoría se combina (AND) con el estado', async () => {
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3, estado: 'inactivos' }))).map((x) => x.id)).toEqual([16])
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3, estado: 'activos' }))).some((x) => x.id === 16)).toBe(false)
+  })
+
+  it('«Sin asignar» se combina con texto y estado', async () => {
+    const creado = await nuevoSinCategoria()
+    const sin = servicio.SIN_CATEGORIA
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: sin, texto: 'prueba', estado: 'activos' }))).map((x) => x.id)).toEqual([creado.id])
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: sin, texto: 'prueba', estado: 'inactivos' }))).toEqual([])
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: sin, texto: 'giraldo' }))).toEqual([])
+  })
+
+  it('una categoría vacía («Todas») no filtra', async () => {
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: '' }))).toHaveLength(21)
+  })
+})

@@ -139,14 +139,19 @@ export async function listarCategorias() {
   return categorias.map(copiar)
 }
 
-// idCategoria: solo los de esa categoría (lanza CATEGORIA_NO_EXISTE si no existe). texto: nombre o documento.
+// Valor especial de idCategoria para listar solo a los deportistas sin grupo (idCategoria null).
+export const SIN_CATEGORIA = 'sin-asignar'
+
+// idCategoria: solo los de esa categoría (lanza CATEGORIA_NO_EXISTE si no existe) o SIN_CATEGORIA. texto: nombre o documento.
 // estado: 'todos' (por defecto, como siempre: activos e inactivos) | 'activos' | 'inactivos'.
 export async function listarDeportistas({ idCategoria, texto, estado = 'todos' } = {}) {
   await simularRed()
   let lista = deportistas
   if (estado === 'activos') lista = lista.filter((x) => x.activo)
   else if (estado === 'inactivos') lista = lista.filter((x) => !x.activo)
-  if (idCategoria !== undefined && idCategoria !== null && idCategoria !== '') {
+  if (idCategoria === SIN_CATEGORIA) {
+    lista = lista.filter((x) => x.idCategoria === null)
+  } else if (idCategoria !== undefined && idCategoria !== null && idCategoria !== '') {
     if (!categorias.some((c) => c.id === Number(idCategoria))) throw error('CATEGORIA_NO_EXISTE', 'La categoría no existe.')
     lista = lista.filter((x) => x.idCategoria === Number(idCategoria))
   }
