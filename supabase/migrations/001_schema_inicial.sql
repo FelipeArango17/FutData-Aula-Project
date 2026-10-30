@@ -82,7 +82,7 @@ create table public.deportista (
     constraint deportista_tipo_documento_ck check (
         tipo_documento in ('CC', 'TI', 'CE', 'PASAPORTE')
     ),
-    unique (tipo_documento, documento_identidad),
+    unique (documento_identidad),
     unique (correo)
 );
 
