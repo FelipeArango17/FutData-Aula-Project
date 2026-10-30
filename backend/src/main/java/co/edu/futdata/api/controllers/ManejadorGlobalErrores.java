@@ -1,11 +1,16 @@
 package co.edu.futdata.api.controllers;
 
 import co.edu.futdata.api.dto.ErrorResponseDTO;
+import co.edu.futdata.services.facade.ConflictoException;
+import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.util.reports.ComprobanteInvalidoException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,9 +35,10 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * Convierte las excepciones en la respuesta JSON uniforme {@link ErrorResponseDTO}.
  *
  * <ul>
- *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros) o
- *       {@link ComprobanteInvalidoException}.</li>
+ *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros),
+ *       {@link DatosInvalidosException} o {@link ComprobanteInvalidoException}.</li>
  *   <li>{@code 404}: ruta inexistente o {@link RecursoNoEncontradoException}.</li>
+ *   <li>{@code 409}: {@link ConflictoException} (duplicados, reglas que dependen de otros registros).</li>
  *   <li>Otros errores de Spring MVC ({@code 405}, {@code 415}...): su código, con un mensaje en español.</li>
  *   <li>{@code 500}: cualquier otra excepción. La traza solo va al log del servidor.</li>
  * </ul>
@@ -62,8 +68,21 @@ public class ManejadorGlobalErrores {
         return responder(HttpStatus.BAD_REQUEST, mensaje.isEmpty() ? DATOS_INVALIDOS : mensaje, peticion);
     }
 
+    /**
+     * JSON mal formado o un valor que no se puede convertir al tipo del campo (por ejemplo, una fecha que no es
+     * {@code AAAA-MM-DD}). En el segundo caso nombra el campo, sin repetir el valor.
+     */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponseDTO> jsonInvalido(HttpMessageNotReadableException e, HttpServletRequest peticion) {
+        if (e.getCause() instanceof JsonMappingException mapeo && !mapeo.getPath().isEmpty()) {
+            String campo = mapeo.getPath().stream()
+                    .map(JsonMappingException.Reference::getFieldName)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("."));
+            if (!campo.isEmpty()) {
+                return responder(HttpStatus.BAD_REQUEST, campo + ": tiene un valor o un formato inválido", List.of(campo), peticion);
+            }
+        }
         return responder(HttpStatus.BAD_REQUEST, "El cuerpo de la petición falta o no es un JSON válido", peticion);
     }
 
@@ -75,6 +94,16 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponseDTO> tipoInvalido(MethodArgumentTypeMismatchException e, HttpServletRequest peticion) {
         return responder(HttpStatus.BAD_REQUEST, "El parámetro '" + e.getName() + "' tiene un valor inválido", peticion);
+    }
+
+    @ExceptionHandler(DatosInvalidosException.class)
+    public ResponseEntity<ErrorResponseDTO> datosInvalidos(DatosInvalidosException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, e.getMessage(), e.getCampos(), peticion);
+    }
+
+    @ExceptionHandler(ConflictoException.class)
+    public ResponseEntity<ErrorResponseDTO> conflicto(ConflictoException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.CONFLICT, e.getMessage(), e.getCampos(), peticion);
     }
 
     @ExceptionHandler(ComprobanteInvalidoException.class)
@@ -121,9 +150,14 @@ public class ManejadorGlobalErrores {
     }
 
     private ResponseEntity<ErrorResponseDTO> responder(HttpStatusCode estado, String mensaje, HttpServletRequest peticion) {
+        return responder(estado, mensaje, List.of(), peticion);
+    }
+
+    private ResponseEntity<ErrorResponseDTO> responder(HttpStatusCode estado, String mensaje, List<String> campos,
+                                                       HttpServletRequest peticion) {
         HttpStatus conocido = HttpStatus.resolve(estado.value());
         String error = conocido != null ? conocido.getReasonPhrase() : String.valueOf(estado.value());
-        ErrorResponseDTO cuerpo = new ErrorResponseDTO(Instant.now(), estado.value(), error, mensaje, peticion.getRequestURI());
+        ErrorResponseDTO cuerpo = new ErrorResponseDTO(Instant.now(), estado.value(), error, mensaje, peticion.getRequestURI(), campos);
         return ResponseEntity.status(estado).body(cuerpo);
     }
 }

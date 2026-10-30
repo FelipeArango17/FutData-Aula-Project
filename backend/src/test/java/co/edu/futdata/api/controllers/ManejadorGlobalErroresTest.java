@@ -1,5 +1,6 @@
 package co.edu.futdata.api.controllers;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,12 +9,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import co.edu.futdata.services.facade.ConflictoException;
+import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.util.reports.ComprobanteInvalidoException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -45,7 +50,8 @@ class ManejadorGlobalErroresTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nombre\": \"\", \"edad\": 3}")), 400, "Bad Request", "/api/pruebas-errores")
                 .andExpect(jsonPath("$.mensaje").value(
-                        "edad: debe ser mayor que o igual a 5; nombre: no debe estar vacío"));
+                        "edad: debe ser mayor que o igual a 5; nombre: no debe estar vacío"))
+                .andExpect(jsonPath("$.campos").doesNotExist());
     }
 
     @Test
@@ -54,6 +60,30 @@ class ManejadorGlobalErroresTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{no es json")), 400, "Bad Request", "/api/pruebas-errores")
                 .andExpect(jsonPath("$.mensaje").value("El cuerpo de la petición falta o no es un JSON válido"));
+    }
+
+    @Test
+    void valorConFormatoInvalidoResponde400NombrandoElCampoSinRepetirElValor() throws Exception {
+        formatoUniforme(mvc.perform(post("/api/pruebas-errores/fecha")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fecha\": \"14/05/1990\"}")), 400, "Bad Request", "/api/pruebas-errores/fecha")
+                .andExpect(jsonPath("$.mensaje").value("fecha: tiene un valor o un formato inválido"))
+                .andExpect(jsonPath("$.campos[0]").value("fecha"))
+                .andExpect(content().string(not(containsString("14/05/1990"))));
+    }
+
+    @Test
+    void datosInvalidosDelServicioResponde400ConLosCamposOrdenados() throws Exception {
+        formatoUniforme(mvc.perform(get("/api/pruebas-errores/datos")), 400, "Bad Request", "/api/pruebas-errores/datos")
+                .andExpect(jsonPath("$.mensaje").value("correo: no es válido; documento: debe tener entre 6 y 12 dígitos"))
+                .andExpect(jsonPath("$.campos").value(contains("correo", "documento")));
+    }
+
+    @Test
+    void conflictoResponde409ConSuMensajeYLosCampos() throws Exception {
+        formatoUniforme(mvc.perform(get("/api/pruebas-errores/conflicto")), 409, "Conflict", "/api/pruebas-errores/conflicto")
+                .andExpect(jsonPath("$.mensaje").value("documento: ya está registrado en otro entrenador"))
+                .andExpect(jsonPath("$.campos").value(contains("documento")));
     }
 
     @Test
@@ -103,12 +133,30 @@ class ManejadorGlobalErroresTest {
     record PruebaRequestDTO(@NotBlank String nombre, @Min(5) int edad) {
     }
 
+    record FechaRequestDTO(LocalDate fecha) {
+    }
+
     @RestController
     static class ControladorDePrueba {
 
         @PostMapping("/api/pruebas-errores")
         String crear(@Valid @RequestBody PruebaRequestDTO cuerpo) {
             return "ok";
+        }
+
+        @PostMapping("/api/pruebas-errores/fecha")
+        String fecha(@RequestBody FechaRequestDTO cuerpo) {
+            return "ok";
+        }
+
+        @GetMapping("/api/pruebas-errores/datos")
+        String datos() {
+            throw new DatosInvalidosException(Map.of("documento", "debe tener entre 6 y 12 dígitos", "correo", "no es válido"));
+        }
+
+        @GetMapping("/api/pruebas-errores/conflicto")
+        String conflicto() {
+            throw new ConflictoException("documento: ya está registrado en otro entrenador", List.of("documento"));
         }
 
         @GetMapping("/api/pruebas-errores/falla")
