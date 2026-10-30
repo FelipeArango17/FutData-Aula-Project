@@ -207,6 +207,29 @@ Reglas para todos los módulos:
 - Nombres de clases, métodos y mensajes en español, como en los diagramas del PPI.
 - No registrar en logs datos sensibles (contraseñas, códigos 2FA, tokens, correos completos).
 
+## Deportistas (HU-008)
+
+El registro de deportistas está disponible en `POST /api/deportistas`. La fecha de nacimiento es obligatoria y la edad se calcula en la respuesta; no se persiste. El número de documento debe ser único, sin importar el tipo de documento, y el registro se crea sin categoría.
+
+### Endpoints
+
+| Método y ruta | Descripción | Respuestas |
+| :--- | :--- | :--- |
+| `POST /api/deportistas` | Registra los datos personales | `201` con `Location`, `400`, `409` |
+| `GET /api/deportistas/{id}` | Consulta un deportista por UUID | `200`, `400`, `404` |
+
+El request contiene `nombre`, `apellido`, `tipoDocumento` (`CC`, `TI`, `CE` o `PASAPORTE`), `documento`, `fechaNacimiento` (`yyyy-MM-dd`), `telefono` (10 dígitos) y `direccion`. Los errores `400` y `409` incluyen `campos` para identificar los campos que deben corregirse; un documento repetido responde `409` con `campos: ["documento"]`.
+
+Ejemplo:
+
+```http
+POST /api/deportistas
+Content-Type: application/json
+
+{"nombre":"Ana","apellido":"Pérez","tipoDocumento":"TI","documento":"12345678",
+ "fechaNacimiento":"2012-04-10","telefono":"3001234567","direccion":"Calle 10 # 20-30"}
+```
+
 ## Entrenadores (HU-025)
 
 API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).

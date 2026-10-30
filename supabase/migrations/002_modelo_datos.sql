@@ -69,3 +69,9 @@ alter table public.acudiente_deportista enable row level security;
 
 alter table public.deportista
     alter column id_categoria drop not null;
+
+alter table public.deportista
+    drop constraint if exists deportista_tipo_documento_documento_identidad_key;
+
+create unique index if not exists deportista_documento_identidad_uidx
+    on public.deportista (documento_identidad);
