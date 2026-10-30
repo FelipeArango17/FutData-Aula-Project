@@ -40,11 +40,11 @@ Registro principal de los jugadores del club.
 | `foto` | `varchar` | — | URL de la fotografía en almacenamiento en la nube. |
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del deportista. |
 | `fecha_registro` | `date` | — | Fecha de registro en el sistema. |
-| `id_categoria` | `UUID` | FK | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. |
+| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Puede ser `NULL` mientras se asigna el grupo. Referencia `Categoria.id_categoria`. Ver decisión D3. |
 
 ### 2.2 `Acudiente`
 
-Personas responsables o acudientes asociados a un deportista.
+Personas responsables o acudientes. La relación con los deportistas se guarda en `AcudienteDeportista`.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
@@ -58,10 +58,18 @@ Personas responsables o acudientes asociados a un deportista.
 | `telefono` | `varchar` | — | Teléfono de contacto. |
 | `correo` | `varchar` | — | Correo electrónico. |
 | `direccion` | `varchar` | — | Dirección de residencia. |
-| `id_deportista` | `UUID` | FK | Deportista al que está asociado. Referencia `Deportista.id_deportista`. |
 | `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el acudiente. |
 
-### 2.3 `Entrenador`
+### 2.3 `AcudienteDeportista`
+
+Tabla puente para asociar acudientes y deportistas. Permite que un acudiente tenga varios hijos y que un deportista tenga varios acudientes.
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_acudiente` | `UUID` | PK/FK | Acudiente asociado. Referencia `Acudiente.id_acudiente`. |
+| `id_deportista` | `UUID` | PK/FK | Deportista asociado. Referencia `Deportista.id_deportista`. |
+
+### 2.4 `Entrenador`
 
 Información personal y laboral de los entrenadores.
 
@@ -82,7 +90,7 @@ Información personal y laboral de los entrenadores.
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del entrenador. |
 | `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el entrenador. |
 
-### 2.4 `Usuario`
+### 2.5 `Usuario`
 
 Perfil y estado de una cuenta administrada por Supabase Auth.
 
@@ -93,7 +101,7 @@ Perfil y estado de una cuenta administrada por Supabase Auth.
 | `correo` | `varchar` | — | Correo utilizado para el acceso. |
 | `activo` | `boolean` | — | Indica si el acceso de la cuenta está vigente. Revocar el acceso no elimina la cuenta de Supabase Auth. |
 
-### 2.5 `Pago`
+### 2.6 `Pago`
 
 Pagos realizados por un deportista.
 
@@ -101,13 +109,13 @@ Pagos realizados por un deportista.
 | :--- | :--- | :--- | :--- |
 | `id_pago` | `UUID` | PK | Identificador único del pago. |
 | `id_deportista` | `UUID` | FK | Deportista que realiza o recibe el cobro. Referencia `Deportista.id_deportista`. |
-| `fecha_pago` | `date` | — | Fecha en que se registra el pago. |
+| `fecha_pago` | `date` | — | Fecha en que se registra el pago; es `NULL` mientras el cobro esté pendiente. |
 | `monto` | `decimal` | — | Valor monetario pagado. |
 | `concepto` | `varchar` | — | Concepto del pago. |
 | `recibo_url` | `varchar` | — | URL del recibo almacenado. |
 | `estado_pago` | `varchar` | — | Estado del pago, por ejemplo pendiente, aprobado o rechazado. |
 
-### 2.6 `Torneo`
+### 2.7 `Torneo`
 
 Información de los torneos en los que puede participar el club.
 
@@ -121,7 +129,7 @@ Información de los torneos en los que puede participar el club.
 | `fecha_fin` | `date` | — | Fecha de finalización. |
 | `costo` | `decimal` | — | Costo de inscripción o participación. |
 
-### 2.7 `NotificacionPago`
+### 2.8 `NotificacionPago`
 
 Mensajes de notificación de pagos dirigidos a acudientes.
 
@@ -133,7 +141,7 @@ Mensajes de notificación de pagos dirigidos a acudientes.
 | `fecha_envio` | `datetime` | — | Fecha y hora del envío. |
 | `leido` | `boolean` | — | Indica si el acudiente leyó la notificación. |
 
-### 2.8 `Notificacion`
+### 2.9 `Notificacion`
 
 Notificaciones generales dirigidas a las cuentas de usuarios, incluidos los avisos de entrenamientos.
 
@@ -147,7 +155,7 @@ Notificaciones generales dirigidas a las cuentas de usuarios, incluidos los avis
 | `fecha_envio` | `datetime` | — | Fecha y hora del envío. |
 | `leido` | `boolean` | — | Indica si el usuario leyó la notificación. |
 
-### 2.9 `Asistencia`
+### 2.10 `Asistencia`
 
 Registro de asistencia de un deportista tomado por un entrenador.
 
@@ -158,10 +166,10 @@ Registro de asistencia de un deportista tomado por un entrenador.
 | `id_entrenador` | `UUID` | FK | Entrenador que registra la asistencia. Referencia `Entrenador.id_entrenador`. |
 | `id_entrenamiento` | `UUID` | FK | **Nuevo (Sprint 2).** Entrenamiento al que corresponde la asistencia. Referencia `Entrenamiento.id_entrenamiento`. Ver decisión D5. |
 | `fecha` | `date` | — | Fecha de la asistencia. |
-| `presente` | `boolean` | — | Indica si el deportista estuvo presente. |
+| `estado` | `varchar(20)` | — | Estado de la asistencia: `PRESENTE`, `AUSENTE` o `JUSTIFICADO`. |
 | `observaciones` | `text` | — | Comentarios adicionales sobre la asistencia. |
 
-### 2.10 `InscripcionTorneo`
+### 2.11 `InscripcionTorneo`
 
 Tabla intermedia que registra la participación de deportistas en torneos.
 
@@ -236,7 +244,8 @@ Las siguientes relaciones se derivan de las claves foráneas incluidas en el mod
 
 | Tabla origen | Cardinalidad | Tabla destino | Descripción |
 | :--- | :--- | :--- | :--- |
-| `Acudiente` | N:1 | `Deportista` | Cada acudiente se asocia a un deportista; un deportista puede tener varios acudientes. |
+| `AcudienteDeportista` | N:1 | `Acudiente` | Cada vínculo pertenece a un acudiente; un acudiente puede tener varios vínculos con deportistas. |
+| `AcudienteDeportista` | N:1 | `Deportista` | Cada vínculo pertenece a un deportista; un deportista puede tener varios vínculos con acudientes. |
 | `Pago` | N:1 | `Deportista` | Cada pago pertenece a un deportista; un deportista puede tener varios pagos. |
 | `NotificacionPago` | N:1 | `Acudiente` | Cada notificación pertenece a un acudiente; un acudiente puede recibir varias notificaciones. |
 | `Notificacion` | N:1 | `Usuario` | Cada notificación general pertenece a un usuario destinatario; un usuario puede recibir varias notificaciones. |

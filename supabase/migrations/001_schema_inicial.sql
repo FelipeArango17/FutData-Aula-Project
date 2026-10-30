@@ -78,7 +78,7 @@ create table public.deportista (
     foto varchar(500),
     documentos varchar(500),
     fecha_registro date not null default current_date,
-    id_categoria uuid not null references public.categoria (id_categoria) on delete restrict,
+    id_categoria uuid references public.categoria (id_categoria) on delete restrict,
     constraint deportista_tipo_documento_ck check (
         tipo_documento in ('CC', 'TI', 'CE', 'PASAPORTE')
     ),
@@ -96,13 +96,18 @@ create table public.acudiente (
     telefono varchar(30),
     correo varchar(320),
     direccion varchar(250),
-    id_deportista uuid not null references public.deportista (id_deportista) on delete restrict,
     id_usuario uuid unique references public.usuario (id_usuario) on delete set null,
     constraint acudiente_tipo_documento_ck check (
         tipo_documento in ('CC', 'TI', 'CE', 'PASAPORTE')
     ),
     unique (tipo_documento, documento_identidad),
     unique (correo)
+);
+
+create table public.acudiente_deportista (
+    id_acudiente uuid not null references public.acudiente (id_acudiente) on delete cascade,
+    id_deportista uuid not null references public.deportista (id_deportista) on delete restrict,
+    primary key (id_acudiente, id_deportista)
 );
 
 create table public.torneo (
@@ -120,7 +125,7 @@ create table public.torneo (
 create table public.pago (
     id_pago uuid primary key default gen_random_uuid(),
     id_deportista uuid not null references public.deportista (id_deportista) on delete restrict,
-    fecha_pago date not null,
+    fecha_pago date,
     monto numeric(12, 2) not null,
     concepto varchar(250) not null,
     recibo_url varchar(500),
@@ -158,8 +163,11 @@ create table public.asistencia (
     id_entrenador uuid not null references public.entrenador (id_entrenador) on delete restrict,
     id_entrenamiento uuid not null references public.entrenamiento (id_entrenamiento) on delete cascade,
     fecha date not null,
-    presente boolean not null,
+    estado varchar(20) not null,
     observaciones text,
+    constraint asistencia_estado_ck check (
+        estado in ('PRESENTE', 'AUSENTE', 'JUSTIFICADO')
+    ),
     unique (id_deportista, id_entrenamiento)
 );
 
@@ -205,7 +213,7 @@ create table public.reporte_financiero (
 );
 
 create index deportista_categoria_idx on public.deportista (id_categoria);
-create index acudiente_deportista_idx on public.acudiente (id_deportista);
+create index acudiente_deportista_idx on public.acudiente_deportista (id_deportista);
 create index pago_deportista_idx on public.pago (id_deportista);
 create index torneo_categoria_idx on public.torneo (id_categoria);
 create index entrenamiento_fecha_idx on public.entrenamiento (fecha);
@@ -228,6 +236,7 @@ alter table public.entrenador enable row level security;
 alter table public.categoria enable row level security;
 alter table public.deportista enable row level security;
 alter table public.acudiente enable row level security;
+alter table public.acudiente_deportista enable row level security;
 alter table public.torneo enable row level security;
 alter table public.pago enable row level security;
 alter table public.inscripcion_torneo enable row level security;
