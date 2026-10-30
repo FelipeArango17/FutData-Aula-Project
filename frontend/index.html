@@ -5,6 +5,24 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>FutData</title>
+    <!-- Aplica el tema y el tamaño del texto antes de que React pinte (sin parpadeo). Misma lógica que
+         src/utils/preferenciasAccesibilidad.js: si cambias claves o valores allá, cámbialos aquí. -->
+    <script>
+      (function () {
+        var p = {};
+        try {
+          p = JSON.parse(localStorage.getItem('futdata.accesibilidad')) || {};
+        } catch (e) {} // sin almacenamiento o dato dañado: valores por defecto
+        try {
+          var tema = ['alto-contraste', 'oscuro'].indexOf(p.tema) >= 0 ? p.tema : 'normal';
+          var escala = [100, 125, 150, 200].indexOf(p.escala) >= 0 ? p.escala : 100;
+          var r = document.documentElement;
+          if (tema !== 'normal') r.setAttribute('data-theme', tema);
+          r.style.colorScheme = tema === 'oscuro' ? 'dark' : 'light';
+          r.style.fontSize = escala + '%';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

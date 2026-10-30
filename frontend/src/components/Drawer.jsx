@@ -59,7 +59,7 @@ export default function Drawer({ open, onClose, role }) {
           </span>
           <div className="min-w-0 flex-1 basis-40">
             <p className="break-words text-body-medium">{name}</p>
-            <p className="break-words text-small opacity-70">{roleLabels[role]}</p>
+            <p className="break-words text-small texto-atenuado">{roleLabels[role]}</p>
           </div>
         </div>
         <NavMenu role={role} onNavigate={onClose} />
