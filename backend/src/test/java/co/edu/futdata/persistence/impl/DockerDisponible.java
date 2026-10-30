@@ -1,5 +1,6 @@
 package co.edu.futdata.persistence.impl;
 
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -18,9 +19,20 @@ public class DockerDisponible implements ExecutionCondition {
 
     private static Boolean disponible;
 
+    private final BooleanSupplier hayDocker;
+
+    public DockerDisponible() {
+        this(DockerDisponible::hayDocker);
+    }
+
+    /** Para las pruebas de esta condición. */
+    DockerDisponible(BooleanSupplier hayDocker) {
+        this.hayDocker = hayDocker;
+    }
+
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext contexto) {
-        if (hayDocker()) {
+        if (hayDocker.getAsBoolean()) {
             return ConditionEvaluationResult.enabled("Docker disponible");
         }
         System.out.println("[AVISO] " + MENSAJE);
