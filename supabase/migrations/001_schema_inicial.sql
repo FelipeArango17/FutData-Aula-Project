@@ -6,6 +6,7 @@ create extension if not exists pgcrypto;
 create table public.usuario (
     id_usuario uuid primary key references auth.users (id) on delete restrict,
     nombre varchar(100) not null,
+    apellido varchar(100) not null,
     correo varchar(320) not null unique,
     activo boolean not null default true,
     creado_en timestamptz not null default now()
