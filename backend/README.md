@@ -19,7 +19,7 @@ API REST en JSON de FutData. Sigue la arquitectura en capas del PPI con los patr
 - JDK 21 (por ejemplo, Eclipse Temurin). `java -version` debe decir 21.
 - No hace falta instalar Maven: `mvnw` descarga la versión correcta (3.9.16) la primera vez y comprueba su SHA-256 (`distributionSha256Sum` en `.mvn/wrapper/maven-wrapper.properties`).
 - **En Linux, `unzip`** (`sudo apt install unzip`). Sin `unzip`, `mvnw` descarga el `.tar.gz` de Maven en lugar del `.zip`, y como la suma SHA-256 guardada es la del `.zip`, falla con *Failed to validate Maven distribution SHA-256*. Windows, macOS y los runners de GitHub Actions ya lo traen; el `Dockerfile` lo instala en su etapa de compilación.
-- Opcional: Docker Desktop, para construir la imagen.
+- Opcional: Docker Desktop, para construir la imagen y para las pruebas de integración con PostgreSQL (sin Docker se omiten).
 
 ## Correr el backend
 
@@ -206,6 +206,191 @@ Reglas para todos los módulos:
 - El controlador nunca usa un DAO ni una entidad; la entidad nunca sale por la API.
 - Nombres de clases, métodos y mensajes en español, como en los diagramas del PPI.
 - No registrar en logs datos sensibles (contraseñas, códigos 2FA, tokens, correos completos).
+
+## Entrenadores (HU-025)
+
+API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
+
+> [!WARNING]
+> **Todavía sin seguridad por rol.** Debe quedar solo para `ADMINISTRADOR` (HU-005). Está marcado con `// TODO HU-005` en `EntrenadorController` y `CategoriaController`.
+
+| Capa | Clase | Qué hace |
+| :--- | :--- | :--- |
+| `api.controllers` | `EntrenadorController`, `CategoriaController` | HTTP; `201` con `Location` al crear |
+| `api.dto` | `EntrenadorRequestDTO`, `EntrenadorResponseDTO`, `AsignarCategoriasRequestDTO`, `CategoriaResponseDTO`, `EntrenadorMapper` | Lo que viaja por la API |
+| `services.facade` | `IEntrenadorService` | `listar`, `consultar`, `crear`, `editar`, `asignarCategorias`, `listarCategorias` |
+| `services.impl` | `EntrenadorServiceImpl` | Limpia y valida, revisa duplicados y aplica las reglas de categorías; `@Transactional` |
+| `domain.rules` | `ReglasEntrenador` | Limpieza, validaciones, categorías oficiales y tipos de documento |
+| `domain.entities` | `Entrenador`, `Categoria` | Entidades (no salen por la API) |
+| `persistence.dao` / `impl` | `IEntrenadorDAO` / `EntrenadorDAOImpl`, `ICategoriaDAO` / `CategoriaDAOImpl` | SQL con `NamedParameterJdbcTemplate` |
+
+### Endpoints
+
+| Método y ruta | Qué hace | Respuestas |
+| :--- | :--- | :--- |
+| `GET /api/entrenadores` | Lista ordenada por apellido y nombre, con sus categorías | `200` |
+| `GET /api/entrenadores/{id}` | Un entrenador | `200`, `400` (el id no es UUID), `404` |
+| `POST /api/entrenadores` | Registra los datos personales (sin categorías) | `201` con `Location: /api/entrenadores/{id}`, `400`, `409` |
+| `PUT /api/entrenadores/{id}` | Edita los datos personales; **no** cambia las categorías | `200`, `400`, `404`, `409` |
+| `PUT /api/entrenadores/{id}/categorias` | Deja al entrenador con exactamente esas categorías | `200`, `400`, `404`, `409` |
+| `GET /api/categorias` | Las categorías en el orden oficial, cada una con su entrenador | `200` |
+
+### Forma de datos
+
+Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion`, que están en la tabla:
+
+```json
+{
+  "id": "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b",
+  "nombre": "Luis",
+  "apellido": "Pérez",
+  "tipoDocumento": "CC",
+  "documento": "1098765432",
+  "fechaNacimiento": "1990-05-14",
+  "telefono": "3001112233",
+  "correo": "luis.perez@pradofc.co",
+  "especialidad": "Porteros",
+  "categorias": ["Sub-8", "Sub-12"],
+  "horarioTrabajo": "Lunes a viernes, 3:30 p. m. a 7:30 p. m.",
+  "direccion": null
+}
+```
+
+| Campo | Columna | Nota |
+| :--- | :--- | :--- |
+| `id` | `id_entrenador` | **UUID** (texto). El frontend hoy usa números (`1`, `2`) |
+| `tipoDocumento` | `tipo_documento` | **Código** de la base: `CC`, `TI`, `CE` o `PASAPORTE` (ver la tabla de abajo) |
+| `documento` | `documento_identidad` | Texto: conserva los ceros iniciales |
+| `fechaNacimiento` | `fecha_nacimiento` | `AAAA-MM-DD` |
+| `categorias` | `categoria.id_entrenador` | Nombres, en el orden oficial `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14`, `Sub-16`. Solo en las respuestas |
+| `horarioTrabajo`, `direccion` | `horario_trabajo`, `direccion` | Opcionales. Vacíos se guardan y se devuelven como `null` (el frontend usaba `''`) |
+
+Al crear o editar, si el cuerpo trae `id` o `categorias`, **se ignoran**. Las columnas `documentos` e `id_usuario` no se leen ni se cambian (la cuenta de usuario es de CU-06).
+
+**Equivalencia de tipos de documento (para Felipe).** La pantalla muestra el texto y la API recibe y devuelve el código:
+
+| Texto en la pantalla (`TIPOS_DOCUMENTO`) | Código en la API y en la base |
+| :--- | :--- |
+| `Cédula de ciudadanía` | `CC` |
+| `Cédula de extranjería` | `CE` |
+| `Pasaporte` | `PASAPORTE` |
+| *(no está en la pantalla)* Tarjeta de identidad | `TI` |
+
+```js
+// Sugerencia para entrenadoresService.js
+export const TIPOS_DOCUMENTO = [
+  { codigo: 'CC', texto: 'Cédula de ciudadanía' },
+  { codigo: 'CE', texto: 'Cédula de extranjería' },
+  { codigo: 'PASAPORTE', texto: 'Pasaporte' },
+]
+```
+
+### Validaciones
+
+El servicio primero **quita los espacios sobrantes** (al principio, al final y los repetidos dentro de los textos de una línea), pasa el tipo de documento a mayúsculas y el correo a minúsculas. Después valida (`ReglasEntrenador`):
+
+| Campo | Regla | Mensaje |
+| :--- | :--- | :--- |
+| `nombre`, `apellido` | Obligatorios, máximo 100 caracteres | `es obligatorio` / `debe tener como máximo 100 caracteres` |
+| `tipoDocumento` | `CC`, `TI`, `CE` o `PASAPORTE` (sin distinguir mayúsculas) | `debe ser CC, TI, CE o PASAPORTE` |
+| `documento` | Solo dígitos, de 6 a 12 | `solo puede tener números, sin puntos ni espacios` / `debe tener entre 6 y 12 dígitos` |
+| `telefono` | Exactamente 10 dígitos | `debe tener exactamente 10 dígitos, sin espacios` |
+| `correo` | `algo@dominio.ext`, sin espacios (la misma revisión que el frontend), máximo 320 | `no es válido` |
+| `especialidad` | Obligatoria, máximo 100 | `es obligatoria` |
+| `fechaNacimiento` | Obligatoria (la tabla la exige), no futura, al menos 18 años cumplidos hoy en Colombia | `no puede ser una fecha futura` / `el entrenador debe tener al menos 18 años` |
+| `direccion`, `horarioTrabajo` | Opcionales, máximo 250 | `debe tener como máximo 250 caracteres` |
+
+Todos los errores salen juntos en un `400`. Los mensajes nunca repiten el valor recibido.
+
+**Duplicados.** El mismo tipo **y** número de documento, o el mismo correo sin distinguir mayúsculas, en **otro** entrenador, responden `409`. Al editar, el entrenador no choca consigo mismo. El mensaje dice qué campo se repite, nunca de quién: primero el documento y después el correo, como el formulario. Si dos peticiones pasan la revisión al mismo tiempo, la restricción `unique` de la tabla rechaza la segunda, y el DAO la traduce al mismo `409` (`DatoDuplicadoException`).
+
+### Categorías
+
+Según la decisión **D1**, cada categoría tiene **un solo entrenador**, y `categoria.id_entrenador` es `NOT NULL`. `PUT /api/entrenadores/{id}/categorias` recibe la lista **completa**:
+
+```json
+{ "categorias": ["Sub-8", "Sub-12"], "reasignar": true }
+```
+
+- **Tomar una categoría de otro entrenador** la pasa de ese entrenador a este. Exige `"reasignar": true`. Sin él, la respuesta es `409` y dice cuáles tienen otro entrenador, por ejemplo `Sub-8 ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.` La pantalla puede pedir la confirmación y reenviar con `"reasignar": true`.
+- **Quitar una categoría** (no enviarla) es imposible, porque quedaría sin entrenador. La respuesta es `409`: `No se puede quitar Sub-12: cada categoría debe tener un entrenador. Para quitársela, asígnala a otro entrenador.` Para cambiar de entrenador una categoría, se asigna al **nuevo** entrenador con `"reasignar": true`.
+- Si en la misma petición quita y toma, primero avisa de lo que quita.
+- Un nombre que no es categoría del club (`Sub-99`, `sub-8`) responde `400`. Un nombre oficial que todavía no está en la tabla responde `400` con `Sub-14 todavía no está creada en la base de datos`.
+- El orden y los repetidos de la lista no importan. Una lista vacía solo es válida para quien no tiene categorías.
+- Todo pasa en **una transacción**: las categorías se bloquean (`SELECT ... FOR UPDATE`) mientras se decide, así que dos asignaciones al mismo tiempo no se pisan, y un `409` no deja cambios a medias.
+
+`GET /api/categorias`:
+
+```json
+[
+  { "id": "0b6c3f1e-9d2a-4c8b-a1e7-5f4d3c2b1a09", "nombre": "Sub-12", "edadMinima": 10, "edadMaxima": 11,
+    "entrenador": { "id": "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b", "nombre": "Andrés", "apellido": "Mora" } }
+]
+```
+
+Del entrenador solo van el id, el nombre y el apellido: ni documento, ni teléfono, ni correo.
+
+### Ejemplos
+
+**Registrar:**
+
+```http
+POST /api/entrenadores
+Content-Type: application/json
+
+{ "nombre": " Luis ", "apellido": "Pérez", "tipoDocumento": "CC", "documento": "1098765432",
+  "fechaNacimiento": "1990-05-14", "telefono": "3001112233", "correo": "Luis.Perez@pradofc.co",
+  "especialidad": "Porteros", "horarioTrabajo": "", "direccion": "Calle 40 Sur 75b-81" }
+```
+
+```http
+HTTP/1.1 201 Created
+Location: http://localhost:8080/api/entrenadores/6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b
+
+{ "id": "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b", "nombre": "Luis", "apellido": "Pérez", "tipoDocumento": "CC",
+  "documento": "1098765432", "fechaNacimiento": "1990-05-14", "telefono": "3001112233",
+  "correo": "luis.perez@pradofc.co", "especialidad": "Porteros", "categorias": [],
+  "horarioTrabajo": null, "direccion": "Calle 40 Sur 75b-81" }
+```
+
+**Errores** (formato de [Formato de errores](#formato-de-errores-para-el-frontend), con `campos` para marcar el formulario):
+
+```json
+{ "timestamp": "2026-10-29T15:02:11.481Z", "estado": 400, "error": "Bad Request",
+  "mensaje": "fechaNacimiento: es obligatoria; telefono: debe tener exactamente 10 dígitos, sin espacios",
+  "ruta": "/api/entrenadores", "campos": ["fechaNacimiento", "telefono"] }
+```
+
+```json
+{ "timestamp": "2026-10-29T15:03:40.127Z", "estado": 409, "error": "Conflict",
+  "mensaje": "documento: ya está registrado en otro entrenador",
+  "ruta": "/api/entrenadores", "campos": ["documento"] }
+```
+
+| Código | Cuándo | `campos` |
+| :--- | :--- | :--- |
+| `400` | Validaciones de arriba; fecha con otro formato (`fechaNacimiento: tiene un valor o un formato inválido`); JSON mal formado; id que no es UUID; categoría desconocida o sin crear | Los campos con error (no en JSON mal formado ni en id inválido) |
+| `404` | No existe un entrenador con ese id | — |
+| `409` | Documento o correo de otro entrenador; categorías de otro sin `reasignar`; categorías quitadas | `["documento"]`, `["correo"]`, `["documento", "correo"]` o `["categorias"]` |
+
+En el frontend, el `409` de duplicado se lleva al formulario como hoy (`error.duplicado.campo`): `campo = error.response.data.campos[0]`.
+
+### Pendientes / diferencias con el frontend y el esquema
+
+- **`fecha_nacimiento` es obligatoria en la tabla, pero la pantalla no la pide.** La API la exige (y que tenga 18 años o más). El formulario debe agregar el campo; si no, todo registro responde `400`.
+- **No hay columna `activo` en `entrenador`.** Por eso no hay endpoint para desactivar ni para borrar entrenadores; queda para cuando el esquema la tenga.
+- **La migración no crea las categorías**, y este módulo no agrega datos semilla. Mientras no existan, `GET /api/categorias` devuelve `[]` y asignar cualquier categoría responde `400`. Además, como `categoria.id_entrenador` es `NOT NULL`, una categoría **no puede existir sin un entrenador**. Las cinco categorías se tendrán que crear después de registrar al menos un entrenador, o cambiar el esquema. Hay que decidirlo con Juan Sebastián.
+- **Ids UUID en lugar de números.** `entrenadoresService.js` y `ID_ENTRENADOR_EJEMPLO` usan `1`, `2`; `Number(id)` ya no sirve. Hay que comparar los ids como texto.
+- **`tipoDocumento` va por código** (`CC`, `CE`, `PASAPORTE`), no por el texto de la pantalla. La equivalencia está arriba. `TI` (tarjeta de identidad, de menores de edad) lo acepta la tabla, pero no la pantalla. **Duda:** ¿se rechaza `TI` para entrenadores?
+- **Categorías: la pantalla y D1 no coinciden.** El formulario permite marcar y desmarcar categorías libremente, y varios entrenadores con la misma categoría. Con D1:
+  - desmarcar responde `409`;
+  - marcar una que tiene otro entrenador pide confirmación;
+  - `POST` no lleva categorías: registrar con categorías son **dos llamadas** (`POST` y luego `PUT .../categorias`). Si la segunda falla, el entrenador queda registrado sin categorías.
+  - El mensaje del frontend `categoriasMinimo` ("Selecciona al menos una categoría") tampoco se exige en la API.
+- **`unique (correo)` de la tabla distingue mayúsculas.** La API guarda el correo en minúsculas y revisa sin distinguirlas, pero un correo insertado por fuera de la API con mayúsculas no lo cubre la restricción. Propuesta para una migración futura: `unique` sobre `lower(correo)`.
+- **Pasaportes alfanuméricos.** Como la pantalla, la API pide solo dígitos (6 a 12), aunque muchos pasaportes tienen letras. **Duda:** ¿se acepta alfanumérico para `PASAPORTE`?
+- `documentos` (carpeta de documentos) e `id_usuario` (cuenta de acceso, CU-06) no los maneja esta historia.
+- Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre), crear la cuenta del entrenador (CU-06) y la seguridad por rol (HU-005).
 
 ## Comprobante de pago (PDF)
 
@@ -438,11 +623,13 @@ Todas las respuestas de error tienen el mismo JSON:
 | `error` | Nombre estándar del código HTTP, en inglés (`Bad Request`, `Not Found`...) |
 | `mensaje` | Explicación en español que se puede mostrar al usuario. En validación: `campo: mensaje`, separados por `; ` y ordenados |
 | `ruta` | Ruta de la petición, sin la cadena de consulta |
+| `campos` | Solo en los errores de campos concretos (`400` del servicio o de un valor con formato inválido, y `409`): lista ordenada de los campos con error o en conflicto, para marcarlos en el formulario. Si no aplica, no aparece |
 
 | Código | Cuándo | `mensaje` de ejemplo |
 | :--- | :--- | :--- |
-| `400` | Bean Validation falla, el JSON está mal formado, falta un parámetro o tiene un tipo inválido, o el servicio lanza `ComprobanteInvalidoException` | `nombre: no debe estar vacío` |
+| `400` | Bean Validation falla, el JSON está mal formado o un valor no tiene el formato del campo (por ejemplo, una fecha), falta un parámetro o tiene un tipo inválido, o el servicio lanza `DatosInvalidosException` o `ComprobanteInvalidoException` | `nombre: no debe estar vacío` |
 | `404` | La ruta no existe o el servicio lanza `RecursoNoEncontradoException` | `No existe la ruta GET /api/no-existe` |
+| `409` | El servicio lanza `ConflictoException`: un dato que ya tiene otro registro, o una regla que depende de otros registros | `documento: ya está registrado en otro entrenador` |
 | `405` / `415` | Método HTTP no permitido o tipo de contenido no soportado | `El método POST no está permitido en esta ruta` |
 | `500` | Cualquier error no controlado. **Nunca incluye la traza ni el mensaje interno**; el detalle queda en el log del servidor | `Ocurrió un error interno. Intenta de nuevo más tarde.` |
 | `503` | Solo `/api/health`, cuando la base de datos no responde (su cuerpo es el de salud, no este) | |
@@ -594,7 +781,12 @@ Esta prueba lee las variables del sistema, no `backend/.env`.
 ./mvnw verify
 ```
 
-No necesitan base de datos, credenciales ni red (salvo `N8nClientContraN8nLocalTest` y `SupabaseStorageContraSupabaseTest`, desactivadas por defecto): cargan `src/test/resources/pruebas.properties`, que tiene prioridad sobre `backend/.env`, y simulan la base de datos con Mockito.
+No necesitan credenciales ni red (salvo `N8nClientContraN8nLocalTest` y `SupabaseStorageContraSupabaseTest`, desactivadas por defecto): cargan `src/test/resources/pruebas.properties`, que tiene prioridad sobre `backend/.env`, y simulan la base de datos con Mockito o con dobles en memoria.
+
+Las pruebas de los DAO (`EntrenadorDAOImplTest`, `EntrenadorServiceImplConPostgresTest`) usan un **PostgreSQL real en Docker** con [Testcontainers](https://testcontainers.com/):
+- Antes de aplicar la migración 001 tal cual desde `supabase/migrations/`, crean un esquema `auth` mínimo (`auth.users(id uuid primary key)`), porque la migración lo referencia.
+- Cada prueba inserta sus propias categorías y entrenadores.
+- **Sin Docker se omiten** con el aviso *Docker no está disponible: se omiten las pruebas de integración con PostgreSQL* y el build pasa igual (`DockerDisponible`). En el CI sí corren.
 
 | Prueba | Qué revisa |
 | :--- | :--- |
@@ -607,9 +799,15 @@ No necesitan base de datos, credenciales ni red (salvo `N8nClientContraN8nLocalT
 | `ComprobanteServiceImplTest` | Generar y guardar con dobles de prueba: ruta `AAAA/FD-AAAA-NNNNNN.pdf`, formato y año del número, bucket y vigencia del enlace |
 | `SupabaseStorageContraSupabaseTest` | Opcional y desactivada: contra un Supabase real (ver [Almacenamiento](#almacenamiento-de-comprobantes-supabase-storage)) |
 | `EnvExampleTest` | Los datos del club de `.env.example` se leen con tildes (escapes `\u`) |
+| `ReglasEntrenadorTest` | Limpieza de espacios, tipo de documento y correo; obligatorios; documento de 6 a 12 dígitos; teléfono de 10; correo; fecha de nacimiento no futura y 18 años; largos de la tabla; orden oficial de las categorías |
+| `EntrenadorServiceImplTest` | Con dobles en memoria de los DAO: crear y editar (datos limpios, `400` con todos los campos), duplicados de documento y correo sin datos del otro, la carrera traducida a `409`, `404`, y las reglas de categorías (reasignar, quitar, desconocidas, sin crear, lista vacía) |
+| `EntrenadorServiceImplConPostgresTest` | Servicio con los DAO reales en PostgreSQL: reasignación, `409` sin cambios a medias y correo en minúsculas |
+| `EntrenadorDAOImplTest` | SQL contra PostgreSQL con la migración 001: crear, buscar, listar ordenado con categorías, existencia de documento y correo, traducción de las restricciones `unique`, actualizar sin tocar `documentos` ni categorías, `FOR UPDATE` y reasignación |
+| `EntrenadorControllerTest` | `/api/entrenadores` y `/api/categorias` con MockMvc: JSON de respuesta, `201` con `Location`, `400` (UUID inválido, fecha con otro formato, JSON mal formado, validación con `campos`), `404` y `409` |
+| `DockerDisponibleTest` | Sin Docker la prueba se omite con el aviso; con Docker corre |
 | `SaludControllerTest` | `GET /api/health`: `200` con la base de datos arriba, `503` con la base de datos abajo |
 | `SaludDAOImplTest` | `SELECT 1` con timeout de 2 s; `false` si no hay conexión |
-| `ManejadorGlobalErroresTest` | Formato uniforme para `400`, `404`, `405` y `500`, sin traza |
+| `ManejadorGlobalErroresTest` | Formato uniforme para `400` (con `campos` en los del servicio y en un valor con formato inválido), `404`, `405`, `409` y `500`, sin traza |
 | `CorsConfigTest` | Acepta el origen configurado y rechaza otros |
 | `VerificadorVariablesProdTest` | El perfil `prod` exige las variables obligatorias, incluidas las de n8n |
 | `N8nClientTest` | Petición a n8n (URL, método, `Content-Type`, `X-FutData-Token`, cuerpo), cada respuesta (`200`, `202`, `400`, `401`, `502`, otros, timeout, red) y que el código, el token, los correos y los destinatarios no salgan en logs ni excepciones |
