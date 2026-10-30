@@ -3,7 +3,10 @@
 **Sprint:** Sprint 1  
 **Proyecto:** FutData - Asociación Deportiva Prado Fútbol Club  
 **Origen:** Modelo Entidad-Relación definido para la HU de modelado de datos  
-**Ampliación Sprint 2:** se agregan las tablas `Categoria`, `Entrenamiento` y `Notificacion`, además de los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).
+**Ampliación Sprint 2:** se agregan las tablas `Categoria`, `Entrenamiento` y `Notificacion`, además de los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).  
+**Migraciones 002 y 003 (equipo):** la tabla `AcudienteDeportista`, la asistencia con tres estados, `Usuario.apellido`, la categoría del deportista y la fecha de pago opcionales, y la tabla `CodigoVerificacion` del 2FA. Están marcadas como **Migración 002** o **Migración 003**.  
+**Migración 004:** se agregan las tablas `Documento`, `Venta`, `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y se ajustan `Deportista`, `Entrenador`, `Usuario`, `Pago`, `Asistencia`, `Categoria` y `Entrenamiento`. Lo que cambia está marcado como **Migración 004** y explicado en la sección 6 (decisiones D6 a D16).  
+El esquema vigente son las migraciones de `supabase/migrations/` aplicadas en orden: `001_schema_inicial.sql`, `002_modelo_datos.sql`, `003_codigo_verificacion_2fa.sql` y `004_ajustes_modelo.sql`.
 
 ## 1. Convenciones
 
@@ -13,7 +16,10 @@
 - `UUID` identifica registros y relaciones entre tablas; `varchar` almacena texto corto; `text`, texto de longitud variable; `int`, números enteros; `decimal`, valores numéricos con decimales; `date`, fecha; `time`, hora del día; `datetime`, fecha y hora; y `boolean`, valores verdadero/falso.
 - En PostgreSQL/Supabase, `UUID` se implementa como `uuid`, `decimal` como `numeric`, `datetime` como `timestamp with time zone` y `boolean` como `boolean`.
 - Los campos `edad` son calculados a partir de `fecha_nacimiento`; no deben mantenerse como un valor independiente sin una regla de actualización.
-- Los campos `foto`, `documentos` y `recibo_url` almacenan URLs o rutas al almacenamiento de archivos, no el contenido binario.
+- Los campos `foto`, `documentos`, `Documento.ruta` y `Pago.recibo_ruta` almacenan rutas al almacenamiento de archivos (Supabase Storage), no el contenido binario ni URLs firmadas, que vencen a los pocos minutos.
+- **Migración 004.** Los valores en dinero son pesos colombianos **enteros**: las columnas son `numeric(12,2)`, pero una regla `CHECK` rechaza los centavos (con `numeric(12,0)` PostgreSQL los redondearía sin avisar).
+- **Migración 004.** Los correos se guardan en minúsculas y son únicos sin distinguir mayúsculas (índice único sobre `lower(correo)`).
+- **Migración 004.** Los códigos de verificación y los identificadores de equipos de confianza se guardan solo como hash; nunca el valor original.
 - La autenticación y las contraseñas pertenecen a Supabase Auth. `Usuario.id_usuario` usa el mismo UUID de `auth.users.id`; la tabla `Usuario` solo almacena el perfil y estado de la cuenta.
 - Los nombres de rol se almacenan en la base de datos en mayúsculas: `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR` y `ACUDIENTE`. La API puede exponerlos en minúsculas para coincidir con el frontend.
 
@@ -38,13 +44,15 @@ Registro principal de los jugadores del club.
 | `correo` | `varchar` | — | Correo electrónico. |
 | `direccion` | `varchar` | — | Dirección de residencia. |
 | `foto` | `varchar` | — | URL de la fotografía en almacenamiento en la nube. |
-| `documentos` | `varchar` | — | URL a la carpeta de documentos del deportista. |
 | `fecha_registro` | `date` | — | Fecha de registro en el sistema. |
-| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Puede ser `NULL` mientras se asigna el grupo. Referencia `Categoria.id_categoria`. Ver decisión D3. |
+| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. **Migración 002:** nullable mientras se asigna el grupo. **Migración 004:** obligatoria cuando la inscripción está `ACTIVA` (D9). |
+| `estado_inscripcion` | `varchar` | — | **Migración 004.** `PENDIENTE` (recién inscrito, documentos en revisión), `ACTIVA` (aprobado, con categoría) o `RETIRADA`. Por defecto `PENDIENTE`. Ver decisión D9. |
+
+**Migración 004:** se quita `documentos`; los documentos del deportista están en la tabla `Documento` (D10). Los acudientes se asocian por `AcudienteDeportista` (migración 002).
 
 ### 2.2 `Acudiente`
 
-Personas responsables o acudientes. La relación con los deportistas se guarda en `AcudienteDeportista`.
+Personas responsables de uno o varios deportistas. **Migración 002:** un acudiente puede tener varios deportistas (por ejemplo, hermanos) y un deportista varios acudientes; la relación está en `AcudienteDeportista` (D6).
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
@@ -60,9 +68,11 @@ Personas responsables o acudientes. La relación con los deportistas se guarda e
 | `direccion` | `varchar` | — | Dirección de residencia. |
 | `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el acudiente. |
 
+**Migración 002:** se quita `id_deportista` (pasa a `AcudienteDeportista`).
+
 ### 2.3 `AcudienteDeportista`
 
-Tabla puente para asociar acudientes y deportistas. Permite que un acudiente tenga varios hijos y que un deportista tenga varios acudientes.
+**Migración 002.** Tabla puente para asociar acudientes y deportistas. Permite que un acudiente tenga varios hijos y que un deportista tenga varios acudientes (D6).
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
@@ -89,6 +99,7 @@ Información personal y laboral de los entrenadores.
 | `especialidad` | `varchar` | — | **Nuevo (Sprint 2).** Especialidad del entrenador (por ejemplo, porteros o preparación física). Ya existe en el diagrama de clases del dominio. |
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del entrenador. |
 | `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el entrenador. |
+| `activo` | `boolean` | — | **Migración 004.** `false` si el entrenador fue desactivado: conserva su historial, pero no recibe categorías ni entrenamientos nuevos. Por defecto `true`. Ver decisión D8. |
 
 ### 2.5 `Usuario`
 
@@ -98,22 +109,39 @@ Perfil y estado de una cuenta administrada por Supabase Auth.
 | :--- | :--- | :--- | :--- |
 | `id_usuario` | `UUID` | PK | Identificador único del usuario. |
 | `nombre` | `varchar` | — | Nombre visible del usuario. |
+| `apellido` | `varchar` | — | **Migración 002.** Apellidos del usuario. |
 | `correo` | `varchar` | — | Correo utilizado para el acceso. |
 | `activo` | `boolean` | — | Indica si el acceso de la cuenta está vigente. Revocar el acceso no elimina la cuenta de Supabase Auth. |
+| `creado_en` | `datetime` | — | Fecha y hora de creación del perfil. |
+| `alto_contraste` | `boolean` | — | **Migración 004.** Preferencia de accesibilidad: modo de alto contraste. Por defecto `false` (CU-08). |
+| `tamano_texto` | `int` | — | **Migración 004.** Preferencia de accesibilidad: tamaño del texto en porcentaje, de 100 a 200. Por defecto 100 (CU-08). |
+| `paleta_daltonismo` | `boolean` | — | **Migración 004.** Preferencia de accesibilidad: paleta apta para daltonismo. Por defecto `false` (CU-08). |
 
 ### 2.6 `Pago`
 
-Pagos realizados por un deportista.
+Cobros y pagos de un deportista. **Migración 004:** un cobro se crea `PENDIENTE` y sin `fecha_pago` en la fecha de corte; cuando se paga queda `APROBADO` con la fecha, el método y el comprobante. Ver decisión D13.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
 | `id_pago` | `UUID` | PK | Identificador único del pago. |
 | `id_deportista` | `UUID` | FK | Deportista que realiza o recibe el cobro. Referencia `Deportista.id_deportista`. |
-| `fecha_pago` | `date` | — | Fecha en que se registra el pago; es `NULL` mientras el cobro esté pendiente. |
-| `monto` | `decimal` | — | Valor monetario pagado. |
-| `concepto` | `varchar` | — | Concepto del pago. |
-| `recibo_url` | `varchar` | — | URL del recibo almacenado. |
-| `estado_pago` | `varchar` | — | Estado del pago, por ejemplo pendiente, aprobado o rechazado. |
+| `tipo_pago` | `varchar` | — | **Migración 004.** `MENSUALIDAD` o `INSCRIPCION`. Separa los ingresos del reporte financiero. |
+| `periodo` | `date` | — | **Migración 004.** Mes que cubre una mensualidad, guardado como el día 1 de ese mes (`2026-10-01`). Obligatorio en mensualidades y nulo en inscripciones. |
+| `fecha_vencimiento` | `date` | — | **Migración 004.** Fecha límite de pago. Con ella se calcula si el pago está vencido y se envían los recordatorios (RF006). |
+| `fecha_pago` | `date` | — | Fecha en que se hizo el pago. **Migración 002:** `NULL` mientras el cobro está pendiente. **Migración 004:** obligatoria si está `APROBADO`. |
+| `monto` | `decimal` | — | Valor del cobro en pesos enteros. |
+| `concepto` | `varchar` | — | Concepto del pago, por ejemplo `Mensualidad octubre`. |
+| `metodo` | `varchar` | — | **Migración 004.** Medio de pago: `EFECTIVO`, `TRANSFERENCIA`, `PSE`, `NEQUI` o `TARJETA`. Obligatorio si está `APROBADO`. |
+| `referencia_wompi` | `varchar` | — | **Migración 004.** Referencia de la transacción en Wompi. Única: un webhook repetido no registra el pago dos veces. Obligatoria en pagos aprobados por `PSE`, `NEQUI` o `TARJETA`, y prohibida en los manuales. |
+| `referencia_manual` | `varchar` | — | **Migración 004.** Soporte de un pago manual (por ejemplo, el número de la transferencia). No sale en el comprobante. |
+| `numero_comprobante` | `varchar` | — | **Migración 004.** Número del comprobante, `FD-AAAA-NNNNNN`. Único. Lo genera la función `siguiente_numero_comprobante()`. |
+| `recibo_ruta` | `varchar` | — | Ruta del comprobante en PDF dentro del bucket privado, `AAAA/FD-AAAA-NNNNNN.pdf`. **Migración 004:** antes `recibo_url`; guarda la ruta, no una URL. |
+| `estado_pago` | `varchar` | — | `PENDIENTE`, `APROBADO` o `RECHAZADO`. "Vencido" no es un estado: se calcula (D13). |
+| `nota_interna` | `text` | — | **Migración 004.** Observación interna del tesorero. No sale en el comprobante. |
+| `registrado_por` | `UUID` | FK | **Migración 004.** Usuario que registró un pago manual. Referencia `Usuario.id_usuario`. Nulo en los pagos en línea. |
+| `creado_en` | `datetime` | — | **Migración 004.** Fecha y hora en que se creó el cobro. |
+
+La vista `pago_con_estado` agrega la columna calculada `vencido`: verdadera si el pago está `PENDIENTE` y su `fecha_vencimiento` ya pasó (hora de Colombia).
 
 ### 2.7 `Torneo`
 
@@ -127,7 +155,7 @@ Información de los torneos en los que puede participar el club.
 | `lugar` | `varchar` | — | Lugar donde se realiza el torneo. |
 | `fecha_inicio` | `date` | — | Fecha de inicio. |
 | `fecha_fin` | `date` | — | Fecha de finalización. |
-| `costo` | `decimal` | — | Costo de inscripción o participación. |
+| `costo` | `decimal` | — | Costo de inscripción o participación, en pesos enteros. |
 
 ### 2.8 `NotificacionPago`
 
@@ -163,11 +191,13 @@ Registro de asistencia de un deportista tomado por un entrenador.
 | :--- | :--- | :--- | :--- |
 | `id_asistencia` | `UUID` | PK | Identificador único del registro de asistencia. |
 | `id_deportista` | `UUID` | FK | Deportista registrado. Referencia `Deportista.id_deportista`. |
-| `id_entrenador` | `UUID` | FK | Entrenador que registra la asistencia. Referencia `Entrenador.id_entrenador`. |
+| `id_entrenador` | `UUID` | FK | Entrenador que registra la asistencia (el responsable que pide RF005). Referencia `Entrenador.id_entrenador`. |
 | `id_entrenamiento` | `UUID` | FK | **Nuevo (Sprint 2).** Entrenamiento al que corresponde la asistencia. Referencia `Entrenamiento.id_entrenamiento`. Ver decisión D5. |
-| `fecha` | `date` | — | Fecha de la asistencia. |
-| `estado` | `varchar(20)` | — | Estado de la asistencia: `PRESENTE`, `AUSENTE` o `JUSTIFICADO`. |
+| `estado` | `varchar(20)` | — | **Migración 002.** `PRESENTE`, `AUSENTE` o `JUSTIFICADO`. Reemplaza `presente` (D11). |
+| `registrado_en` | `datetime` | — | **Migración 004.** Fecha y hora en que se tomó la asistencia. |
 | `observaciones` | `text` | — | Comentarios adicionales sobre la asistencia. |
+
+**Migración 002:** se quita `presente` (pasa a `estado`). **Migración 004:** se quita `fecha`, que se toma de `Entrenamiento.fecha` como preveía la decisión D5.
 
 ### 2.11 `InscripcionTorneo`
 
@@ -180,7 +210,7 @@ Tabla intermedia que registra la participación de deportistas en torneos.
 | `id_deportista` | `UUID` | FK | Deportista inscrito. Referencia `Deportista.id_deportista`. |
 | `resultado` | `varchar` | — | Resultado o clasificación obtenida. |
 
-### 2.11 `Rol`
+### 2.12 `Rol`
 
 Catálogo de roles disponibles en el sistema.
 
@@ -189,7 +219,7 @@ Catálogo de roles disponibles en el sistema.
 | `id_rol` | `UUID` | PK | Identificador único del rol. |
 | `nombre` | `varchar` | — | Nombre del rol. Único; valores: `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR` y `ACUDIENTE`. |
 
-### 2.12 `ReporteFinanciero`
+### 2.13 `ReporteFinanciero`
 
 Resumen mensual de los ingresos del club.
 
@@ -197,13 +227,13 @@ Resumen mensual de los ingresos del club.
 | :--- | :--- | :--- | :--- |
 | `id_reporte` | `UUID` | PK | Identificador único del reporte. |
 | `mes` | `int` | — | Mes del periodo reportado. |
-| `año` | `int` | — | Año del periodo reportado. |
+| `anio` | `int` | — | Año del periodo reportado (sin ñ, como en la tabla). |
 | `ingresos_mensualidades` | `decimal` | — | Total de ingresos por mensualidades. |
 | `ingresos_inscripciones` | `decimal` | — | Total de ingresos por inscripciones. |
-| `ingresos_ventas` | `decimal` | — | Total de ingresos por ventas. |
+| `ingresos_ventas` | `decimal` | — | Total de ingresos por ventas de uniformes (tabla `Venta`, D14). |
 | `fecha_generacion` | `datetime` | — | Fecha y hora de generación del reporte. |
 
-### 2.13 `UsuarioRol`
+### 2.14 `UsuarioRol`
 
 Tabla intermedia para asociar usuarios con roles.
 
@@ -213,7 +243,7 @@ Tabla intermedia para asociar usuarios con roles.
 | `id_usuario` | `UUID` | FK | Usuario asociado. Referencia `Usuario.id_usuario`. |
 | `id_rol` | `UUID` | FK | Rol asignado. Referencia `Rol.id_rol`. |
 
-### 2.14 `Categoria`
+### 2.15 `Categoria`
 
 **Nuevo (Sprint 2).** Catálogo de categorías por edad del club (Sub-8, Sub-10, Sub-12, Sub-14 y Sub-16 en las pantallas actuales).
 
@@ -223,9 +253,11 @@ Tabla intermedia para asociar usuarios con roles.
 | `nombre` | `varchar` | — | Nombre de la categoría: `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14` o `Sub-16`. Único. |
 | `edad_minima` | `int` | — | Edad mínima cumplida: 0, 8, 10, 12 o 14, respectivamente. |
 | `edad_maxima` | `int` | — | Edad máxima cumplida: 7, 9, 11, 13 o 15, respectivamente. |
-| `id_entrenador` | `UUID` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. |
+| `id_entrenador` | `UUID` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. **Migración 004:** nullable; una categoría puede no tener entrenador asignado todavía (D7). |
 
-### 2.15 `Entrenamiento`
+**Migración 004:** las cinco categorías se crean en la migración, sin entrenador.
+
+### 2.16 `Entrenamiento`
 
 **Nuevo (Sprint 2).** Sesión de entrenamiento programada para una categoría (HU-026).
 
@@ -235,8 +267,103 @@ Tabla intermedia para asociar usuarios con roles.
 | `id_categoria` | `UUID` | FK | Categoría que entrena. Referencia `Categoria.id_categoria`. |
 | `id_entrenador` | `UUID` | FK | Entrenador a cargo de la sesión. Referencia `Entrenador.id_entrenador`. Puede ser distinto del que dirige la categoría (por ejemplo, un reemplazo). |
 | `fecha` | `date` | — | Fecha del entrenamiento. |
-| `hora_inicio` | `time` | — | Hora de inicio. Las pantallas actuales solo manejan hora de inicio. |
+| `hora_inicio` | `time` | — | Hora de inicio. |
+| `hora_fin` | `time` | — | **Migración 004.** Hora de fin, posterior a `hora_inicio`. Necesaria para detectar cruces de horario (CU-05). Los entrenamientos que ya existían quedan de 90 minutos. |
 | `lugar` | `varchar` | — | Cancha o lugar del entrenamiento, por ejemplo `Cancha 1`. Ver decisión D2. |
+| `estado` | `varchar` | — | **Migración 004.** `PROGRAMADO` o `CANCELADO`. Cancelar no borra el entrenamiento, así sus avisos y asistencias conservan la referencia. Por defecto `PROGRAMADO`. |
+
+### 2.17 `Documento`
+
+**Migración 004.** Documentos requeridos del deportista, con su revisión y vencimiento (RF009, CU-04, D10).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_documento` | `UUID` | PK | Identificador único del documento. |
+| `id_deportista` | `UUID` | FK | Deportista dueño del documento. Referencia `Deportista.id_deportista`. |
+| `tipo` | `varchar` | — | `DOCUMENTO_IDENTIDAD`, `FICHA_MEDICA`, `PERMISO`, `CONTRATO` u `OTRO`. |
+| `ruta` | `varchar` | — | Ruta del archivo en el bucket privado de documentos. Única. |
+| `nombre_original` | `varchar` | — | Nombre del archivo como lo cargó el usuario, para mostrarlo. |
+| `tipo_contenido` | `varchar` | — | `application/pdf`, `image/jpeg` o `image/png`. |
+| `tamano_bytes` | `int` | — | Tamaño del archivo, de 1 byte a 5 MB (5.242.880 bytes). |
+| `estado` | `varchar` | — | `PENDIENTE`, `APROBADO` o `RECHAZADO`. Por defecto `PENDIENTE`. |
+| `comentario` | `text` | — | Observación del administrador. Obligatoria si el documento está `RECHAZADO`. |
+| `fecha_vencimiento` | `date` | — | Fecha en que el documento deja de ser válido (por ejemplo, la ficha médica). Opcional; se usa para las alertas de vencimiento. |
+| `cargado_por` | `UUID` | FK | Usuario que cargó el archivo. Referencia `Usuario.id_usuario`. |
+| `cargado_en` | `datetime` | — | Fecha y hora de la carga. |
+| `revisado_por` | `UUID` | FK | Administrador que aprobó o rechazó. Referencia `Usuario.id_usuario`. |
+| `revisado_en` | `datetime` | — | Fecha y hora de la revisión. Nulo mientras está `PENDIENTE` y obligatorio después. |
+
+### 2.18 `Venta`
+
+**Migración 004.** Ventas de uniformes, para los ingresos por ventas del reporte financiero (RF003, D14).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_venta` | `UUID` | PK | Identificador único de la venta. |
+| `fecha` | `date` | — | Fecha de la venta. Por defecto, hoy. |
+| `concepto` | `varchar` | — | Qué se vendió, por ejemplo `Uniforme de juego talla 12`. |
+| `cantidad` | `int` | — | Unidades vendidas; mayor que 0. |
+| `valor_unitario` | `decimal` | — | Precio de una unidad, en pesos enteros. |
+| `total` | `decimal` | Calculado | `cantidad × valor_unitario`, calculado por la base de datos. |
+| `metodo` | `varchar` | — | Medio de pago, con los mismos valores de `Pago.metodo`. |
+| `id_deportista` | `UUID` | FK | Deportista que compró, si aplica. Referencia `Deportista.id_deportista`. |
+| `registrado_por` | `UUID` | FK | Usuario que registró la venta. Referencia `Usuario.id_usuario`. |
+| `creado_en` | `datetime` | — | Fecha y hora del registro. |
+
+### 2.19 `CodigoVerificacion`
+
+**Migración 003.** Códigos de 6 dígitos del segundo paso del inicio de sesión (CU-00, D16).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_codigo` | `UUID` | PK | Identificador único del código. |
+| `id_usuario` | `UUID` | FK | Usuario al que se envió. Referencia `Usuario.id_usuario`. |
+| `codigo_hash` | `varchar` | — | Hash del código. El código en claro nunca se guarda. |
+| `expira_en` | `datetime` | — | Vencimiento: 10 minutos después de enviado. |
+| `intentos` | `int` | — | Intentos fallidos con este código, de 0 a 5. |
+| `bloqueado_hasta` | `datetime` | — | Hasta cuándo está bloqueada la verificación tras 5 intentos fallidos (15 minutos). Nulo si no está bloqueada. |
+| `ultimo_envio` | `datetime` | — | Último envío del código; limita los reenvíos a uno por minuto. |
+| `usado` | `boolean` | — | `true` cuando el código ya se validó; un código usado no vuelve a servir. |
+| `creado_en` | `datetime` | — | Fecha y hora de creación. |
+
+### 2.20 `EquipoConfianza`
+
+**Migración 004.** Navegadores marcados con "Recordar este equipo" (D16).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_equipo` | `UUID` | PK | Identificador único del equipo. |
+| `id_usuario` | `UUID` | FK | Dueño del equipo. Referencia `Usuario.id_usuario`. |
+| `token_hash` | `varchar` | — | Hash del identificador aleatorio que va en la cookie HttpOnly. Único. |
+| `descripcion` | `varchar` | — | Navegador y sistema operativo, para que el usuario reconozca el equipo. |
+| `creado_en` | `datetime` | — | Fecha y hora de registro. |
+| `expira_en` | `datetime` | — | Vencimiento: 30 días después de creado. |
+| `ultimo_uso_en` | `datetime` | — | Último inicio de sesión desde este equipo. |
+| `revocado_en` | `datetime` | — | Momento en que se revocó (cierre de sesión en todos los equipos o cambio de contraseña). |
+
+### 2.21 `SesionVerificada`
+
+**Migración 004.** Sesiones de Supabase Auth que ya completaron el segundo paso (D16).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_sesion` | `UUID` | PK | El `session_id` del JWT de Supabase. |
+| `id_usuario` | `UUID` | FK | Dueño de la sesión. Referencia `Usuario.id_usuario`. |
+| `verificada_en` | `datetime` | — | Momento en que se completó el segundo paso. |
+| `expira_en` | `datetime` | — | Hasta cuándo vale la verificación. |
+
+### 2.22 `Auditoria`
+
+**Migración 004.** Registro de eventos de seguridad y de notificaciones fallidas (D16).
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_auditoria` | `bigint` | PK | Consecutivo del evento. |
+| `fecha` | `datetime` | — | Fecha y hora del evento. |
+| `id_usuario` | `UUID` | FK | Usuario relacionado, si lo hay. Referencia `Usuario.id_usuario`. |
+| `evento` | `varchar` | — | Nombre del evento, por ejemplo `INICIO_SESION`, `CODIGO_FALLIDO`, `BLOQUEO_2FA`, `EQUIPO_REGISTRADO` o `NOTIFICACION_NO_ENVIADA`. |
+| `detalle` | `jsonb` | — | Datos adicionales del evento. Nunca códigos, tokens, contraseñas ni datos de menores. |
+| `ip` | `inet` | — | Dirección IP de la petición, si aplica. |
 
 ## 3. Relaciones
 
@@ -244,8 +371,14 @@ Las siguientes relaciones se derivan de las claves foráneas incluidas en el mod
 
 | Tabla origen | Cardinalidad | Tabla destino | Descripción |
 | :--- | :--- | :--- | :--- |
-| `AcudienteDeportista` | N:1 | `Acudiente` | Cada vínculo pertenece a un acudiente; un acudiente puede tener varios vínculos con deportistas. |
-| `AcudienteDeportista` | N:1 | `Deportista` | Cada vínculo pertenece a un deportista; un deportista puede tener varios vínculos con acudientes. |
+| `AcudienteDeportista` | N:1 | `Acudiente` | **Migración 002.** Cada vínculo pertenece a un acudiente; un acudiente puede tener varios deportistas. |
+| `AcudienteDeportista` | N:1 | `Deportista` | **Migración 002.** Cada vínculo pertenece a un deportista; un deportista puede tener varios acudientes. |
+| `Documento` | N:1 | `Deportista` | **Migración 004.** Cada documento es de un deportista; un deportista tiene varios documentos. |
+| `Venta` | N:1 | `Deportista` | **Migración 004.** Una venta puede asociarse al deportista que compró (opcional). |
+| `CodigoVerificacion` | N:1 | `Usuario` | **Migración 003.** Un usuario recibe muchos códigos a lo largo del tiempo. |
+| `EquipoConfianza` | N:1 | `Usuario` | **Migración 004.** Un usuario puede tener varios equipos de confianza. |
+| `SesionVerificada` | N:1 | `Usuario` | **Migración 004.** Un usuario puede tener varias sesiones verificadas. |
+| `Auditoria` | N:1 | `Usuario` | **Migración 004.** Un usuario puede tener muchos eventos de auditoría. |
 | `Pago` | N:1 | `Deportista` | Cada pago pertenece a un deportista; un deportista puede tener varios pagos. |
 | `NotificacionPago` | N:1 | `Acudiente` | Cada notificación pertenece a un acudiente; un acudiente puede recibir varias notificaciones. |
 | `Notificacion` | N:1 | `Usuario` | Cada notificación general pertenece a un usuario destinatario; un usuario puede recibir varias notificaciones. |
@@ -257,12 +390,12 @@ Las siguientes relaciones se derivan de las claves foráneas incluidas en el mod
 | `UsuarioRol` | N:1 | `Usuario` | Cada asociación asigna un rol a un usuario; un usuario puede tener varios roles. |
 | `UsuarioRol` | N:1 | `Rol` | Cada asociación referencia un rol; un rol puede asignarse a varios usuarios. |
 | `Deportista` | N:1 | `Categoria` | **Nuevo.** Cada deportista pertenece a una categoría; una categoría agrupa a varios deportistas. |
-| `Categoria` | N:1 | `Entrenador` | **Nuevo.** Cada categoría la dirige un entrenador; un entrenador puede dirigir varias categorías (decisión D1). |
+| `Categoria` | N:1 | `Entrenador` | **Nuevo.** Cada categoría la dirige como máximo un entrenador; un entrenador puede dirigir varias categorías (decisiones D1 y D7). |
 | `Entrenamiento` | N:1 | `Categoria` | **Nuevo.** Cada entrenamiento es de una categoría; una categoría tiene muchos entrenamientos. |
 | `Entrenamiento` | N:1 | `Entrenador` | **Nuevo.** Cada entrenamiento tiene un entrenador a cargo; un entrenador puede tener muchos entrenamientos. |
 | `Asistencia` | N:1 | `Entrenamiento` | **Nuevo.** Cada registro de asistencia pertenece a un entrenamiento; un entrenamiento tiene muchas asistencias (decisión D5). |
 
-Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es **N:M**. Por medio de `UsuarioRol`, la relación entre `Usuario` y `Rol` también es **N:M**.
+Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es **N:M**. Por medio de `UsuarioRol`, la relación entre `Usuario` y `Rol` también es **N:M**. **Migración 002:** por medio de `AcudienteDeportista`, la relación entre `Deportista` y `Acudiente` también es **N:M**.
 
 ## 4. Observaciones para la implementación
 
@@ -271,13 +404,15 @@ Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es 
 3. Para evitar duplicados, se debe aplicar `UNIQUE (id_torneo, id_deportista)` en `InscripcionTorneo`.
 4. Para evitar duplicados, se debe aplicar `UNIQUE (id_deportista, id_entrenamiento)` en `Asistencia`.
 5. `documento_identidad` se almacena como `varchar`, no como entero, para conservar ceros iniciales y soportar documentos alfanuméricos.
-6. Los valores permitidos son `tipo_documento`: `CC`, `TI`, `CE`, `PASAPORTE`; `estado_pago`: `PENDIENTE`, `APROBADO`, `RECHAZADO`; `resultado`: `PENDIENTE`, `CAMPEON`, `SUBCAMPEON`, `TERCER_LUGAR`, `OTRO`. Deben validarse con `CHECK` o catálogos equivalentes.
+6. Los valores permitidos son `tipo_documento`: `CC`, `TI`, `CE`, `PASAPORTE`; `estado_pago`: `PENDIENTE`, `APROBADO`, `RECHAZADO`; `resultado`: `PENDIENTE`, `CAMPEON`, `SUBCAMPEON`, `TERCER_LUGAR`, `OTRO`. Deben validarse con `CHECK` o catálogos equivalentes. **Migración 004:** también `estado_inscripcion`, `Documento.tipo`, `Documento.estado`, `Asistencia.estado`, `Pago.tipo_pago`, `Pago.metodo`, `Venta.metodo` y `Entrenamiento.estado`, con los valores de cada tabla.
 7. Las contraseñas no se almacenan en el esquema de la aplicación: Supabase Auth las gestiona en `auth.users`. `Usuario.id_usuario` es una FK/PK hacia `auth.users.id`.
-8. **Nuevo (Sprint 2).** Para que no se programen dos entrenamientos en el mismo lugar a la misma hora, se debe aplicar `UNIQUE (lugar, fecha, hora_inicio)` en `Entrenamiento`. La pantalla de programación ya detecta este conflicto y ofrece alternativas; la base de datos debe hacerlo cumplir también.
+8. **Nuevo (Sprint 2), reemplazada en la migración 004.** Antes era `UNIQUE (lugar, fecha, hora_inicio)`, que solo impedía dos entrenamientos que empezaran exactamente a la misma hora. Ahora tres restricciones de exclusión impiden que se **crucen** los entrenamientos `PROGRAMADO` de una misma cancha, de una misma categoría o de un mismo entrenador (D15). Los cancelados no cuentan. La pantalla de programación detecta el conflicto y ofrece alternativas; la base de datos lo hace cumplir también.
 9. **Nuevo (Sprint 2).** Todas las PK y FK usan `UUID`, compatible con Supabase Auth y con el diagrama de clases del dominio.
 10. **Nuevo (Sprint 2).** `Torneo.id_categoria` referencia `Categoria.id_categoria`, por lo que torneos y deportistas usan el mismo catálogo.
 11. **Nuevo (Sprint 2).** `Entrenador.id_usuario` y `Acudiente.id_usuario` permiten asociar cada perfil con su cuenta de acceso; ambos son nullable durante el registro.
 12. `Entrenador.id_usuario` y `Acudiente.id_usuario` deben ser `UNIQUE` para que una cuenta no se vincule a dos perfiles del mismo tipo.
+13. **Migración 004.** Un deportista tiene como máximo una mensualidad por mes (índice único sobre `id_deportista` y `periodo`; los cobros `RECHAZADO` no cuentan).
+14. **Migración 004.** Todas las tablas tienen RLS activo y sin políticas: solo el backend (rol `postgres`) lee y escribe. El frontend nunca consulta las tablas directamente.
 
 ## 5. Decisiones confirmadas de la ampliación del Sprint 2
 
@@ -304,3 +439,31 @@ La capa `services/entrenamientosService.js` usa esta forma de datos, que debe ca
 | `lugar` | `Entrenamiento.lugar` | — |
 | `idEntrenador` | `Entrenamiento.id_entrenador` | — |
 | Jugadores a notificar (por ejemplo, 17) | Conteo de `Deportista` con el mismo `id_categoria` | Hoy es un dato de ejemplo en el frontend. |
+
+## 6. Decisiones de la revisión del modelo (migraciones 002, 003 y 004)
+
+Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres estados) y la tabla de códigos de D16 los aplicaron las migraciones 002 y 003 del equipo; el resto está en `supabase/migrations/004_ajustes_modelo.sql`.
+
+| Id | Problema | Decisión |
+| :--- | :--- | :--- |
+| D6 | `Acudiente.id_deportista` era obligatorio y el documento y el correo del acudiente son únicos: una madre con dos hijos en el club no se podía registrar. | **Migración 002.** Tabla intermedia `AcudienteDeportista` (N:M). Se quita `Acudiente.id_deportista`; las asociaciones existentes se copian a la tabla nueva. |
+| D7 | `Categoria.id_entrenador` era obligatorio y la migración no creaba categorías: sin un entrenador no existía ninguna categoría, y sin categorías no se podía inscribir a nadie. | `id_entrenador` pasa a ser opcional y la migración crea Sub-8 a Sub-16 sin entrenador. Se mantiene D1: como máximo un entrenador por categoría. |
+| D8 | No había forma de desactivar un entrenador (CU-10, camino alternativo 2). | `Entrenador.activo`. Desactivar no borra: conserva el historial y lo retira de las asignaciones futuras. |
+| D9 | El PPI dice que la inscripción queda pendiente hasta que el administrador aprueba la documentación y asigna la categoría (BPMN 3.1, CU-01 y CU-04), pero el deportista no tenía estado y la categoría era obligatoria desde el inicio. | `Deportista.estado_inscripcion` (`PENDIENTE`, `ACTIVA`, `RETIRADA`). La categoría es opcional mientras está pendiente y obligatoria cuando está activa. Un rechazo de documentos no cambia el estado: el acudiente los corrige y la inscripción sigue pendiente. |
+| D10 | `Deportista.documentos` era un solo texto: no permitía aprobar o rechazar cada documento, dejar comentarios ni alertar vencimientos (RF009). | Tabla `Documento`, un registro por archivo, con estado, comentario obligatorio al rechazar, vencimiento y quién lo cargó y revisó. Acepta PDF, JPG y PNG de hasta 5 MB. Se quita `Deportista.documentos`. |
+| D11 | `Asistencia.presente` era booleano y el PPI pide presente, ausente o justificado (N005, RF005, CU-03). | **Migración 002:** `Asistencia.estado` con los tres valores. **Migración 004:** `registrado_en` con la hora y se quita `Asistencia.fecha`, que sale de `Entrenamiento.fecha` (D5). |
+| D12 | El backend y el frontend manejan pesos enteros, y la base de datos aceptaba centavos. | Los montos siguen como `numeric(12,2)`, pero un `CHECK` rechaza los centavos. Se descartó `numeric(12,0)` porque redondea sin avisar. |
+| D13 | `Pago` no tenía periodo, vencimiento, método, referencia de Wompi ni número de comprobante, aunque el comprobante en PDF ya los usa. Un cobro pendiente no podía existir porque `fecha_pago` era obligatoria. | Se agregan `tipo_pago`, `periodo`, `fecha_vencimiento`, `metodo`, `referencia_wompi` (única), `referencia_manual`, `numero_comprobante` (con la función `siguiente_numero_comprobante()`), `nota_interna`, `registrado_por` y `creado_en`. `fecha_pago` es opcional mientras el cobro está pendiente. `recibo_url` se renombra `recibo_ruta`. **Vencido se calcula, no se guarda:** un pago `PENDIENTE` con `fecha_vencimiento` pasada (vista `pago_con_estado`). Así no hace falta una tarea que actualice estados y nunca queda desactualizado. |
+| D14 | El reporte financiero tenía `ingresos_ventas`, pero no existía de dónde sacar las ventas. | El club solo vende uniformes: tabla `Venta` con concepto, cantidad, valor unitario y total calculado. |
+| D15 | `Entrenamiento` solo tenía hora de inicio, así que no se podían detectar cruces de horario (CU-05); y eliminar un entrenamiento dejaba sus avisos sin referencia. | `hora_fin` y `estado` (`PROGRAMADO`, `CANCELADO`). Tres restricciones de exclusión impiden cruces de cancha, de categoría y de entrenador entre entrenamientos programados. Cancelar reemplaza a borrar. |
+| D16 | El PPI define la verificación en dos pasos, los equipos de confianza, la auditoría y las preferencias de accesibilidad (4.1, 4.2, CU-00 y CU-08), pero no había dónde guardarlos. | **Migración 003:** `CodigoVerificacion`. **Migración 004:** `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y en `Usuario` las columnas `alto_contraste`, `tamano_texto` y `paleta_daltonismo`. "Recordar este equipo" usa una cookie HttpOnly, como dice el PPI. |
+
+Además, los correos de `Usuario`, `Entrenador`, `Deportista` y `Acudiente` pasan a ser únicos sin distinguir mayúsculas.
+
+### 6.1 Cómo aplicarla
+
+1. Hacer una copia de seguridad del proyecto en Supabase (**Database → Backups**) o exportar los datos.
+2. Comprobar que ya se aplicaron la 002 y la 003 (por ejemplo, que existan `acudiente_deportista` y `codigo_verificacion`). Si no, aplicarlas primero, en orden.
+3. Abrir **SQL Editor**, pegar todo `004_ajustes_modelo.sql` y ejecutarlo una sola vez.
+4. Si termina con error, no se aplicó **ningún** cambio (va en una transacción). El mensaje dice qué dato hay que corregir antes: montos con centavos, valores en `deportista.documentos`, correos repetidos sin distinguir mayúsculas o entrenamientos que se cruzan.
+5. Comprobar: `select nombre from categoria order by edad_minima;` debe devolver las cinco categorías.
