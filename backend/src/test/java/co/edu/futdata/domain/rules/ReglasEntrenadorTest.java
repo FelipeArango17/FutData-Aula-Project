@@ -78,11 +78,20 @@ class ReglasEntrenadorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"CC", "TI", "CE", "PASAPORTE", "pasaporte"})
-    void aceptaLosCodigosDeLaBase(String tipo) {
+    @ValueSource(strings = {"CC", "CE", "PASAPORTE", "pasaporte", " cc "})
+    void aceptaCedulasYPasaporte(String tipo) {
         Entrenador e = valido();
         e.setTipoDocumento(tipo);
         assertThat(errores(e)).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"TI", "ti", " TI "})
+    void rechazaLaTarjetaDeIdentidadPorqueEsDeMenores(String tipo) {
+        Entrenador e = valido();
+        e.setTipoDocumento(tipo);
+        assertThat(errores(e)).containsExactly(
+                Map.entry("tipoDocumento", "TI no se acepta: la tarjeta de identidad es de menores de edad"));
     }
 
     @ParameterizedTest
@@ -90,12 +99,14 @@ class ReglasEntrenadorTest {
     void rechazaOtrosTiposDeDocumento(String tipo) {
         Entrenador e = valido();
         e.setTipoDocumento(tipo);
-        assertThat(errores(e)).containsExactly(Map.entry("tipoDocumento", "debe ser CC, TI, CE o PASAPORTE"));
+        assertThat(errores(e)).containsExactly(Map.entry("tipoDocumento", "debe ser CC, CE o PASAPORTE"));
     }
 
-    @Test
-    void documentoDe6A12DigitosSinPuntosNiEspacios() {
+    @ParameterizedTest
+    @ValueSource(strings = {"CC", "CE"})
+    void cedulasDe6A12DigitosSinLetrasPuntosNiEspacios(String tipo) {
         Entrenador e = valido();
+        e.setTipoDocumento(tipo);
         for (String bueno : List.of("123456", "123456789012", "0012345")) {
             e.setDocumento(bueno);
             assertThat(errores(e)).as(bueno).isEmpty();
@@ -108,6 +119,37 @@ class ReglasEntrenadorTest {
         assertThat(errores(e)).containsEntry("documento", "solo puede tener números, sin puntos ni espacios");
         e.setDocumento("AB123456");
         assertThat(errores(e)).containsEntry("documento", "solo puede tener números, sin puntos ni espacios");
+    }
+
+    @Test
+    void pasaporteDe6A12LetrasYNumerosEnMayusculas() {
+        Entrenador e = valido();
+        e.setTipoDocumento("PASAPORTE");
+        for (String bueno : List.of("AB123456", "123456", "ABCDEF", "X1Y2Z3W4V5U6")) {
+            e.setDocumento(bueno);
+            assertThat(errores(e)).as(bueno).isEmpty();
+        }
+
+        e.setDocumento(" ab123456 ");
+        assertThat(ReglasEntrenador.limpiar(e).getDocumento()).isEqualTo("AB123456");
+        assertThat(errores(e)).isEmpty();
+
+        e.setDocumento("AB123");
+        assertThat(errores(e)).containsEntry("documento", "debe tener entre 6 y 12 caracteres");
+        e.setDocumento("AB12345678901");
+        assertThat(errores(e)).containsEntry("documento", "debe tener entre 6 y 12 caracteres");
+        for (String malo : List.of("AB 123456", "AB-123456", "AB.123456", "ÑB123456", "AÉ123456")) {
+            e.setDocumento(malo);
+            assertThat(errores(e)).as(malo)
+                    .containsEntry("documento", "solo puede tener letras y números, sin espacios ni otros signos");
+        }
+    }
+
+    @Test
+    void enCedulasLasLetrasNoSePasanAMayusculas() {
+        Entrenador e = valido();
+        e.setDocumento("ab123456");
+        assertThat(ReglasEntrenador.limpiar(e).getDocumento()).isEqualTo("ab123456");
     }
 
     @ParameterizedTest

@@ -195,6 +195,26 @@ class EntrenadorServiceImplTest {
         }
 
         @Test
+        void unPasaporteSeGuardaEnMayusculasYEnMinusculasEsElMismoDocumento() {
+            assertThat(servicio.crear(conDocumento("PASAPORTE", " ab123456 ")).documento()).isEqualTo("AB123456");
+
+            EntrenadorRequestDTO otro = conDocumento("pasaporte", "Ab123456");
+            EntrenadorRequestDTO conOtroCorreo = new EntrenadorRequestDTO(otro.nombre(), otro.apellido(),
+                    otro.tipoDocumento(), otro.documento(), otro.fechaNacimiento(), otro.telefono(), "otro@pradofc.co",
+                    otro.especialidad(), null, null);
+            assertThat(catchThrowableOfType(ConflictoException.class, () -> servicio.crear(conOtroCorreo)).getCampos())
+                    .containsExactly("documento");
+        }
+
+        @Test
+        void unaTarjetaDeIdentidadNoSePuedeRegistrar() {
+            assertThatThrownBy(() -> servicio.crear(conDocumento("TI", "1098765432")))
+                    .isInstanceOf(DatosInvalidosException.class)
+                    .hasMessage("tipoDocumento: TI no se acepta: la tarjeta de identidad es de menores de edad");
+            assertThat(entrenadores.filas).hasSize(2);
+        }
+
+        @Test
         void elCorreoDeOtroSinDistinguirMayusculasEs409PorCorreo() {
             ConflictoException e = catchThrowableOfType(ConflictoException.class,
                     () -> servicio.crear(conCorreo("  CARLOS.DIAZ@PRADOFC.CO ")));
