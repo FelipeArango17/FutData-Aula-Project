@@ -4,7 +4,10 @@ import co.edu.futdata.domain.entities.CodigoVerificacion;
 import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,7 +60,9 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
     @Override
     public void bloquear(UUID id, Instant hasta) {
         jdbc.update("update codigo_verificacion set bloqueado_hasta = :hasta where id_codigo = :id",
-                Map.of("id", id, "hasta", hasta));
+                new MapSqlParameterSource()
+                        .addValue("id", id)
+                .addValue("hasta", fechaJDBC(hasta), Types.TIMESTAMP_WITH_TIMEZONE));
     }
 
     @Override
@@ -70,8 +75,12 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
         return new MapSqlParameterSource()
                 .addValue("usuario", codigo.getUsuarioId())
                 .addValue("hash", codigo.getCodigoHash())
-                .addValue("expira", codigo.getExpiraEn())
-                .addValue("envio", codigo.getUltimoEnvio());
+                .addValue("expira", fechaJDBC(codigo.getExpiraEn()), Types.TIMESTAMP_WITH_TIMEZONE)
+                .addValue("envio", fechaJDBC(codigo.getUltimoEnvio()), Types.TIMESTAMP_WITH_TIMEZONE);
+    }
+
+    private static OffsetDateTime fechaJDBC(Instant fecha) {
+        return OffsetDateTime.ofInstant(fecha, ZoneOffset.UTC);
     }
 
     private static CodigoVerificacion mapear(ResultSet fila, int numero) throws SQLException {
@@ -79,11 +88,16 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
         c.setId(fila.getObject("id_codigo", UUID.class));
         c.setUsuarioId(fila.getObject("id_usuario", UUID.class));
         c.setCodigoHash(fila.getString("codigo_hash"));
-        c.setExpiraEn(fila.getObject("expira_en", Instant.class));
+        c.setExpiraEn(fechaInstant(fila, "expira_en"));
         c.setIntentos(fila.getInt("intentos"));
-        c.setBloqueadoHasta(fila.getObject("bloqueado_hasta", Instant.class));
-        c.setUltimoEnvio(fila.getObject("ultimo_envio", Instant.class));
+        c.setBloqueadoHasta(fechaInstant(fila, "bloqueado_hasta"));
+        c.setUltimoEnvio(fechaInstant(fila, "ultimo_envio"));
         c.setUsado(fila.getBoolean("usado"));
         return c;
+    }
+
+    private static Instant fechaInstant(ResultSet fila, String columna) throws SQLException {
+        OffsetDateTime fecha = fila.getObject(columna, OffsetDateTime.class);
+        return fecha == null ? null : fecha.toInstant();
     }
 }
