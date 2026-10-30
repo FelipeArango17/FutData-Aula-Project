@@ -12,6 +12,38 @@
   }
 }
 
+/* Texto secundario sobre fondos del menú (títulos de grupo, rol). Se atenúa con opacity, pero en alto contraste
+   debe verse al 100 %: esa regla va aquí y no en cada componente. */
+@layer components {
+  .texto-atenuado {
+    opacity: 0.7;
+  }
+}
+
+/* Tema oscuro: el borde de separación del anillo de foco usa el fondo de la página, no el blanco por defecto */
+[data-theme="oscuro"] *,
+[data-theme="oscuro"] ::before,
+[data-theme="oscuro"] ::after {
+  --tw-ring-offset-color: var(--color-bg-app);
+}
+
+/* Alto contraste real (HU-045): más que cambiar variables. !important porque las clases focus-visible:outline-none
+   de los componentes tienen la misma especificidad. */
+[data-theme="alto-contraste"] .texto-atenuado {
+  opacity: 1;
+}
+[data-theme="alto-contraste"] :focus-visible {
+  outline: 3px solid var(--color-focus-ring) !important;
+  outline-offset: 2px !important;
+}
+[data-theme="alto-contraste"] main a {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+[data-theme="alto-contraste"] main a:hover {
+  text-decoration-thickness: 2px;
+}
+
 /* Zonas seguras (notch y barra de gestos): se suman al padding, no lo reemplazan */
 @layer utilities {
   /* Alto de pantalla: vh de respaldo y dvh después (Safari < 15.4 no entiende dvh). Se declaran juntos para que dvh gane. */

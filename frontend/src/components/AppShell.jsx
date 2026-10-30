@@ -5,6 +5,7 @@ import TopBar from './TopBar.jsx'
 import Drawer from './Drawer.jsx'
 import BottomNav from './BottomNav.jsx'
 import RoleSwitcher from './RoleSwitcher.jsx'
+import PanelAccesibilidad from './PanelAccesibilidad.jsx'
 import { useRole } from '../context/RoleContext.js'
 
 // Estructura única para los 4 roles; solo cambia el menú.
@@ -13,6 +14,7 @@ export default function AppShell() {
   const { role } = useRole()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const menuButtonRef = useRef(null)
+  const accesibilidadSidebarRef = useRef(null)
   const location = useLocation()
 
   // Al llegar desde la verificación 2FA el foco va al título de la pantalla (el botón que se pulsó ya no existe)
@@ -41,7 +43,7 @@ export default function AppShell() {
     <>
       {/* inert: con el Drawer abierto, el resto de la página no recibe foco ni clics */}
       <div inert={drawerOpen} className="flex min-h-app flex-col md:flex-row">
-        <Sidebar role={role} />
+        <Sidebar role={role} accesibilidadRef={accesibilidadSidebarRef} />
         <div className="flex min-w-0 flex-1 flex-col">
           <TopBar
             onOpenMenu={() => setDrawerOpen(true)}
@@ -56,6 +58,8 @@ export default function AppShell() {
         </div>
       </div>
       <Drawer open={drawerOpen} onClose={closeDrawer} role={role} />
+      {/* Si el botón que abrió el panel ya no existe al cerrarlo, el foco va a uno de estos dos */}
+      <PanelAccesibilidad menuButtonRef={menuButtonRef} accesibilidadSidebarRef={accesibilidadSidebarRef} />
     </>
   )
 }

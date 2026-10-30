@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { menus } from '../config/menus.js'
 import { useAuth } from '../context/AuthContext.js'
+import { useAccesibilidad } from '../context/AccesibilidadContext.js'
 
 const itemClasses =
   'flex min-h-11 w-full items-center gap-3 rounded-md px-3 py-2 text-left text-body-medium text-on-dark ' +
@@ -8,8 +9,9 @@ const itemClasses =
 
 // Lista de grupos del rol + Accesibilidad y Cerrar sesión al final.
 // La usan Sidebar (escritorio) y Drawer (móvil).
-export default function NavMenu({ role, onNavigate }) {
+export default function NavMenu({ role, onNavigate, accesibilidadRef }) {
   const { cerrarSesion } = useAuth()
+  const { abrirPanel } = useAccesibilidad()
   const navigate = useNavigate()
 
   // replace: el botón Atrás no regresa a la pantalla desde la que se cerró la sesión
@@ -19,12 +21,18 @@ export default function NavMenu({ role, onNavigate }) {
     navigate('/login', { replace: true, state: { aviso: 'Sesión cerrada' } })
   }
 
+  // En el cajón móvil se cierra primero el cajón; el panel recuerda quién lo abrió (ver AccesibilidadProvider)
+  function abrirAccesibilidad() {
+    abrirPanel()
+    onNavigate?.()
+  }
+
   return (
     <nav aria-label="Secciones" className="flex flex-1 flex-col gap-4 p-4">
       {menus[role].map((group, index) => (
         <div key={group.title ?? index}>
           {group.title && (
-            <h2 className="px-3 pb-2 text-label uppercase opacity-70">{group.title}</h2>
+            <h2 className="px-3 pb-2 text-label uppercase texto-atenuado">{group.title}</h2>
           )}
           <ul className="flex flex-col gap-1">
             {group.items.map((item) => (
@@ -66,8 +74,7 @@ export default function NavMenu({ role, onNavigate }) {
             </>
           )}
         </NavLink>
-        {/* Sin acción todavía: se conecta cuando exista el menú de accesibilidad */}
-        <button type="button" className={itemClasses}>
+        <button type="button" ref={accesibilidadRef} onClick={abrirAccesibilidad} aria-haspopup="dialog" className={itemClasses}>
           <span aria-hidden="true" className="min-h-5 w-1 shrink-0" />
           Accesibilidad
         </button>

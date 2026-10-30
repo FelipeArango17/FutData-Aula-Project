@@ -1,11 +1,13 @@
 import Icon from './Icon.jsx'
 import Logo from './Logo.jsx'
+import { useAccesibilidad } from '../context/AccesibilidadContext.js'
 
 const buttonClasses =
   'flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2'
 
 // Barra superior móvil: menú, logo, y a la derecha accesibilidad y notificaciones. Se oculta desde md.
 export default function TopBar({ onOpenMenu, menuButtonRef, drawerOpen }) {
+  const { abrirPanel } = useAccesibilidad()
   return (
     <header className="sticky top-0 z-20 bg-sidebar pt-safe text-on-dark md:hidden">
       {/* flex-wrap: con letra muy grande los íconos bajan a otra línea en vez de desbordar */}
@@ -22,9 +24,8 @@ export default function TopBar({ onOpenMenu, menuButtonRef, drawerOpen }) {
           <Icon name="menu" />
         </button>
         <Logo />
-        {/* Sin acción todavía */}
         <div className="ml-auto flex">
-          <button type="button" aria-label="Accesibilidad" className={buttonClasses}>
+          <button type="button" onClick={abrirPanel} aria-label="Accesibilidad" aria-haspopup="dialog" className={buttonClasses}>
             <Icon name="accessibility" />
           </button>
           <button type="button" aria-label="Notificaciones" className={buttonClasses}>
