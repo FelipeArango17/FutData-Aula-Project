@@ -172,6 +172,16 @@ También crea UUID automáticos, claves foráneas, índices, restricciones `CHEC
 
 No se debe ejecutar repetidamente sobre un proyecto que ya tiene las tablas. Para cambios posteriores, crear una migración nueva con numeración siguiente.
 
+### 6.1 Migraciones siguientes
+
+Después de la 001 se ejecutan, una sola vez cada una y en orden, las demás de `supabase/migrations/`:
+
+1. [002_modelo_datos.sql](../supabase/migrations/002_modelo_datos.sql): `acudiente_deportista`, asistencia con tres estados y `usuario.apellido`.
+2. [003_codigo_verificacion_2fa.sql](../supabase/migrations/003_codigo_verificacion_2fa.sql): códigos del 2FA.
+3. [004_ajustes_modelo.sql](../supabase/migrations/004_ajustes_modelo.sql): categorías Sub-8 a Sub-16, `documento`, `venta`, pagos con periodo, vencimiento y comprobante, entrenamientos sin cruces, equipos de confianza, sesiones verificadas y auditoría. El detalle y los pasos (incluida la copia de seguridad previa) están en la sección 6 del [diccionario de datos](info-sprints/sprint-1/diccionario-datos.md).
+
+La 004 va en una transacción: si falla, no queda ningún cambio y el mensaje dice qué dato corregir.
+
 ## 7. Verificar las tablas
 
 En SQL Editor:
