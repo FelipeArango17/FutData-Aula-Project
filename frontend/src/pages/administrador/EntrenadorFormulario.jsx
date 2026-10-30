@@ -7,8 +7,8 @@ import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 
 const VOLVER = '/administrador/usuarios/entrenadores' // la lista de entrenadores (antes era /administrador/usuarios)
 const VACIO = {
-  nombre: '', apellido: '', tipoDocumento: '', documento: '', telefono: '', correo: '',
-  especialidad: '', categorias: [], horarioTrabajo: '',
+  nombre: '', apellido: '', tipoDocumento: '', documento: '', fechaNacimiento: '', telefono: '', correo: '',
+  especialidad: '', categorias: [], horarioTrabajo: '', direccion: '',
 }
 
 // Registrar (.../entrenadores/nuevo) y editar (.../entrenadores/:id/editar) un entrenador (HU-025).
