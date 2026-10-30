@@ -27,10 +27,10 @@ public final class EntrenadorMapper {
     public static EntrenadorResponseDTO toDTO(Entrenador e) {
         return new EntrenadorResponseDTO(e.getId(), e.getNombre(), e.getApellido(), e.getTipoDocumento(),
                 e.getDocumento(), e.getFechaNacimiento(), e.getTelefono(), e.getCorreo(), e.getEspecialidad(),
-                e.getCategorias(), e.getHorarioTrabajo(), e.getDireccion());
+                e.getCategorias(), e.getHorarioTrabajo(), e.getDireccion(), e.isActivo());
     }
 
-    /** @param entrenador quien la dirige; {@code null} solo si no se encontró (no debería pasar: es NOT NULL) */
+    /** @param entrenador quien la dirige; {@code null} si la categoría no tiene entrenador (decisión D7) */
     public static CategoriaResponseDTO toDTO(Categoria c, Entrenador entrenador) {
         CategoriaResponseDTO.EntrenadorResumenDTO resumen = entrenador == null ? null
                 : new CategoriaResponseDTO.EntrenadorResumenDTO(entrenador.getId(), entrenador.getNombre(), entrenador.getApellido());

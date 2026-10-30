@@ -130,7 +130,8 @@ co.edu.futdata
 ├── util
 │   ├── security         JWT, códigos 2FA, auditoría (HU-001, HU-002, HU-005)
 │   └── reports          Reportes y exportaciones: comprobante de pago en PDF (OpenPDF)
-└── config               CORS, OpenAPI, propiedades tipadas (futdata.cors, futdata.n8n, futdata.club)
+└── config               CORS, OpenAPI, reloj en hora de Colombia, propiedades tipadas (futdata.cors, futdata.n8n,
+                         futdata.club, futdata.supabase)
 ```
 
 Cada paquete tiene un `package-info.java` que explica qué va ahí.
@@ -261,7 +262,7 @@ La migración `003_codigo_verificacion_2fa.sql` debe ejecutarse en Supabase ante
 
 ## Entrenadores (HU-025)
 
-API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
+API para registrar, consultar, editar, activar y desactivar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos son las migraciones de [`supabase/migrations/`](../supabase/migrations/), en orden; las tablas `entrenador` y `categoria` las ajusta [`004_ajustes_modelo.sql`](../supabase/migrations/004_ajustes_modelo.sql). Lo que todavía no encaja está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
 
 > [!WARNING]
 > **Todavía sin seguridad por rol (HU-005).** `/api/entrenadores` debe quedar solo para `ADMINISTRADOR`, y `GET /api/categorias` para `ADMINISTRADOR` y `ENTRENADOR`. Está marcado con `// TODO HU-005` en `EntrenadorController` y `CategoriaController`.
@@ -269,8 +270,8 @@ API para registrar, consultar y editar entrenadores, y para asignarles categorí
 | Capa | Clase | Qué hace |
 | :--- | :--- | :--- |
 | `api.controllers` | `EntrenadorController`, `CategoriaController` | HTTP; `201` con `Location` al crear |
-| `api.dto` | `EntrenadorRequestDTO`, `EntrenadorResponseDTO`, `AsignarCategoriasRequestDTO`, `CategoriaResponseDTO`, `EntrenadorMapper` | Lo que viaja por la API |
-| `services.facade` | `IEntrenadorService` | `listar`, `consultar`, `crear`, `editar`, `asignarCategorias`, `listarCategorias` |
+| `api.dto` | `EntrenadorRequestDTO`, `EntrenadorResponseDTO`, `AsignarCategoriasRequestDTO`, `CambiarEstadoEntrenadorRequestDTO`, `CategoriaResponseDTO`, `EntrenadorMapper` | Lo que viaja por la API |
+| `services.facade` | `IEntrenadorService` | `listar`, `consultar`, `crear`, `editar`, `asignarCategorias`, `cambiarEstado`, `listarCategorias` |
 | `services.impl` | `EntrenadorServiceImpl` | Limpia y valida, revisa duplicados y aplica las reglas de categorías; `@Transactional` |
 | `domain.rules` | `ReglasEntrenador` | Limpieza, validaciones, categorías oficiales y tipos de documento |
 | `domain.entities` | `Entrenador`, `Categoria` | Entidades (no salen por la API) |
@@ -285,7 +286,8 @@ API para registrar, consultar y editar entrenadores, y para asignarles categorí
 | `POST /api/entrenadores` | Registra los datos personales (sin categorías) | `201` con `Location: /api/entrenadores/{id}`, `400`, `409` |
 | `PUT /api/entrenadores/{id}` | Edita los datos personales; **no** cambia las categorías | `200`, `400`, `404`, `409` |
 | `PUT /api/entrenadores/{id}/categorias` | Deja al entrenador con exactamente esas categorías | `200`, `400`, `404`, `409` |
-| `GET /api/categorias` | Las categorías en el orden oficial, cada una con su entrenador | `200` |
+| `PATCH /api/entrenadores/{id}/estado` | Activa o desactiva (`{"activo": false}`). Desactivar deja sin entrenador sus categorías | `200`, `400`, `404` |
+| `GET /api/categorias` | Las categorías en el orden oficial, cada una con su entrenador (o `null`) | `200` |
 
 ### Forma de datos
 
@@ -304,7 +306,8 @@ Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion
   "especialidad": "Porteros",
   "categorias": ["Sub-8", "Sub-12"],
   "horarioTrabajo": "Lunes a viernes, 3:30 p. m. a 7:30 p. m.",
-  "direccion": null
+  "direccion": null,
+  "activo": true
 }
 ```
 
@@ -316,8 +319,9 @@ Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion
 | `fechaNacimiento` | `fecha_nacimiento` | `AAAA-MM-DD` |
 | `categorias` | `categoria.id_entrenador` | Nombres, en el orden oficial `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14`, `Sub-16`. Solo en las respuestas |
 | `horarioTrabajo`, `direccion` | `horario_trabajo`, `direccion` | Opcionales. Vacíos se guardan y se devuelven como `null` (el frontend usaba `''`) |
+| `activo` | `activo` | Solo en las respuestas; se cambia con `PATCH /api/entrenadores/{id}/estado`. Un inactivo conserva sus datos, pero no dirige categorías |
 
-Al crear o editar, si el cuerpo trae `id` o `categorias`, **se ignoran**. Las columnas `documentos` e `id_usuario` no se leen ni se cambian (la cuenta de usuario es de CU-06).
+Al crear o editar, si el cuerpo trae `id`, `categorias` o `activo`, **se ignoran**. Las columnas `documentos` e `id_usuario` no se leen ni se cambian (la cuenta de usuario es de CU-06).
 
 **Equivalencia de tipos de documento (para Felipe).** La pantalla muestra el texto y la API recibe y devuelve el código:
 
@@ -359,18 +363,21 @@ Todos los errores salen juntos en un `400`. Los mensajes nunca repiten el valor 
 
 ### Categorías
 
-Según la decisión **D1**, cada categoría tiene **un solo entrenador**, y `categoria.id_entrenador` es `NOT NULL`. `PUT /api/entrenadores/{id}/categorias` recibe la lista **completa**:
+Según las decisiones **D1** y **D7**, cada categoría tiene **como máximo un entrenador**, y la migración 004 crea Sub-8 a Sub-16 sin entrenador. `PUT /api/entrenadores/{id}/categorias` recibe la lista **completa**:
 
 ```json
 { "categorias": ["Sub-8", "Sub-12"], "reasignar": true }
 ```
 
+- **Tomar una categoría sin entrenador** la asigna directamente.
 - **Tomar una categoría de otro entrenador** la pasa de ese entrenador a este. Exige `"reasignar": true`. Sin él, la respuesta es `409` y dice cuáles tienen otro entrenador, por ejemplo `Sub-8 ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.` La pantalla puede pedir la confirmación y reenviar con `"reasignar": true`.
-- **Quitar una categoría** (no enviarla) es imposible, porque quedaría sin entrenador. La respuesta es `409`: `No se puede quitar Sub-12: cada categoría debe tener un entrenador. Para quitársela, asígnala a otro entrenador.` Para cambiar de entrenador una categoría, se asigna al **nuevo** entrenador con `"reasignar": true`.
-- Si en la misma petición quita y toma, primero avisa de lo que quita.
-- Un nombre que no es categoría del club (`Sub-99`, `sub-8`) responde `400`. Un nombre oficial que todavía no está en la tabla responde `400` con `Sub-14 todavía no está creada en la base de datos`.
-- El orden y los repetidos de la lista no importan. Una lista vacía solo es válida para quien no tiene categorías.
+- **Quitar una categoría** (no enviarla) la deja **sin entrenador**. Una lista vacía le quita todas.
+- Un **entrenador inactivo** no puede recibir categorías: `409` con `El entrenador está inactivo. Actívalo antes de asignarle categorías.` y `campos: ["activo"]`.
+- Un nombre que no es categoría del club (`Sub-99`, `sub-8`) responde `400`. Un nombre oficial que no está en la tabla responde `400` con `Sub-14 todavía no está creada en la base de datos` (no debería pasar después de la migración 004).
+- El orden y los repetidos de la lista no importan.
 - Todo pasa en **una transacción**: las categorías se bloquean (`SELECT ... FOR UPDATE`) mientras se decide, así que dos asignaciones al mismo tiempo no se pisan, y un `409` no deja cambios a medias.
+
+**Desactivar** (`PATCH /api/entrenadores/{id}/estado` con `{"activo": false}`) deja sin entrenador todas sus categorías, en la misma transacción, y conserva sus datos. **Reactivarlo** (`{"activo": true}`) no le devuelve las categorías: se asignan de nuevo. Pedir el estado que ya tiene no cambia nada. Sin `activo` en el cuerpo, `400`.
 
 `GET /api/categorias`:
 
@@ -381,7 +388,7 @@ Según la decisión **D1**, cada categoría tiene **un solo entrenador**, y `cat
 ]
 ```
 
-Del entrenador solo van el id, el nombre y el apellido: ni documento, ni teléfono, ni correo.
+Del entrenador solo van el id, el nombre y el apellido: ni documento, ni teléfono, ni correo. Una categoría sin entrenador llega con `"entrenador": null`.
 
 ### Ejemplos
 
@@ -432,26 +439,25 @@ En el frontend, el `409` de duplicado se lleva al formulario como hoy (`error.du
 
 Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
 
-1. **Desmarcar una categoría responde `409`.** Con D1, una categoría no puede quedar sin entrenador. Para cambiarla de entrenador, se marca en el **nuevo** entrenador. Hoy el formulario deja marcar y desmarcar libremente, y varios entrenadores con la misma categoría.
-   - Si se marca una categoría que tiene otro entrenador, el `409` trae el mensaje. La pantalla debe pedir confirmación y reenviar con `"reasignar": true`.
+1. **Una categoría tiene como máximo un entrenador (D1).** Desmarcarla la deja sin entrenador. Hoy el formulario permite varios entrenadores con la misma categoría.
+   - Si se marca una categoría que tiene otro entrenador, el `409` trae el mensaje. La pantalla debe pedir confirmación y reenviar con `"reasignar": true`. Las que no tienen entrenador se asignan sin confirmar.
    - Registrar con categorías son **dos llamadas**: `POST /api/entrenadores` y después `PUT /api/entrenadores/{id}/categorias`. Si la segunda falla, el entrenador queda registrado sin categorías y se puede reintentar.
    - La API no exige al menos una categoría (`categoriasMinimo`); si la pantalla la quiere, es solo del formulario.
 2. **`fechaNacimiento` es obligatoria** (`AAAA-MM-DD`, no futura, 18 años o más). El formulario no la pide todavía: sin ella, todo registro responde `400`.
 3. **Ids UUID** (texto), no números. `Number(id)` ya no sirve: compara los ids como texto. `ID_ENTRENADOR_EJEMPLO = 1` (en `entrenamientosService.js`) tampoco servirá con datos reales.
 4. **Códigos de documento:** se envían y se reciben `CC`, `CE` o `PASAPORTE`, con la equivalencia de [Forma de datos](#forma-de-datos). `TI` no se acepta (`400`).
 5. **Pasaporte alfanumérico:** con `PASAPORTE`, el documento puede tener letras y números, de 6 a 12, sin espacios. Llega en mayúsculas. Con `CC` y `CE` siguen solo dígitos. Hay que cambiar `validarDocumento` (`utils/validaciones.js`), que hoy pide solo dígitos para todos.
-6. **`campos` en los errores:** los `400` del servicio y los `409` traen `campos`, la lista de campos con error o en conflicto. Con ella se marca el formulario: el duplicado que hoy es `error.duplicado.campo` pasa a ser `error.response.data.campos[0]`, y el mensaje para mostrar sigue en `mensaje`. El formulario usa sus propios textos para los duplicados (`textoDuplicado`), así que puede seguir con ellos.
+6. **Activo e inactivo:** cada entrenador llega con `activo`. Para desactivar o reactivar: `PATCH /api/entrenadores/{id}/estado` con `{"activo": false}` o `true`. Conviene mostrar los inactivos aparte (o con una etiqueta) y no ofrecerles categorías: asignárselas responde `409` con `campos: ["activo"]`.
+7. **Categorías sin entrenador:** en `GET /api/categorias`, `entrenador` puede ser `null`.
+8. **`campos` en los errores:** los `400` del servicio y los `409` traen `campos`, la lista de campos con error o en conflicto. Con ella se marca el formulario: el duplicado que hoy es `error.duplicado.campo` pasa a ser `error.response.data.campos[0]`, y el mensaje para mostrar sigue en `mensaje`. El formulario usa sus propios textos para los duplicados (`textoDuplicado`), así que puede seguir con ellos.
 
 ### Pendientes / diferencias con el frontend y el esquema
 
-- **Las categorías no se crean en la migración**, y este módulo no agrega datos semilla. Mientras no existan, `GET /api/categorias` devuelve `[]` y asignar cualquier categoría responde `400`. Como `categoria.id_entrenador` es `NOT NULL`, hoy una categoría **no puede existir sin un entrenador**.
-  - **Propuesta para Juan Sebastián (no aplicada):** una migración `002` que haga opcional `categoria.id_entrenador` (`alter table public.categoria alter column id_entrenador drop not null;`). Así Sub-8 a Sub-16 se pueden crear desde el inicio, sin entrenador.
-  - Si se aplica, quitar una categoría dejaría de ser imposible. La regla de `409` al quitar se revisaría para dejarla sin entrenador (`null`).
 - **`fecha_nacimiento` es obligatoria en la tabla, pero la pantalla no la pide** (punto 2 de arriba).
-- **No hay columna `activo` en `entrenador`.** Por eso no hay endpoint para desactivar ni para borrar entrenadores; queda para cuando el esquema la tenga.
+- **No se borran entrenadores**, solo se desactivan, para conservar su historial (decisión D8).
+- **Entrenamientos de un entrenador desactivado:** cuando exista el módulo de entrenamientos (HU-026), hay que decidir qué pasa con sus entrenamientos `PROGRAMADO` futuros. Está marcado con `// TODO HU-026` en `EntrenadorServiceImpl.cambiarEstado`.
 - **Ids UUID** en la base y la API, **números** en el frontend (punto 3).
 - **`tipoDocumento` va por código** (punto 4). La tabla permite `TI`, pero la API la rechaza para entrenadores: todos son mayores de edad.
-- **`unique (correo)` de la tabla distingue mayúsculas.** La API guarda el correo en minúsculas y revisa sin distinguirlas, pero un correo insertado por fuera de la API con mayúsculas no lo cubre la restricción. Propuesta para una migración futura: `unique` sobre `lower(correo)`.
 - `documentos` (carpeta de documentos) e `id_usuario` (cuenta de acceso, CU-06) no los maneja esta historia.
 - Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre), crear la cuenta del entrenador (CU-06) y la seguridad por rol (HU-005).
 
@@ -542,7 +548,8 @@ Salen de `futdata.club` (`config.ClubProperties`). Son datos públicos, con valo
 ### Pendientes
 
 - **Diagrama 02-pagos (propuesta, no aplicada).** Cambiar `IGeneradorComprobante +generarPdf(Pago) byte[]` por `+generar(ComprobantePagoDTO) byte[]`. Razón: el generador no debe recibir la entidad `Pago`. Con el DTO no depende de la base de datos (se prueba sin ella) y solo recibe lo que puede ver el acudiente: así no puede imprimir por error quién registró el pago, la nota interna ni la referencia manual, que sí están en el pago.
-- **Consecutivo del comprobante.** El número `FD-AAAA-NNNNNN` lo generará la base de datos con una secuencia, al crear la tabla `Pago`. Así es único aunque dos pagos se registren al mismo tiempo.
+- **Consecutivo del comprobante.** El número `FD-AAAA-NNNNNN` lo genera la base de datos con `select siguiente_numero_comprobante()` (secuencia de la migración 004), así es único aunque dos pagos se registren al mismo tiempo. Falta usarlo desde el módulo de pagos.
+- **`MetodoPago`** está dentro de `ComprobantePagoDTO` (`util.reports`). Cuando exista el módulo de pagos, pasarlo a `domain.entities`: es un concepto del dominio (columna `pago.metodo`), no del PDF.
 - **Texto del pie, por confirmar con el tesorero:** "Este comprobante es un soporte del pago recibido por el club. No es una factura electrónica."
 - **Logo.** No hay un PNG en el repositorio, así que el comprobante sale sin logo. Cuando haya uno, se agrega en `PlantillaReportePdf`.
 
@@ -590,14 +597,14 @@ El timeout de conexión y de lectura es de 10 s (`futdata.supabase.timeout`, en 
 - El cliente la manda en las cabeceras `Authorization: Bearer` y `apikey`. **Nunca** aparece en logs, mensajes de excepción ni `toString` (`SupabaseStorageClientTest` lo comprueba con los logs en TRACE).
 - El frontend recibe solo URL firmadas que vencen en minutos. Si la llave se filtra, hay que rotarla en Supabase de inmediato.
 
-### Rutas: qué se guarda en `Pago.recibo_url`
+### Rutas: qué se guarda en `Pago.recibo_ruta`
 
 Ruta: `AAAA/FD-AAAA-NNNNNN.pdf`: la carpeta es el año **del número** del comprobante. Ejemplo: `2026/FD-2026-000123.pdf`.
 - No lleva nombres, documentos ni correos.
 - El servicio exige que el número tenga el formato `FD-AAAA-NNNNNN`.
 - **No** exige que ese año sea el de la fecha de pago. Un pago del 31 de diciembre registrado en enero recibe un número del año nuevo y queda en esa carpeta: `FD-2026-000001` → `2026/FD-2026-000001.pdf`.
 
-**En `Pago.recibo_url` se guarda la ruta, no una URL.** El diccionario de datos lo llama "URL del recibo", pero las URL firmadas vencen a los pocos minutos: guardar una no serviría. Con la ruta, cada descarga pide una URL nueva.
+**En `Pago.recibo_ruta` se guarda la ruta, no una URL** (la migración 004 renombró `recibo_url`). Las URL firmadas vencen a los pocos minutos: guardar una no serviría. Con la ruta, cada descarga pide una URL nueva.
 
 Reglas del cliente, que se revisan antes de llamar a Storage (`ArchivoInvalidoException`):
 - solo `application/pdf`;
@@ -637,7 +644,7 @@ GET /api/pagos/{id}/comprobante
   3. comprobantes.enlaceDescarga(pago.reciboUrl)  ->  responde {"url": ...} o un 302 hacia la URL firmada.
 ```
 
-El `// TODO` está en `ComprobanteServiceImpl.enlaceDescarga`. Cómo responder cada excepción (por ejemplo `ArchivoNoEncontradoException` → `404`, `AlmacenamientoNoDisponibleException` → `503`) se decidirá con ese endpoint; hoy el manejador global las convierte en `500`.
+El `// TODO` está en `ComprobanteServiceImpl.enlaceDescarga`. El manejador global ya responde cada excepción: `ArchivoInvalidoException` → `400`, `ArchivoNoEncontradoException` → `404`, `ArchivoYaExisteException` → `409` y las demás → `503`, con un mensaje genérico (el detalle va al log). Ver [Formato de errores](#formato-de-errores-para-el-frontend).
 
 ### Prueba real (opcional)
 
@@ -660,10 +667,8 @@ Lee las variables del sistema, no `backend/.env`. `SUPABASE_BUCKET_COMPROBANTES`
 ### Pendientes
 
 - **Proyecto de Supabase y bucket** (Juan Sebastián, lista de arriba). Después, correr la prueba real.
-- **Tabla `Pago`:** la columna `recibo_url` guardará la ruta. Se propone llamarla `recibo_ruta` en el diccionario de datos. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
+- **Módulo de pagos:** la columna `pago.recibo_ruta` (migración 004) guarda la ruta. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
 - **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con HU-001 y HU-005.
-- **Respuestas HTTP de las excepciones de Storage**, en `ManejadorGlobalErrores`, junto con el endpoint.
-- **Propuesta para Felipe (`docker-compose.yml`, no aplicada).** Hoy el compose arranca el backend con el perfil `prod` de la imagen, que exige `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`: mientras el proyecto de Supabase no exista, `docker compose up` deja el backend detenido. Como el compose es para desarrollo, se propone que el servicio `backend` tenga `environment: SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}`. Así arranca en `local` por defecto, y quien quiera probar `prod` lo pide con `SPRING_PROFILES_ACTIVE=prod docker compose up -d`. Mientras tanto: `SPRING_PROFILES_ACTIVE=local` en `backend/.env`.
 
 ## Formato de errores (para el frontend)
 
@@ -675,7 +680,7 @@ Todas las respuestas de error tienen el mismo JSON:
   "estado": 400,
   "error": "Bad Request",
   "mensaje": "edad: debe ser mayor que o igual a 5; nombre: no debe estar vacío",
-  "ruta": "/api/entrenamientos"
+  "ruta": "/api/entrenadores"
 }
 ```
 
@@ -690,12 +695,12 @@ Todas las respuestas de error tienen el mismo JSON:
 
 | Código | Cuándo | `mensaje` de ejemplo |
 | :--- | :--- | :--- |
-| `400` | Bean Validation falla, el JSON está mal formado o un valor no tiene el formato del campo (por ejemplo, una fecha), falta un parámetro o tiene un tipo inválido, o el servicio lanza `DatosInvalidosException` o `ComprobanteInvalidoException` | `nombre: no debe estar vacío` |
-| `404` | La ruta no existe o el servicio lanza `RecursoNoEncontradoException` | `No existe la ruta GET /api/no-existe` |
-| `409` | El servicio lanza `ConflictoException`: un dato que ya tiene otro registro, o una regla que depende de otros registros | `documento: ya está registrado en otro entrenador` |
+| `400` | Bean Validation falla, el JSON está mal formado o un valor no tiene el formato del campo (por ejemplo, una fecha), falta un parámetro o tiene un tipo inválido, o el servicio lanza `DatosInvalidosException`, `ComprobanteInvalidoException` o `ArchivoInvalidoException` | `nombre: no debe estar vacío` |
+| `404` | La ruta no existe, el servicio lanza `RecursoNoEncontradoException` o el archivo no está en Storage (`ArchivoNoEncontradoException`) | `No existe la ruta GET /api/no-existe` |
+| `409` | El servicio lanza `ConflictoException` (un dato que ya tiene otro registro, o una regla que depende de otros registros), el archivo ya existe en Storage, o la base de datos rechaza la operación por una restricción que el servicio no tradujo | `documento: ya está registrado en otro entrenador` |
 | `405` / `415` | Método HTTP no permitido o tipo de contenido no soportado | `El método POST no está permitido en esta ruta` |
-| `500` | Cualquier error no controlado. **Nunca incluye la traza ni el mensaje interno**; el detalle queda en el log del servidor | `Ocurrió un error interno. Intenta de nuevo más tarde.` |
-| `503` | Solo `/api/health`, cuando la base de datos no responde (su cuerpo es el de salud, no este) | |
+| `500` | Cualquier error no controlado, o n8n mal configurado. **Nunca incluye la traza ni el mensaje interno**; el detalle queda en el log del servidor | `Ocurrió un error interno. Intenta de nuevo más tarde.` |
+| `503` | Supabase Storage o n8n no respondieron o no están configurados (mensaje genérico; el detalle va al log). En `/api/health`, la base de datos no responde (su cuerpo es el de salud, no este) | `No se pudo enviar el correo. Intenta de nuevo más tarde.` |
 
 En el frontend basta con leer `error.response.data.mensaje` (Axios) para mostrar el error.
 
@@ -847,9 +852,16 @@ Esta prueba lee las variables del sistema, no `backend/.env`.
 No necesitan credenciales ni red (salvo `N8nClientContraN8nLocalTest` y `SupabaseStorageContraSupabaseTest`, desactivadas por defecto): cargan `src/test/resources/pruebas.properties`, que tiene prioridad sobre `backend/.env`, y simulan la base de datos con Mockito o con dobles en memoria.
 
 Las pruebas de los DAO (`EntrenadorDAOImplTest`, `EntrenadorServiceImplConPostgresTest`) usan un **PostgreSQL real en Docker** con [Testcontainers](https://testcontainers.com/):
-- Antes de aplicar la migración 001 tal cual desde `supabase/migrations/`, crean un esquema `auth` mínimo (`auth.users(id uuid primary key)`), porque la migración lo referencia.
-- Cada prueba inserta sus propias categorías y entrenadores.
+- Antes de aplicar **todas** las migraciones de `supabase/migrations/` en orden de nombre (`PostgresDePrueba.migraciones()`; una nueva entra sola), crean un esquema `auth` mínimo (`auth.users(id uuid primary key)`), porque las migraciones lo referencian.
+- Registran las categorías que crea la 004 (lo revisa `laMigracionCreaLasCincoCategoriasSinEntrenador`) y después cada prueba inserta sus propias categorías y entrenadores.
 - **Sin Docker se omiten** con el aviso *Docker no está disponible: se omiten las pruebas de integración con PostgreSQL* y el build pasa igual (`DockerDisponible`). En el CI sí corren.
+- **Sin Docker, con un PostgreSQL local:** define `FUTDATA_PRUEBA_DB_URL` (y si hace falta `FUTDATA_PRUEBA_DB_USER` y `FUTDATA_PRUEBA_DB_PASSWORD`) con una base **desechable**. Las pruebas borran sus esquemas `public` y `auth`, así que solo se acepta `localhost`, nunca Supabase:
+
+  ```powershell
+  $env:FUTDATA_PRUEBA_DB_URL = "jdbc:postgresql://localhost:5432/futdata_pruebas"
+  $env:FUTDATA_PRUEBA_DB_PASSWORD = "..."
+  .\mvnw.cmd verify
+  ```
 
 | Prueba | Qué revisa |
 | :--- | :--- |

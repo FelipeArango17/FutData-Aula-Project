@@ -8,6 +8,7 @@ import java.util.UUID;
  *
  * @param edadMinima edad cumplida mínima, por ejemplo 10 en Sub-12
  * @param edadMaxima edad cumplida máxima, por ejemplo 11 en Sub-12
+ * @param entrenador quien la dirige, o {@code null} si todavía no tiene entrenador
  */
 public record CategoriaResponseDTO(
         @Schema(example = "0b6c3f1e-9d2a-4c8b-a1e7-5f4d3c2b1a09") UUID id,

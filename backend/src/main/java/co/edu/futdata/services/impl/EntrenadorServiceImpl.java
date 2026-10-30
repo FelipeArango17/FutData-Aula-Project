@@ -1,6 +1,7 @@
 package co.edu.futdata.services.impl;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
+import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.api.dto.EntrenadorMapper;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
@@ -15,7 +16,6 @@ import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.IEntrenadorService;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
-import co.edu.futdata.util.reports.FormatoColombiano;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -28,7 +28,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,18 +36,14 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
 
     static final String NO_EXISTE = "No existe un entrenador con ese id.";
     static final String YA_REGISTRADO = "ya está registrado en otro entrenador";
+    static final String INACTIVO = "El entrenador está inactivo. Actívalo antes de asignarle categorías.";
 
     private final IEntrenadorDAO entrenadores;
     private final ICategoriaDAO categorias;
     private final Clock reloj;
 
-    @Autowired
-    public EntrenadorServiceImpl(IEntrenadorDAO entrenadores, ICategoriaDAO categorias) {
-        this(entrenadores, categorias, Clock.system(FormatoColombiano.ZONA));
-    }
-
-    /** Para las pruebas: con un reloj fijo para la fecha de nacimiento. */
-    EntrenadorServiceImpl(IEntrenadorDAO entrenadores, ICategoriaDAO categorias, Clock reloj) {
+    /** @param reloj hora de Colombia ({@code config.RelojConfig}); en las pruebas, uno fijo para la fecha de nacimiento */
+    public EntrenadorServiceImpl(IEntrenadorDAO entrenadores, ICategoriaDAO categorias, Clock reloj) {
         this.entrenadores = entrenadores;
         this.categorias = categorias;
         this.reloj = reloj;
@@ -92,7 +87,10 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
     @Transactional
     public EntrenadorResponseDTO asignarCategorias(UUID id, AsignarCategoriasRequestDTO peticion) {
         Set<String> pedidas = categoriasPedidas(peticion);
-        buscar(id);
+        Entrenador entrenador = buscar(id);
+        if (!entrenador.isActivo() && !pedidas.isEmpty()) {
+            throw new ConflictoException(INACTIVO, List.of("activo"));
+        }
 
         // Bloquea las categorías hasta el final de la transacción: dos asignaciones a la vez no se pisan
         Map<String, Categoria> existentes = categorias.listarParaActualizar().stream()
@@ -105,21 +103,10 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
                     + " en la base de datos");
         }
 
-        List<String> quitadas = existentes.values().stream()
-                .filter(c -> id.equals(c.getIdEntrenador()) && !pedidas.contains(c.getNombre()))
-                .map(Categoria::getNombre)
-                .toList();
-        if (!quitadas.isEmpty()) {
-            boolean una = quitadas.size() == 1;
-            throw new ConflictoException((una ? "No se puede quitar " : "No se pueden quitar ") + enumerar(quitadas)
-                    + ": cada categoría debe tener un entrenador. Para "
-                    + (una ? "quitársela, asígnala" : "quitárselas, asígnalas") + " a otro entrenador.",
-                    List.of("categorias"));
-        }
-
-        List<Categoria> deOtros = existentes.values().stream()
+        List<Categoria> nuevas = existentes.values().stream()
                 .filter(c -> pedidas.contains(c.getNombre()) && !id.equals(c.getIdEntrenador()))
                 .toList();
+        List<Categoria> deOtros = nuevas.stream().filter(c -> c.getIdEntrenador() != null).toList();
         if (!deOtros.isEmpty() && !peticion.reasignacionConfirmada()) {
             boolean una = deOtros.size() == 1;
             throw new ConflictoException(enumerar(deOtros.stream().map(Categoria::getNombre).toList())
@@ -128,7 +115,41 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
                     + " a este entrenador.", List.of("categorias"));
         }
 
-        categorias.asignarEntrenador(deOtros.stream().map(Categoria::getId).toList(), id);
+        // Las que tenía y no pidió quedan sin entrenador (decisión D7)
+        List<UUID> quitadas = existentes.values().stream()
+                .filter(c -> id.equals(c.getIdEntrenador()) && !pedidas.contains(c.getNombre()))
+                .map(Categoria::getId)
+                .toList();
+
+        categorias.asignarEntrenador(nuevas.stream().map(Categoria::getId).toList(), id);
+        categorias.asignarEntrenador(quitadas, null);
+        return consultar(id);
+    }
+
+    @Override
+    @Transactional
+    public EntrenadorResponseDTO cambiarEstado(UUID id, CambiarEstadoEntrenadorRequestDTO peticion) {
+        if (peticion == null || peticion.activo() == null) {
+            throw DatosInvalidosException.de("activo", "es obligatorio (true o false)");
+        }
+        Entrenador entrenador = buscar(id);
+        boolean activo = peticion.activo();
+        if (entrenador.isActivo() == activo) {
+            return EntrenadorMapper.toDTO(entrenador);
+        }
+        if (!activo) {
+            // Bloquea las categorías y suelta las suyas: un inactivo no dirige ninguna (decisión D8)
+            List<UUID> suyas = categorias.listarParaActualizar().stream()
+                    .filter(c -> id.equals(c.getIdEntrenador()))
+                    .map(Categoria::getId)
+                    .toList();
+            categorias.asignarEntrenador(suyas, null);
+            // TODO HU-026: cuando exista el módulo de entrenamientos, decidir qué pasa con sus entrenamientos
+            // PROGRAMADO futuros (avisar o reasignar) antes de desactivarlo.
+        }
+        if (!entrenadores.cambiarActivo(id, activo)) {
+            throw new RecursoNoEncontradoException(NO_EXISTE);
+        }
         return consultar(id);
     }
 

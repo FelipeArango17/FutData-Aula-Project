@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
+import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.persistence.impl.CategoriaDAOImpl;
 import co.edu.futdata.persistence.impl.DockerDisponible;
@@ -22,8 +23,8 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * El servicio con los DAO reales sobre PostgreSQL (Testcontainers), cada llamada en su transacción como lo hace
- * {@code @Transactional}. Sin Docker, se omite.
+ * El servicio con los DAO reales sobre PostgreSQL (Testcontainers o una base local), cada llamada en su transacción
+ * como lo hace {@code @Transactional}. Sin ninguno de los dos, se omite.
  */
 @ExtendWith(DockerDisponible.class)
 class EntrenadorServiceImplConPostgresTest {
@@ -63,12 +64,32 @@ class EntrenadorServiceImplConPostgresTest {
     @Test
     void unConflictoNoDejaCambiosAMedias() {
         assertThatThrownBy(() -> enTransaccion(() -> servicio.asignarCategorias(diaz,
-                new AsignarCategoriasRequestDTO(List.of("Sub-8", "Sub-12"), true))))
+                new AsignarCategoriasRequestDTO(List.of("Sub-8", "Sub-12"), false))))
                 .isInstanceOf(ConflictoException.class)
-                .hasMessageStartingWith("No se puede quitar Sub-10");
+                .hasMessageStartingWith("Sub-12 ya tiene otro entrenador");
 
         assertThat(enTransaccion(() -> servicio.consultar(diaz)).categorias()).containsExactly("Sub-8", "Sub-10");
         assertThat(enTransaccion(() -> servicio.consultar(mora)).categorias()).containsExactly("Sub-12");
+    }
+
+    @Test
+    void quitarYTomarDeOtroQuedaGuardadoEnLaBase() {
+        enTransaccion(() -> servicio.asignarCategorias(diaz,
+                new AsignarCategoriasRequestDTO(List.of("Sub-8", "Sub-12"), true)));
+
+        List<CategoriaResponseDTO> lista = enTransaccion(servicio::listarCategorias);
+        assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-8", "Sub-10", "Sub-12");
+        assertThat(lista).extracting(c -> c.entrenador() == null ? null : c.entrenador().id())
+                .containsExactly(diaz, null, diaz);
+    }
+
+    @Test
+    void desactivarLiberaSusCategoriasEnLaBase() {
+        var r = enTransaccion(() -> servicio.cambiarEstado(diaz, new CambiarEstadoEntrenadorRequestDTO(false)));
+
+        assertThat(r.activo()).isFalse();
+        assertThat(enTransaccion(servicio::listarCategorias)).extracting(c -> c.entrenador() == null ? "-" : c.entrenador().apellido())
+                .containsExactly("-", "-", "Mora");
     }
 
     @Test

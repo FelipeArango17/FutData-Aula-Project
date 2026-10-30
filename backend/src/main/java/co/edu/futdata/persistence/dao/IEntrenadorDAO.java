@@ -32,10 +32,17 @@ public interface IEntrenadorDAO {
 
     /**
      * Actualiza los datos personales del entrenador con {@code entrenador.getId()}. No cambia sus categorías,
-     * {@code documentos} ni {@code id_usuario}.
+     * {@code activo}, {@code documentos} ni {@code id_usuario}.
      *
      * @return {@code false} si no existe
      * @throws DatoDuplicadoException si la base de datos rechaza el documento o el correo por repetidos
      */
     boolean actualizar(Entrenador entrenador);
+
+    /**
+     * Activa o desactiva al entrenador. No toca sus categorías: eso lo decide el servicio.
+     *
+     * @return {@code false} si no existe
+     */
+    boolean cambiarActivo(UUID id, boolean activo);
 }

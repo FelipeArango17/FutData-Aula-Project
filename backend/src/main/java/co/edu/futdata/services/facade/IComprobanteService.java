@@ -5,7 +5,7 @@ import co.edu.futdata.util.reports.ComprobantePagoDTO;
 /**
  * Comprobantes de pago en PDF guardados en Supabase Storage (HU-018, tarea 328).
  *
- * <p>Lo que se guarda en {@code Pago.recibo_url} es la <b>ruta</b> que devuelve {@link #generarYGuardar}
+ * <p>Lo que se guarda en {@code Pago.recibo_ruta} es la <b>ruta</b> que devuelve {@link #generarYGuardar}
  * ({@code 2026/FD-2026-000123.pdf}), no una URL: las URL firmadas vencen a los pocos minutos, así que se pide una
  * nueva con {@link #enlaceDescarga} cada vez que alguien con permiso quiere descargar el comprobante.
  */
@@ -16,7 +16,7 @@ public interface IComprobanteService {
      *
      * @param datos datos del comprobante; {@code numeroComprobante} con el formato {@code FD-AAAA-NNNNNN}
      * @return la ruta dentro del bucket, {@code AAAA/FD-AAAA-NNNNNN.pdf}, con el año del número (no el de la fecha de
-     *         pago): lo que se guarda en {@code Pago.recibo_url}
+     *         pago): lo que se guarda en {@code Pago.recibo_ruta}
      * @throws co.edu.futdata.util.reports.ComprobanteInvalidoException                datos inválidos ({@code 400})
      * @throws co.edu.futdata.datasource.external.ArchivoYaExisteException            ya hay un comprobante con ese número
      * @throws co.edu.futdata.datasource.external.AlmacenamientoException             otras fallas de Storage
@@ -27,7 +27,7 @@ public interface IComprobanteService {
      * URL firmada para descargar el comprobante, con la vigencia de {@code futdata.supabase.vigencia-url-firmada}
      * (5 min). <b>No revisa permisos</b>: quien llama ya debe haber verificado el rol.
      *
-     * @param ruta la de {@code Pago.recibo_url}, con el formato {@code AAAA/FD-AAAA-NNNNNN.pdf}
+     * @param ruta la de {@code Pago.recibo_ruta}, con el formato {@code AAAA/FD-AAAA-NNNNNN.pdf}
      * @throws co.edu.futdata.datasource.external.ArchivoInvalidoException     la ruta no tiene ese formato
      * @throws co.edu.futdata.datasource.external.ArchivoNoEncontradoException no hay un archivo en esa ruta
      * @throws co.edu.futdata.datasource.external.AlmacenamientoException      otras fallas de Storage

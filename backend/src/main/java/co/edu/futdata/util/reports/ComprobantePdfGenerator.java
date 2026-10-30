@@ -34,13 +34,14 @@ public class ComprobantePdfGenerator implements IGeneradorComprobante {
     private final PlantillaReportePdf plantilla;
     private final Clock reloj;
 
-    @Autowired
+    /** Con el reloj del sistema en hora de Colombia (para usarlo fuera de Spring, por ejemplo en una prueba). */
     public ComprobantePdfGenerator(ClubProperties club) {
         this(club, Clock.system(FormatoColombiano.ZONA));
     }
 
-    /** Para las pruebas: con un reloj fijo para validar la fecha de pago. */
-    ComprobantePdfGenerator(ClubProperties club, Clock reloj) {
+    /** @param reloj hora de Colombia ({@code config.RelojConfig}); en las pruebas, uno fijo para validar la fecha de pago */
+    @Autowired
+    public ComprobantePdfGenerator(ClubProperties club, Clock reloj) {
         this.plantilla = new PlantillaReportePdf(club);
         this.reloj = reloj;
     }

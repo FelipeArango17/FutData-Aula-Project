@@ -55,7 +55,7 @@ public final class ReglasEntrenador {
     /**
      * Copia del entrenador con los textos como se guardan: sin espacios al principio ni al final, sin espacios
      * repetidos en los textos de una línea, el tipo de documento en mayúsculas, el correo en minúsculas y los
-     * campos opcionales vacíos como {@code null}. No toca el id ni las categorías.
+     * campos opcionales vacíos como {@code null}. No toca el id, las categorías ni {@code activo}.
      */
     public static Entrenador limpiar(Entrenador datos) {
         Entrenador limpio = new Entrenador();
@@ -77,6 +77,7 @@ public final class ReglasEntrenador {
         limpio.setHorarioTrabajo(texto(datos.getHorarioTrabajo()));
         limpio.setEspecialidad(texto(datos.getEspecialidad()));
         limpio.setCategorias(datos.getCategorias());
+        limpio.setActivo(datos.isActivo());
         return limpio;
     }
 

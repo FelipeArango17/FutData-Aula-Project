@@ -10,6 +10,9 @@ import java.util.UUID;
  * <p>{@code categorias} son los nombres de las categorías que dirige ({@code categoria.id_entrenador}), en el
  * orden oficial. No se guardan en esta tabla: el DAO las lee de {@code categoria}. Las columnas
  * {@code documentos} e {@code id_usuario} no se manejan en HU-025 (la cuenta de usuario es de CU-06).
+ *
+ * <p>{@code activo} es {@code false} si el entrenador fue desactivado (migración 004, decisión D8): conserva su
+ * historial, pero no dirige categorías ni recibe asignaciones nuevas.
  */
 public class Entrenador {
 
@@ -25,6 +28,7 @@ public class Entrenador {
     private String horarioTrabajo;
     private String especialidad;
     private List<String> categorias = List.of();
+    private boolean activo = true;
 
     public UUID getId() {
         return id;
@@ -122,5 +126,13 @@ public class Entrenador {
 
     public void setCategorias(List<String> categorias) {
         this.categorias = categorias == null ? List.of() : List.copyOf(categorias);
+    }
+
+    public boolean isActivo() {
+        return activo;
+    }
+
+    public void setActivo(boolean activo) {
+        this.activo = activo;
     }
 }

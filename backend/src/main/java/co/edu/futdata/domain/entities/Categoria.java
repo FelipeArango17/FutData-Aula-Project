@@ -4,7 +4,7 @@ import java.util.UUID;
 
 /**
  * Categoría por edad del club (tabla {@code categoria}, diccionario de datos 2.14). Según la decisión D1, la
- * dirige un solo entrenador y {@code id_entrenador} nunca es nulo.
+ * dirige como máximo un entrenador. {@code idEntrenador} es {@code null} si todavía no tiene (decisión D7).
  */
 public class Categoria {
 
@@ -58,6 +58,7 @@ public class Categoria {
         this.edadMaxima = edadMaxima;
     }
 
+    /** El entrenador que la dirige, o {@code null} si no tiene. */
     public UUID getIdEntrenador() {
         return idEntrenador;
     }
