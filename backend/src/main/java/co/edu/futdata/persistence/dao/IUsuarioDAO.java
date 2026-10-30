@@ -8,6 +8,7 @@ import java.util.UUID;
 public interface IUsuarioDAO {
     List<Usuario> listar();
     Optional<Usuario> buscarPorId(UUID id);
+    Optional<Usuario> buscarPorCorreo(String correo);
     boolean existeCorreo(String correo);
     UUID crear(Usuario usuario);
     void asignarRol(UUID idUsuario, String rol);

@@ -36,6 +36,13 @@ public class UsuarioDAOImpl implements IUsuarioDAO {
     }
 
     @Override
+    public Optional<Usuario> buscarPorCorreo(String correo) {
+        return jdbc.query("select " + COLUMNAS + " from usuario u join usuario_rol ur on ur.id_usuario = u.id_usuario "
+                + "join rol r on r.id_rol = ur.id_rol where lower(u.correo) = lower(:correo)",
+                Map.of("correo", correo), MAPEO).stream().findFirst();
+    }
+
+    @Override
     public boolean existeCorreo(String correo) {
         return Boolean.TRUE.equals(jdbc.queryForObject(
                 "select exists(select 1 from usuario where lower(correo) = lower(:correo))",

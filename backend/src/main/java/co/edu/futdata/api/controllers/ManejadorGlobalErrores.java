@@ -2,6 +2,8 @@ package co.edu.futdata.api.controllers;
 
 import co.edu.futdata.api.dto.ErrorResponseDTO;
 import co.edu.futdata.services.facade.ConflictoException;
+import co.edu.futdata.services.facade.CodigoNoEnviadoException;
+import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.util.reports.ComprobanteInvalidoException;
@@ -104,6 +106,18 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(ConflictoException.class)
     public ResponseEntity<ErrorResponseDTO> conflicto(ConflictoException e, HttpServletRequest peticion) {
         return responder(HttpStatus.CONFLICT, e.getMessage(), e.getCampos(), peticion);
+    }
+
+    @ExceptionHandler(CodigoVerificacionException.class)
+    public ResponseEntity<ErrorResponseDTO> codigoVerificacion(CodigoVerificacionException e,
+                                                                 HttpServletRequest peticion) {
+        return responder(HttpStatus.CONFLICT, e.getMessage(), e.getCampos(), peticion);
+    }
+
+    @ExceptionHandler(CodigoNoEnviadoException.class)
+    public ResponseEntity<ErrorResponseDTO> codigoNoEnviado(CodigoNoEnviadoException e,
+                                                             HttpServletRequest peticion) {
+        return responder(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), peticion);
     }
 
     @ExceptionHandler(ComprobanteInvalidoException.class)

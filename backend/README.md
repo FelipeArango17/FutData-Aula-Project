@@ -247,6 +247,18 @@ El cuerpo de creación contiene `nombre`, `apellido`, `correo` y `rol`. Los erro
 
 > **Supabase:** la migración `002_modelo_datos.sql` añade `public.usuario.apellido` para conservar nombres y apellidos por separado. Ejecútala antes de usar `POST /api/usuarios` sobre una base existente y confirma que `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` estén configuradas.
 
+## Verificación 2FA (HU-002)
+
+La API genera códigos aleatorios de seis dígitos, conserva únicamente un hash con sal en `codigo_verificacion` y los envía mediante el evento `CODIGO_2FA` de n8n. Cada código vence en 10 minutos, permite cinco intentos, bloquea durante 15 minutos al quinto intento fallido y limita el reenvío a uno por minuto.
+
+| Método y ruta | Descripción | Respuestas |
+| :--- | :--- | :--- |
+| `POST /api/auth/2fa/codigo` | Genera y envía el código | `202`, `400`, `404`, `409`, `503` |
+| `POST /api/auth/2fa/reenviar` | Reenvía respetando el minuto de espera | `200`, `400`, `404`, `409`, `503` |
+| `POST /api/auth/2fa/verificar` | Valida el correo y código de seis dígitos | `200`, `400`, `404`, `409` |
+
+La migración `003_codigo_verificacion_2fa.sql` debe ejecutarse en Supabase antes de probar estos endpoints. Nunca se devuelve ni se guarda el código en texto plano; la respuesta solo incluye el correo enmascarado, la vigencia y el tiempo para reenvío.
+
 ## Entrenadores (HU-025)
 
 API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
