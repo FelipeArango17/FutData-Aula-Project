@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Categorías del club con su entrenador, para la pantalla de entrenadores (HU-025). */
-// TODO HU-005: decidir qué roles pueden consultarla
+// TODO HU-005: solo ADMINISTRADOR y ENTRENADOR
 @RestController
 @RequestMapping("/api/categorias")
 @Tag(name = "Categorías", description = "Categorías por edad y el entrenador que dirige cada una")
