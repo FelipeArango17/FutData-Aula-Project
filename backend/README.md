@@ -212,7 +212,7 @@ Reglas para todos los módulos:
 API para registrar, consultar y editar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos es [`supabase/migrations/001_schema_inicial.sql`](../supabase/migrations/001_schema_inicial.sql) (tablas `entrenador` y `categoria`); este módulo **no la modifica**. Lo que no encaja con ella está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
 
 > [!WARNING]
-> **Todavía sin seguridad por rol.** Debe quedar solo para `ADMINISTRADOR` (HU-005). Está marcado con `// TODO HU-005` en `EntrenadorController` y `CategoriaController`.
+> **Todavía sin seguridad por rol (HU-005).** `/api/entrenadores` debe quedar solo para `ADMINISTRADOR`, y `GET /api/categorias` para `ADMINISTRADOR` y `ENTRENADOR`. Está marcado con `// TODO HU-005` en `EntrenadorController` y `CategoriaController`.
 
 | Capa | Clase | Qué hace |
 | :--- | :--- | :--- |
@@ -259,8 +259,8 @@ Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion
 | Campo | Columna | Nota |
 | :--- | :--- | :--- |
 | `id` | `id_entrenador` | **UUID** (texto). El frontend hoy usa números (`1`, `2`) |
-| `tipoDocumento` | `tipo_documento` | **Código** de la base: `CC`, `TI`, `CE` o `PASAPORTE` (ver la tabla de abajo) |
-| `documento` | `documento_identidad` | Texto: conserva los ceros iniciales |
+| `tipoDocumento` | `tipo_documento` | **Código** de la base: `CC`, `CE` o `PASAPORTE` (ver la tabla de abajo). La tabla también permite `TI`, pero no se acepta para entrenadores |
+| `documento` | `documento_identidad` | Texto: conserva los ceros iniciales. El pasaporte puede tener letras y se guarda en mayúsculas |
 | `fechaNacimiento` | `fecha_nacimiento` | `AAAA-MM-DD` |
 | `categorias` | `categoria.id_entrenador` | Nombres, en el orden oficial `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14`, `Sub-16`. Solo en las respuestas |
 | `horarioTrabajo`, `direccion` | `horario_trabajo`, `direccion` | Opcionales. Vacíos se guardan y se devuelven como `null` (el frontend usaba `''`) |
@@ -274,7 +274,7 @@ Al crear o editar, si el cuerpo trae `id` o `categorias`, **se ignoran**. Las co
 | `Cédula de ciudadanía` | `CC` |
 | `Cédula de extranjería` | `CE` |
 | `Pasaporte` | `PASAPORTE` |
-| *(no está en la pantalla)* Tarjeta de identidad | `TI` |
+| *(no está en la pantalla)* Tarjeta de identidad | `TI`: **se rechaza** (`400`), porque es de menores de edad y un entrenador tiene al menos 18 años |
 
 ```js
 // Sugerencia para entrenadoresService.js
@@ -287,13 +287,14 @@ export const TIPOS_DOCUMENTO = [
 
 ### Validaciones
 
-El servicio primero **quita los espacios sobrantes** (al principio, al final y los repetidos dentro de los textos de una línea), pasa el tipo de documento a mayúsculas y el correo a minúsculas. Después valida (`ReglasEntrenador`):
+El servicio primero **quita los espacios sobrantes** (al principio, al final y los repetidos dentro de los textos de una línea). Pasa a mayúsculas el tipo de documento y el número de pasaporte, y a minúsculas el correo. Después valida (`ReglasEntrenador`):
 
 | Campo | Regla | Mensaje |
 | :--- | :--- | :--- |
 | `nombre`, `apellido` | Obligatorios, máximo 100 caracteres | `es obligatorio` / `debe tener como máximo 100 caracteres` |
-| `tipoDocumento` | `CC`, `TI`, `CE` o `PASAPORTE` (sin distinguir mayúsculas) | `debe ser CC, TI, CE o PASAPORTE` |
-| `documento` | Solo dígitos, de 6 a 12 | `solo puede tener números, sin puntos ni espacios` / `debe tener entre 6 y 12 dígitos` |
+| `tipoDocumento` | `CC`, `CE` o `PASAPORTE` (sin distinguir mayúsculas). `TI` se rechaza | `debe ser CC, CE o PASAPORTE` / `TI no se acepta: la tarjeta de identidad es de menores de edad` |
+| `documento` con `CC` o `CE` | Solo dígitos, de 6 a 12 | `solo puede tener números, sin puntos ni espacios` / `debe tener entre 6 y 12 dígitos` |
+| `documento` con `PASAPORTE` | Letras sin tilde y dígitos, de 6 a 12, sin espacios ni signos. Se guarda en mayúsculas: `ab123456` y `AB123456` son el mismo documento | `solo puede tener letras y números, sin espacios ni otros signos` / `debe tener entre 6 y 12 caracteres` |
 | `telefono` | Exactamente 10 dígitos | `debe tener exactamente 10 dígitos, sin espacios` |
 | `correo` | `algo@dominio.ext`, sin espacios (la misma revisión que el frontend), máximo 320 | `no es válido` |
 | `especialidad` | Obligatoria, máximo 100 | `es obligatoria` |
@@ -375,20 +376,30 @@ Location: http://localhost:8080/api/entrenadores/6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4
 
 En el frontend, el `409` de duplicado se lleva al formulario como hoy (`error.duplicado.campo`): `campo = error.response.data.campos[0]`.
 
+### Lo que debe adaptar Felipe en el frontend
+
+Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
+
+1. **Desmarcar una categoría responde `409`.** Con D1, una categoría no puede quedar sin entrenador. Para cambiarla de entrenador, se marca en el **nuevo** entrenador. Hoy el formulario deja marcar y desmarcar libremente, y varios entrenadores con la misma categoría.
+   - Si se marca una categoría que tiene otro entrenador, el `409` trae el mensaje. La pantalla debe pedir confirmación y reenviar con `"reasignar": true`.
+   - Registrar con categorías son **dos llamadas**: `POST /api/entrenadores` y después `PUT /api/entrenadores/{id}/categorias`. Si la segunda falla, el entrenador queda registrado sin categorías y se puede reintentar.
+   - La API no exige al menos una categoría (`categoriasMinimo`); si la pantalla la quiere, es solo del formulario.
+2. **`fechaNacimiento` es obligatoria** (`AAAA-MM-DD`, no futura, 18 años o más). El formulario no la pide todavía: sin ella, todo registro responde `400`.
+3. **Ids UUID** (texto), no números. `Number(id)` ya no sirve: compara los ids como texto. `ID_ENTRENADOR_EJEMPLO = 1` (en `entrenamientosService.js`) tampoco servirá con datos reales.
+4. **Códigos de documento:** se envían y se reciben `CC`, `CE` o `PASAPORTE`, con la equivalencia de [Forma de datos](#forma-de-datos). `TI` no se acepta (`400`).
+5. **Pasaporte alfanumérico:** con `PASAPORTE`, el documento puede tener letras y números, de 6 a 12, sin espacios. Llega en mayúsculas. Con `CC` y `CE` siguen solo dígitos. Hay que cambiar `validarDocumento` (`utils/validaciones.js`), que hoy pide solo dígitos para todos.
+6. **`campos` en los errores:** los `400` del servicio y los `409` traen `campos`, la lista de campos con error o en conflicto. Con ella se marca el formulario: el duplicado que hoy es `error.duplicado.campo` pasa a ser `error.response.data.campos[0]`, y el mensaje para mostrar sigue en `mensaje`. El formulario usa sus propios textos para los duplicados (`textoDuplicado`), así que puede seguir con ellos.
+
 ### Pendientes / diferencias con el frontend y el esquema
 
-- **`fecha_nacimiento` es obligatoria en la tabla, pero la pantalla no la pide.** La API la exige (y que tenga 18 años o más). El formulario debe agregar el campo; si no, todo registro responde `400`.
+- **Las categorías no se crean en la migración**, y este módulo no agrega datos semilla. Mientras no existan, `GET /api/categorias` devuelve `[]` y asignar cualquier categoría responde `400`. Como `categoria.id_entrenador` es `NOT NULL`, hoy una categoría **no puede existir sin un entrenador**.
+  - **Propuesta para Juan Sebastián (no aplicada):** una migración `002` que haga opcional `categoria.id_entrenador` (`alter table public.categoria alter column id_entrenador drop not null;`). Así Sub-8 a Sub-16 se pueden crear desde el inicio, sin entrenador.
+  - Si se aplica, quitar una categoría dejaría de ser imposible. La regla de `409` al quitar se revisaría para dejarla sin entrenador (`null`).
+- **`fecha_nacimiento` es obligatoria en la tabla, pero la pantalla no la pide** (punto 2 de arriba).
 - **No hay columna `activo` en `entrenador`.** Por eso no hay endpoint para desactivar ni para borrar entrenadores; queda para cuando el esquema la tenga.
-- **La migración no crea las categorías**, y este módulo no agrega datos semilla. Mientras no existan, `GET /api/categorias` devuelve `[]` y asignar cualquier categoría responde `400`. Además, como `categoria.id_entrenador` es `NOT NULL`, una categoría **no puede existir sin un entrenador**. Las cinco categorías se tendrán que crear después de registrar al menos un entrenador, o cambiar el esquema. Hay que decidirlo con Juan Sebastián.
-- **Ids UUID en lugar de números.** `entrenadoresService.js` y `ID_ENTRENADOR_EJEMPLO` usan `1`, `2`; `Number(id)` ya no sirve. Hay que comparar los ids como texto.
-- **`tipoDocumento` va por código** (`CC`, `CE`, `PASAPORTE`), no por el texto de la pantalla. La equivalencia está arriba. `TI` (tarjeta de identidad, de menores de edad) lo acepta la tabla, pero no la pantalla. **Duda:** ¿se rechaza `TI` para entrenadores?
-- **Categorías: la pantalla y D1 no coinciden.** El formulario permite marcar y desmarcar categorías libremente, y varios entrenadores con la misma categoría. Con D1:
-  - desmarcar responde `409`;
-  - marcar una que tiene otro entrenador pide confirmación;
-  - `POST` no lleva categorías: registrar con categorías son **dos llamadas** (`POST` y luego `PUT .../categorias`). Si la segunda falla, el entrenador queda registrado sin categorías.
-  - El mensaje del frontend `categoriasMinimo` ("Selecciona al menos una categoría") tampoco se exige en la API.
+- **Ids UUID** en la base y la API, **números** en el frontend (punto 3).
+- **`tipoDocumento` va por código** (punto 4). La tabla permite `TI`, pero la API la rechaza para entrenadores: todos son mayores de edad.
 - **`unique (correo)` de la tabla distingue mayúsculas.** La API guarda el correo en minúsculas y revisa sin distinguirlas, pero un correo insertado por fuera de la API con mayúsculas no lo cubre la restricción. Propuesta para una migración futura: `unique` sobre `lower(correo)`.
-- **Pasaportes alfanuméricos.** Como la pantalla, la API pide solo dígitos (6 a 12), aunque muchos pasaportes tienen letras. **Duda:** ¿se acepta alfanumérico para `PASAPORTE`?
 - `documentos` (carpeta de documentos) e `id_usuario` (cuenta de acceso, CU-06) no los maneja esta historia.
 - Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre), crear la cuenta del entrenador (CU-06) y la seguridad por rol (HU-005).
 
@@ -799,7 +810,7 @@ Las pruebas de los DAO (`EntrenadorDAOImplTest`, `EntrenadorServiceImplConPostgr
 | `ComprobanteServiceImplTest` | Generar y guardar con dobles de prueba: ruta `AAAA/FD-AAAA-NNNNNN.pdf`, formato y año del número, bucket y vigencia del enlace |
 | `SupabaseStorageContraSupabaseTest` | Opcional y desactivada: contra un Supabase real (ver [Almacenamiento](#almacenamiento-de-comprobantes-supabase-storage)) |
 | `EnvExampleTest` | Los datos del club de `.env.example` se leen con tildes (escapes `\u`) |
-| `ReglasEntrenadorTest` | Limpieza de espacios, tipo de documento y correo; obligatorios; documento de 6 a 12 dígitos; teléfono de 10; correo; fecha de nacimiento no futura y 18 años; largos de la tabla; orden oficial de las categorías |
+| `ReglasEntrenadorTest` | Limpieza de espacios, tipo de documento y correo; obligatorios; `TI` rechazada; documento de 6 a 12 dígitos con `CC` y `CE`, y de 6 a 12 letras y números en mayúsculas con `PASAPORTE`; teléfono de 10; correo; fecha de nacimiento no futura y 18 años; largos de la tabla; orden oficial de las categorías |
 | `EntrenadorServiceImplTest` | Con dobles en memoria de los DAO: crear y editar (datos limpios, `400` con todos los campos), duplicados de documento y correo sin datos del otro, la carrera traducida a `409`, `404`, y las reglas de categorías (reasignar, quitar, desconocidas, sin crear, lista vacía) |
 | `EntrenadorServiceImplConPostgresTest` | Servicio con los DAO reales en PostgreSQL: reasignación, `409` sin cambios a medias y correo en minúsculas |
 | `EntrenadorDAOImplTest` | SQL contra PostgreSQL con la migración 001: crear, buscar, listar ordenado con categorías, existencia de documento y correo, traducción de las restricciones `unique`, actualizar sin tocar `documentos` ni categorías, `FOR UPDATE` y reasignación |
