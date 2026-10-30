@@ -10,13 +10,15 @@ beforeEach(async () => {
 const datos = (extra = {}) => ({
   nombre: 'Luis',
   apellido: 'Pérez',
-  tipoDocumento: 'Cédula de ciudadanía',
+  tipoDocumento: 'CC',
   documento: '1098765432',
+  fechaNacimiento: '1990-05-14',
   telefono: '3001112233',
   correo: 'luis.perez@pradofc.co',
   especialidad: 'Porteros',
   categorias: ['Sub-8'],
   horarioTrabajo: '',
+  direccion: 'Calle 40 Sur 75b-81',
   ...extra,
 })
 
@@ -89,18 +91,20 @@ describe('crear', () => {
       categorias: ['Sub-16', 'Sub-8', 'Sub-12'],
       horarioTrabajo: undefined,
     }))
-    expect(creado).toEqual({
-      id: 3,
+    expect(creado).toEqual(expect.objectContaining({
       nombre: 'Luis',
       apellido: 'Pérez',
-      tipoDocumento: 'Cédula de ciudadanía',
+      tipoDocumento: 'CC',
       documento: '1098765432',
+      fechaNacimiento: '1990-05-14',
       telefono: '3001112233',
       correo: 'luis.perez@pradofc.co',
       especialidad: 'Porteros',
       categorias: ['Sub-8', 'Sub-12', 'Sub-16'],
       horarioTrabajo: '',
-    })
+      direccion: 'Calle 40 Sur 75b-81',
+    }))
+    expect(creado.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(await servicio.listar()).toHaveLength(3)
     expect(await servicio.obtener(3)).toEqual(creado)
   })
@@ -113,7 +117,7 @@ describe('crear', () => {
   it('los ids no se repiten', async () => {
     const a = await servicio.crear(datos())
     const b = await servicio.crear(datos({ documento: '1098765433', correo: 'otro@pradofc.co' }))
-    expect(b.id).toBe(a.id + 1)
+    expect(b.id).not.toBe(a.id)
   })
 
   it('rechaza un duplicado con error que indica el campo y no guarda', async () => {
@@ -127,7 +131,7 @@ describe('crear', () => {
 describe('editar', () => {
   it('actualiza los datos conservando el id', async () => {
     const editado = await servicio.editar(1, datos({ nombre: 'Andrés Felipe', categorias: ['Sub-14', 'Sub-12'] }))
-    expect(editado.id).toBe(1)
+    expect(editado.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(editado.nombre).toBe('Andrés Felipe')
     expect(editado.categorias).toEqual(['Sub-12', 'Sub-14'])
     expect(await servicio.listar()).toHaveLength(3 - 1)
@@ -142,8 +146,8 @@ describe('editar', () => {
   })
 
   it('acepta el id como texto', async () => {
-    const editado = await servicio.editar('1', datos())
-    expect(editado.id).toBe(1)
+    const editado = await servicio.editar('1', datos({ categorias: ['Sub-12'] }))
+    expect(editado.id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('rechaza usar el documento o el correo de otro entrenador', async () => {

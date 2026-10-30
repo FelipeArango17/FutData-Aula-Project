@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import GrupoCasillas from '../ui/GrupoCasillas.jsx'
-import { CATEGORIAS, ESPECIALIDADES, TIPOS_DOCUMENTO } from '../../services/entrenadoresService.js'
+import { CATEGORIAS, ESPECIALIDADES, ETIQUETAS_TIPO_DOCUMENTO, TIPOS_DOCUMENTO } from '../../services/entrenadoresService.js'
 import {
-  MENSAJES, enLista, noVacia, requerido, validarCampos, validarCorreo, validarDocumento, validarTelefono,
+  MENSAJES, enLista, noVacia, requerido, validarCampos, validarCorreo, validarDocumento, validarFechaNacimiento, validarTelefono,
 } from '../../utils/validaciones.js'
 
 function validar(v) {
@@ -12,7 +12,10 @@ function validar(v) {
     nombre: [requerido(MENSAJES.nombreObligatorio)],
     apellido: [requerido(MENSAJES.apellidoObligatorio)],
     tipoDocumento: [enLista(TIPOS_DOCUMENTO, MENSAJES.tipoDocumento)],
-    documento: [validarDocumento],
+    documento: [(valor, valores) => valores.tipoDocumento === 'PASAPORTE'
+      ? (!String(valor ?? '').trim() ? MENSAJES.documentoObligatorio : /^[A-Za-z0-9]{6,12}$/.test(String(valor).trim()) ? null : 'El pasaporte debe tener entre 6 y 12 caracteres alfanuméricos.')
+      : validarDocumento(valor)],
+    fechaNacimiento: [validarFechaNacimiento],
     telefono: [validarTelefono],
     correo: [validarCorreo],
     especialidad: [requerido(MENSAJES.especialidadObligatoria)],
@@ -62,8 +65,13 @@ export default function FormularioEntrenador({ inicial, ignorarId = null, detect
       }
       await onGuardar(valores)
     } catch (error) {
-      if (!error.duplicado) throw error
-      setErrores({ [error.duplicado.campo]: textoDuplicado[error.duplicado.campo] })
+      if (error.duplicado) {
+        setErrores({ [error.duplicado.campo]: textoDuplicado[error.duplicado.campo] })
+      } else if (error.campos?.length) {
+        setErrores(Object.fromEntries(error.campos.map((campo) => [campo, error.message])))
+      } else {
+        throw error
+      }
       setIntentos((n) => n + 1)
     } finally {
       setGuardando(false)
@@ -76,12 +84,14 @@ export default function FormularioEntrenador({ inicial, ignorarId = null, detect
       <Field label="Apellido" id="apellido" autoComplete="off" {...texto('apellido')} />
       <Field label="Tipo de documento" id="tipoDocumento" as="select" {...texto('tipoDocumento')}>
         <option value="">Selecciona el tipo de documento</option>
-        {TIPOS_DOCUMENTO.map((t) => <option key={t} value={t}>{t}</option>)}
+        {TIPOS_DOCUMENTO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO_DOCUMENTO[t]}</option>)}
       </Field>
-      <Field label="Número de documento" id="documento" inputMode="numeric" autoComplete="off" {...texto('documento')} />
+      <Field label="Número de documento" id="documento" inputMode={valores.tipoDocumento === 'PASAPORTE' ? 'text' : 'numeric'} autoComplete="off" {...texto('documento')} />
+      <Field label="Fecha de nacimiento" id="fechaNacimiento" type="date" {...texto('fechaNacimiento')} />
       <Field label="Teléfono" id="telefono" type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
       <Field label="Correo electrónico" id="correo" type="email" autoComplete="off" {...texto('correo')} />
       <Field label="Especialidad" id="especialidad" list="especialidades" autoComplete="off" {...texto('especialidad')} />
+      <Field label="Dirección (opcional)" id="direccion" autoComplete="street-address" {...texto('direccion')} />
       <datalist id="especialidades">
         {ESPECIALIDADES.map((e) => <option key={e} value={e} />)}
       </datalist>
