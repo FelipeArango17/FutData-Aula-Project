@@ -8,12 +8,13 @@ import FilterChips from '../../components/ui/FilterChips.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
-import { calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { SIN_CATEGORIA, calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
 
 // Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
-// filtra por estado y lleva a la ficha. Reemplaza la maqueta con datos fijos; Figma no tiene una pantalla de esta lista.
+// filtra por estado y por categoría (se combinan con AND) y lleva a la ficha. Reemplaza la maqueta con datos fijos; Figma no tiene una pantalla de esta lista.
 // Privacidad: la lista no muestra teléfono ni dirección; esos datos solo están en la ficha.
 const FILTROS = { Todos: 'todos', Activos: 'activos', Inactivos: 'inactivos' }
+const TODAS = '' // valor del selector de categoría para «Todas las categorías»
 const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
 const textoEdad = (d) => {
   const edad = calcularEdad(d.fechaNacimiento)
@@ -22,9 +23,10 @@ const textoEdad = (d) => {
 
 function Mensaje({ icono = 'info', children }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border bg-surface p-4">
+    // flex-wrap: con letra muy grande el ícono queda encima del texto en vez de quitarle el ancho y partir las palabras
+    <div className="flex flex-wrap items-start gap-3 rounded-lg border bg-surface p-4">
       <Icon name={icono} className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
-      <div className="flex min-w-0 flex-1 flex-col gap-3 break-words text-body">{children}</div>
+      <div className="flex min-w-0 flex-1 basis-40 flex-col gap-3 break-words text-body">{children}</div>
     </div>
   )
 }
@@ -35,9 +37,12 @@ export default function Deportistas() {
   const [intento, setIntento] = useState(0)
   const [texto, setTexto] = useState('')
   const [filtro, setFiltro] = useState('Todos')
+  const [categoria, setCategoria] = useState(TODAS)
   const [conTabla, setConTabla] = useState(false)
+  // Categorías para el selector. Se cargan aparte: si fallan, el selector queda solo con «Todas las categorías» y la lista sigue
+  const [categorias, setCategorias] = useState([])
   // Resultados con la clave de la petición que los produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
-  const [base, setBase] = useState({ intento: -1, categorias: {}, total: 0, activos: 0, error: false })
+  const [base, setBase] = useState({ intento: -1, total: 0, activos: 0, error: false })
   const [lista, setLista] = useState({ clave: null, items: null, error: false })
 
   useEffect(() => {
@@ -56,21 +61,22 @@ export default function Deportistas() {
     return () => observador.disconnect()
   }, [])
 
-  // Nombres de las categorías y totales reales (para el subtítulo)
   useEffect(() => {
     let activo = true
-    Promise.all([listarCategorias(), listarDeportistas()])
-      .then(([categorias, todos]) => {
-        if (!activo) return
-        setBase({
-          intento,
-          categorias: Object.fromEntries(categorias.map((c) => [c.id, c.nombre])),
-          total: todos.length,
-          activos: todos.filter((d) => d.activo).length,
-          error: false,
-        })
-      })
-      .catch(() => activo && setBase({ intento, categorias: {}, total: 0, activos: 0, error: true }))
+    listarCategorias()
+      .then((lista) => activo && setCategorias(lista))
+      .catch(() => activo && setCategorias([]))
+    return () => {
+      activo = false
+    }
+  }, [intento])
+
+  // Totales reales (para el subtítulo)
+  useEffect(() => {
+    let activo = true
+    listarDeportistas()
+      .then((todos) => activo && setBase({ intento, total: todos.length, activos: todos.filter((d) => d.activo).length, error: false }))
+      .catch(() => activo && setBase({ intento, total: 0, activos: 0, error: true }))
     return () => {
       activo = false
     }
@@ -78,27 +84,36 @@ export default function Deportistas() {
 
   const busqueda = texto.trim()
   const estado = FILTROS[filtro]
-  const clave = `${intento}|${estado}|${busqueda}`
+  const clave = `${intento}|${estado}|${categoria}|${busqueda}`
 
   // Resultados de la búsqueda; mientras llegan los nuevos se conservan los anteriores
   useEffect(() => {
     let activo = true
-    listarDeportistas({ texto: busqueda, estado })
+    listarDeportistas({ texto: busqueda, estado, idCategoria: categoria })
       .then((items) => activo && setLista({ clave, items, error: false }))
       .catch(() => activo && setLista({ clave, items: null, error: true }))
     return () => {
       activo = false
     }
-  }, [busqueda, estado, clave])
+  }, [busqueda, estado, categoria, clave])
 
   const cargandoBase = base.intento !== intento
   const actualizando = lista.clave !== clave
   const error = base.error || (!actualizando && lista.error)
   const items = lista.items
-  const categoriaDe = (d) => base.categorias[d.idCategoria] ?? 'Sin asignar'
+  const nombresCategoria = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]))
+  const categoriaDe = (d) => (d.idCategoria === null ? 'Sin asignar' : nombresCategoria[d.idCategoria] ?? 'No disponible')
+  // «Sin asignar» o el nombre de la categoría elegida (vacío si el filtro es «Todas las categorías»)
+  const nombreFiltro = categoria === SIN_CATEGORIA ? 'Sin asignar' : nombresCategoria[categoria] ?? ''
+  const filtroActivo = Boolean(busqueda) || filtro !== 'Todos' || categoria !== TODAS
+  const limpiar = () => { setTexto(''); setFiltro('Todos'); setCategoria(TODAS) }
+  const sufijoCategoria = nombreFiltro ? ` · Categoría: ${nombreFiltro}` : ''
+  const detalleEstado = filtro === 'Todos' ? '' : filtro.toLowerCase()
+  const detalleCategoria = !categoria ? '' : categoria === SIN_CATEGORIA ? 'sin categoría asignada' : `de la categoría ${nombreFiltro}`
 
   const aviso = error ? { texto: 'No se pudo cargar la lista de deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } } : null
-  const cuenta = items === null || error ? '' : items.length === 0 ? 'Sin resultados' : `${items.length} ${items.length === 1 ? 'resultado' : 'resultados'}`
+  // Mientras llegan resultados nuevos no se cuenta: el total anterior no corresponde a la categoría ya elegida
+  const cuenta = items === null || error || actualizando ? '' : items.length === 0 ? `Sin resultados${sufijoCategoria}` : `${items.length} ${items.length === 1 ? 'resultado' : 'resultados'}${sufijoCategoria}`
   const subtitulo = cargandoBase || base.error ? 'Consulta y edita la ficha de cada deportista.' : `${base.total} ${base.total === 1 ? 'deportista registrado' : 'deportistas registrados'} · ${base.activos} ${base.activos === 1 ? 'activo' : 'activos'}`
 
   let contenido
@@ -113,9 +128,13 @@ export default function Deportistas() {
   } else if (items.length === 0) {
     contenido = (
       <Mensaje>
-        <p>{busqueda ? `No hay deportistas que coincidan con «${busqueda}»${filtro === 'Todos' ? '' : ` entre los ${filtro.toLowerCase()}`}.` : `No hay deportistas ${filtro === 'Todos' ? '' : filtro.toLowerCase()}.`}</p>
-        {(busqueda || filtro !== 'Todos') && (
-          <Button variant="secondary" onClick={() => { setTexto(''); setFiltro('Todos') }} className="sm:self-start">Limpiar búsqueda y filtro</Button>
+        <p>
+          {busqueda
+            ? `No hay deportistas que coincidan con «${busqueda}»${detalleEstado ? ` entre los ${detalleEstado}` : ''}${detalleCategoria ? ` ${detalleCategoria}` : ''}.`
+            : `No hay deportistas${detalleEstado ? ` ${detalleEstado}` : ''}${detalleCategoria ? ` ${detalleCategoria}` : ''}.`}
+        </p>
+        {filtroActivo && (
+          <Button variant="secondary" onClick={limpiar} className="sm:self-start">Limpiar búsqueda y filtro</Button>
         )}
       </Mensaje>
     )
@@ -185,7 +204,16 @@ export default function Deportistas() {
       </div>
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
       <div className="grid grid-cols-1 gap-4">
-        <Field label="Buscar por nombre o documento" id="buscar" type="search" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Buscar por nombre o documento" id="buscar" type="search" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} />
+          <Field as="select" label="Categoría" id="categoria" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            <option value={TODAS}>Todas las categorías</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.activa ? c.nombre : `${c.nombre} (no vigente)`}</option>
+            ))}
+            <option value={SIN_CATEGORIA}>Sin asignar</option>
+          </Field>
+        </div>
         <FilterChips label="Estado" options={Object.keys(FILTROS)} value={filtro} onChange={setFiltro} />
         <p role="status" className="min-h-[1.125rem] text-small text-secondary">{cuenta}</p>
       </div>
