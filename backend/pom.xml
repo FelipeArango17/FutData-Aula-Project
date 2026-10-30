@@ -79,6 +79,18 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- PostgreSQL real en Docker para las pruebas de integración de los DAO (versión de Spring Boot).
+             Sin Docker, esas pruebas se omiten (ver DockerDisponible). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Lee el texto de los PDF generados en las pruebas -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
