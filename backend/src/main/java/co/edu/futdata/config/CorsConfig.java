@@ -7,8 +7,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * CORS para el frontend (React en Vercel; en desarrollo, Vite en {@code http://localhost:5173}).
  *
- * <p>Sin credenciales (cookies): el frontend enviará el JWT de Supabase en la cabecera
- * {@code Authorization} (HU-001).
+ * <p>El frontend envía el JWT de Supabase en la cabecera {@code Authorization}. Además se permiten credenciales
+ * (cookies) para la cookie HttpOnly de "Recordar este equipo" (HU-002, decisión D16): el frontend debe usar
+ * {@code withCredentials: true} en Axios. Con credenciales, los orígenes tienen que ser exactos: nunca {@code *}.
  */
 @Configuration
 public class CorsConfig implements WebMvcConfigurer {
@@ -25,6 +26,8 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedOrigins(cors.origins().toArray(String[]::new))
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Authorization", "Content-Type")
+                .exposedHeaders("Location")
+                .allowCredentials(true)
                 .maxAge(3600);
     }
 }

@@ -13,13 +13,20 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+/** Cuentas de usuario y sus roles (HU-004, CU-06). Solo para ADMINISTRADOR. */
 @RestController
 @RequestMapping("/api/usuarios")
+@PreAuthorize("hasRole('ADMINISTRADOR')")
 @Tag(name = "Usuarios", description = "Gestión de usuarios y roles")
 @ApiResponse(responseCode = "400", description = "Datos inválidos",
+        content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+@ApiResponse(responseCode = "401", description = "Sin sesión o con un token inválido o vencido",
+        content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+@ApiResponse(responseCode = "403", description = "La cuenta no tiene el rol ADMINISTRADOR",
         content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
 public class UsuarioController {
     private final IUsuarioService usuarios;

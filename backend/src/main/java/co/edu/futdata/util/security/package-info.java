@@ -1,10 +1,9 @@
 /**
  * <b>Utilidades de seguridad</b>.
  *
- * <p>Componentes transversales de seguridad del PPI: validación del JWT de Supabase
- * ({@code JwtValidator}), generación y hash de códigos 2FA ({@code GeneradorCodigo}) y auditoría
- * ({@code AuditoriaLogger}). Llegan con las historias HU-001, HU-002 y HU-005.
- *
- * <p>Mientras tanto la API no tiene autenticación: no debe desplegarse en un entorno público.
+ * <p>Componentes transversales de seguridad del PPI: la configuración de Spring Security
+ * ({@code SeguridadConfig}), la validación del JWT de Supabase y los roles ({@code JwtValidator}) y las respuestas
+ * {@code 401} y {@code 403} ({@code RespuestasSeguridad}). Con HU-002 llegan la generación y el hash de los códigos
+ * 2FA ({@code GeneradorCodigo}) y la auditoría ({@code AuditoriaLogger}).
  */
 package co.edu.futdata.util.security;

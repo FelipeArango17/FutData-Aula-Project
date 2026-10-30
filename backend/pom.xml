@@ -34,6 +34,13 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- Seguridad: valida el JWT de Supabase Auth con sus llaves públicas (JWKS) y aplica los roles
+             (util.security). Trae Spring Security y Nimbus JOSE. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
         <!-- Persistencia: JDBC sobre HikariCP (JdbcTemplate). Sin JPA ni Spring Data: el PPI usa DAO con JDBC. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -77,6 +84,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- jwt() y @WithMockUser para probar los endpoints protegidos con MockMvc -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- PostgreSQL real en Docker para las pruebas de integración de los DAO (versión de Spring Boot).

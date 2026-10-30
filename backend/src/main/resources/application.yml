@@ -73,6 +73,7 @@ futdata:
     correo: ${CLUB_CORREO:pradofutbolclub@gmail.com}
   supabase:
     # Supabase Storage: comprobantes de pago en un bucket privado (datasource.external.SupabaseStorageClient).
+    # La misma URL sirve para validar los JWT de Supabase Auth (util.security.JwtValidator).
     url: ${SUPABASE_URL}
     service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
     bucket-comprobantes: ${SUPABASE_BUCKET_COMPROBANTES:comprobantes}
@@ -118,6 +119,13 @@ spring:
       data-source-properties:
         # SSL obligatorio si DB_URL no indica sslmode (si lo indica, manda el de la URL).
         sslmode: require
+
+# En producción no se publica la documentación de la API.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 
 logging:
   level:

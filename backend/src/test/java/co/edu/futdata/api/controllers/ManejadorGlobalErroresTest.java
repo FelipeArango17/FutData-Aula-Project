@@ -33,6 +33,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -42,8 +43,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Formato uniforme de errores. Usa un controlador que solo existe en las pruebas. */
+/** Formato uniforme de errores. Usa un controlador que solo existe en las pruebas, con un usuario autenticado. */
 @SpringBootTest
+@WithMockUser
 @Import(ManejadorGlobalErroresTest.ControladorDePrueba.class)
 @AutoConfigureMockMvc
 @TestPropertySource(locations = "classpath:pruebas.properties")

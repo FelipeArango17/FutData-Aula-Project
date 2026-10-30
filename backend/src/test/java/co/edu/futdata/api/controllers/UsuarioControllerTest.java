@@ -1,5 +1,6 @@
 package co.edu.futdata.api.controllers;
 
+import org.springframework.security.test.context.support.WithMockUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,6 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.http.MediaType;
 
 @SpringBootTest
+@WithMockUser(roles = "ADMINISTRADOR")
 @AutoConfigureMockMvc
 @TestPropertySource(locations = "classpath:pruebas.properties")
 class UsuarioControllerTest {
