@@ -1,6 +1,12 @@
 package co.edu.futdata.api.controllers;
 
 import co.edu.futdata.api.dto.ErrorResponseDTO;
+import co.edu.futdata.datasource.external.AlmacenamientoException;
+import co.edu.futdata.datasource.external.ArchivoInvalidoException;
+import co.edu.futdata.datasource.external.ArchivoNoEncontradoException;
+import co.edu.futdata.datasource.external.ArchivoYaExisteException;
+import co.edu.futdata.datasource.external.NotificacionException;
+import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
@@ -13,9 +19,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -40,16 +49,32 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros),
  *       {@link DatosInvalidosException} o {@link ComprobanteInvalidoException}.</li>
  *   <li>{@code 404}: ruta inexistente o {@link RecursoNoEncontradoException}.</li>
- *   <li>{@code 409}: {@link ConflictoException} (duplicados, reglas que dependen de otros registros).</li>
+ *   <li>{@code 409}: {@link ConflictoException} (duplicados, reglas que dependen de otros registros) y las
+ *       restricciones de la base de datos que el servicio no tradujo ({@link DataIntegrityViolationException}).</li>
+ *   <li>Supabase Storage ({@link AlmacenamientoException}): {@code 400} archivo inválido, {@code 404} archivo
+ *       inexistente, {@code 409} archivo que ya existe y {@code 503} cuando Storage falla o no está configurado.</li>
+ *   <li>n8n ({@link NotificacionException}): {@code 503} si no se pudo enviar; {@code 500} si es un error de
+ *       configuración o de contrato (lo debe corregir el equipo, no el usuario).</li>
  *   <li>Otros errores de Spring MVC ({@code 405}, {@code 415}...): su código, con un mensaje en español.</li>
  *   <li>{@code 500}: cualquier otra excepción. La traza solo va al log del servidor.</li>
  * </ul>
+ *
+ * <p>En los errores de servicios externos y de la base de datos, el detalle (rutas, buckets, nombres de variables,
+ * valores repetidos) va solo al log: la respuesta lleva un mensaje genérico.
  */
 @RestControllerAdvice
 public class ManejadorGlobalErrores {
 
     private static final Logger log = LoggerFactory.getLogger(ManejadorGlobalErrores.class);
     private static final String DATOS_INVALIDOS = "Los datos enviados no son válidos";
+    static final String ALMACENAMIENTO_NO_DISPONIBLE =
+            "El almacenamiento de archivos no está disponible en este momento. Intenta de nuevo más tarde.";
+    static final String NOTIFICACION_NO_ENVIADA = "No se pudo enviar el correo. Intenta de nuevo más tarde.";
+    static final String CHOCA_CON_DATOS =
+            "La operación no se puede completar porque choca con otros datos registrados.";
+    static final String ERROR_INTERNO = "Ocurrió un error interno. Intenta de nuevo más tarde.";
+    /** Solo el nombre de la restricción: el detalle de PostgreSQL trae los valores. */
+    private static final Pattern RESTRICCION = Pattern.compile("constraint \"([^\"]+)\"");
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponseDTO> cuerpoInvalido(MethodArgumentNotValidException e, HttpServletRequest peticion) {
@@ -125,6 +150,48 @@ public class ManejadorGlobalErrores {
         return responder(HttpStatus.BAD_REQUEST, e.getMessage(), peticion);
     }
 
+    @ExceptionHandler(AlmacenamientoException.class)
+    public ResponseEntity<ErrorResponseDTO> almacenamiento(AlmacenamientoException e, HttpServletRequest peticion) {
+        return switch (e) {
+            case ArchivoInvalidoException invalido -> responder(HttpStatus.BAD_REQUEST, invalido.getMessage(), peticion);
+            case ArchivoNoEncontradoException noEncontrado -> {
+                log.warn("Archivo no encontrado en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(), noEncontrado.getMessage());
+                yield responder(HttpStatus.NOT_FOUND, "No se encontró el archivo.", peticion);
+            }
+            case ArchivoYaExisteException yaExiste -> {
+                log.warn("Archivo repetido en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(), yaExiste.getMessage());
+                yield responder(HttpStatus.CONFLICT, "El archivo ya existe y no se puede reemplazar.", peticion);
+            }
+            default -> {
+                log.error("Supabase Storage falló en {} {}: {} ({})", peticion.getMethod(), peticion.getRequestURI(),
+                        e.getMessage(), e.getClass().getSimpleName());
+                yield responder(HttpStatus.SERVICE_UNAVAILABLE, ALMACENAMIENTO_NO_DISPONIBLE, peticion);
+            }
+        };
+    }
+
+    @ExceptionHandler(NotificacionException.class)
+    public ResponseEntity<ErrorResponseDTO> notificacion(NotificacionException e, HttpServletRequest peticion) {
+        // Los mensajes de estas excepciones no traen correos ni códigos (los arma N8nClient sin datos personales)
+        log.error("Notificación {} no enviada en {} {}: {} ({})", e.getEvento(), peticion.getMethod(),
+                peticion.getRequestURI(), e.getMessage(), e.getClass().getSimpleName());
+        return e instanceof NotificacionNoEnviadaException
+                ? responder(HttpStatus.SERVICE_UNAVAILABLE, NOTIFICACION_NO_ENVIADA, peticion)
+                : responder(HttpStatus.INTERNAL_SERVER_ERROR, ERROR_INTERNO, peticion);
+    }
+
+    /**
+     * Una restricción de la base de datos que el servicio no tradujo (llave foránea, {@code check}, {@code unique}
+     * o exclusión). En el log va solo el nombre de la restricción, nunca los valores.
+     */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponseDTO> integridad(DataIntegrityViolationException e, HttpServletRequest peticion) {
+        Matcher restriccion = RESTRICCION.matcher(String.valueOf(e.getMostSpecificCause().getMessage()));
+        log.warn("Restricción de la base de datos en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(),
+                restriccion.find() ? restriccion.group(1) : "(sin nombre)");
+        return responder(HttpStatus.CONFLICT, CHOCA_CON_DATOS, peticion);
+    }
+
     @ExceptionHandler(RecursoNoEncontradoException.class)
     public ResponseEntity<ErrorResponseDTO> recursoNoEncontrado(RecursoNoEncontradoException e, HttpServletRequest peticion) {
         return responder(HttpStatus.NOT_FOUND, e.getMessage(), peticion);
@@ -160,7 +227,7 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponseDTO> errorInterno(Exception e, HttpServletRequest peticion) {
         log.error("Error no controlado en {} {}", peticion.getMethod(), peticion.getRequestURI(), e);
-        return responder(HttpStatus.INTERNAL_SERVER_ERROR, "Ocurrió un error interno. Intenta de nuevo más tarde.", peticion);
+        return responder(HttpStatus.INTERNAL_SERVER_ERROR, ERROR_INTERNO, peticion);
     }
 
     private ResponseEntity<ErrorResponseDTO> responder(HttpStatusCode estado, String mensaje, HttpServletRequest peticion) {

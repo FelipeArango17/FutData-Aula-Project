@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -18,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
+import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorResponseDTO;
@@ -60,7 +62,7 @@ class EntrenadorControllerTest {
 
     private static EntrenadorResponseDTO luis(List<String> categorias) {
         return new EntrenadorResponseDTO(ID, "Luis", "Pérez", "CC", "1098765432", LocalDate.of(1990, 5, 14),
-                "3001112233", "luis.perez@pradofc.co", "Porteros", categorias, "Lunes a viernes", null);
+                "3001112233", "luis.perez@pradofc.co", "Porteros", categorias, "Lunes a viernes", null, true);
     }
 
     private static ResultActions error(ResultActions respuesta, int estado, String error, String ruta) throws Exception {
@@ -91,7 +93,8 @@ class EntrenadorControllerTest {
                 .andExpect(jsonPath("$[0].especialidad").value("Porteros"))
                 .andExpect(jsonPath("$[0].categorias").value(contains("Sub-8", "Sub-12")))
                 .andExpect(jsonPath("$[0].horarioTrabajo").value("Lunes a viernes"))
-                .andExpect(jsonPath("$[0].direccion").value(nullValue()));
+                .andExpect(jsonPath("$[0].direccion").value(nullValue()))
+                .andExpect(jsonPath("$[0].activo").value(true));
     }
 
     @Test
@@ -228,6 +231,33 @@ class EntrenadorControllerTest {
                 .andExpect(jsonPath("$.mensaje").value(mensaje))
                 .andExpect(jsonPath("$.campos").value(contains("categorias")));
         verify(servicio).asignarCategorias(ID, new AsignarCategoriasRequestDTO(List.of("Sub-8"), null));
+    }
+
+    @Test
+    void desactivaConPatchEstado() throws Exception {
+        EntrenadorResponseDTO l = luis(List.of());
+        EntrenadorResponseDTO inactivo = new EntrenadorResponseDTO(l.id(), l.nombre(), l.apellido(), l.tipoDocumento(),
+                l.documento(), l.fechaNacimiento(), l.telefono(), l.correo(), l.especialidad(), l.categorias(),
+                l.horarioTrabajo(), l.direccion(), false);
+        when(servicio.cambiarEstado(eq(ID), any())).thenReturn(inactivo);
+
+        mvc.perform(patch("/api/entrenadores/" + ID + "/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.activo").value(false))
+                .andExpect(jsonPath("$.categorias").isEmpty());
+
+        verify(servicio).cambiarEstado(ID, new CambiarEstadoEntrenadorRequestDTO(false));
+    }
+
+    @Test
+    void unaCategoriaSinEntrenadorLlegaConEntrenadorNull() throws Exception {
+        when(servicio.listarCategorias()).thenReturn(List.of(new CategoriaResponseDTO(UUID.randomUUID(), "Sub-8", 0, 7, null)));
+
+        mvc.perform(get("/api/categorias"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nombre").value("Sub-8"))
+                .andExpect(jsonPath("$[0].entrenador").value(nullValue()));
     }
 
     @Test

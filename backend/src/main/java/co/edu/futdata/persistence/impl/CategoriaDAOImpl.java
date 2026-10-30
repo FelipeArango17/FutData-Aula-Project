@@ -4,9 +4,9 @@ import co.edu.futdata.domain.entities.Categoria;
 import co.edu.futdata.persistence.dao.ICategoriaDAO;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -47,7 +47,8 @@ public class CategoriaDAOImpl implements ICategoriaDAO {
         if (idsCategorias.isEmpty()) {
             return;
         }
+        // MapSqlParameterSource y no Map.of: idEntrenador puede ser null (dejar la categoría sin entrenador)
         jdbc.update("UPDATE categoria SET id_entrenador = :idEntrenador WHERE id_categoria IN (:ids)",
-                Map.of("idEntrenador", idEntrenador, "ids", idsCategorias));
+                new MapSqlParameterSource().addValue("idEntrenador", idEntrenador).addValue("ids", idsCategorias));
     }
 }

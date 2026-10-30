@@ -25,10 +25,12 @@ services:
     ports:
       - "8080:8080"
     # Todas las variables del backend (DB_*, CORS_ORIGINS, N8N_WEBHOOK_TOKEN...) salen de backend/.env.
-    # Perfil de Spring: no se define aquí. La imagen usa `prod` (exige todas las variables); para el perfil `local`
-    # (arranca sin base de datos) pon SPRING_PROFILES_ACTIVE=local en backend/.env: el env_file gana sobre el ENV de la imagen.
+    # Perfil de Spring: `local` por defecto, porque este compose es para desarrollo (arranca aunque falten Supabase o la
+    # base de datos). Para probar `prod` (exige todas las variables): `SPRING_PROFILES_ACTIVE=prod docker compose up -d`.
+    # `environment` gana sobre backend/.env y sobre el ENV de la imagen.
     env_file: backend/.env
     environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       # Dentro de Docker el backend llama a n8n por el nombre del servicio, no por localhost (que sería el propio contenedor).
       # Esto manda sobre N8N_BASE_URL de backend/.env.
       N8N_BASE_URL: http://n8n:5678

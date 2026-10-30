@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ComprobanteServiceImpl implements IComprobanteService {
 
-    /** {@code FD-2026-000123}: año y consecutivo de 6 dígitos (lo generará una secuencia de la tabla Pago). */
+    /** {@code FD-2026-000123}: año y consecutivo de 6 dígitos (función {@code siguiente_numero_comprobante()}, migración 004). */
     static final Pattern NUMERO = Pattern.compile("FD-(\\d{4})-\\d{6}");
     /** {@code 2026/FD-2026-000123.pdf}: la carpeta es el mismo año del número. */
     static final Pattern RUTA = Pattern.compile("(\\d{4})/FD-\\1-\\d{6}\\.pdf");
@@ -37,7 +37,7 @@ public class ComprobanteServiceImpl implements IComprobanteService {
         this.supabase = supabase;
     }
 
-    // TODO tabla Pago: PagoServiceImpl la llamará al registrar o aprobar un pago y guardará la ruta en Pago.recibo_url.
+    // TODO tabla Pago: PagoServiceImpl la llamará al registrar o aprobar un pago y guardará la ruta en Pago.recibo_ruta.
     @Override
     public String generarYGuardar(ComprobantePagoDTO datos) {
         byte[] pdf = generador.generar(datos);
@@ -47,7 +47,7 @@ public class ComprobanteServiceImpl implements IComprobanteService {
 
     // TODO HU-001, HU-005 y tabla Pago: PagoController expondrá GET /api/pagos/{id}/comprobante. Antes de llamar
     // aquí, IPagoService busca el pago (404 si no existe), verifica el rol con el JWT (ADMINISTRADOR o TESORERO, o el
-    // ACUDIENTE de ese deportista; si no, 403) y lee Pago.recibo_url. Responde la URL firmada o un 302 hacia ella.
+    // ACUDIENTE de ese deportista; si no, 403) y lee Pago.recibo_ruta. Responde la URL firmada o un 302 hacia ella.
     @Override
     public String enlaceDescarga(String ruta) {
         if (ruta == null || !RUTA.matcher(ruta).matches()) {

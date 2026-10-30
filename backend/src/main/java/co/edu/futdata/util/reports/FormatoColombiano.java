@@ -1,5 +1,6 @@
 package co.edu.futdata.util.reports;
 
+import co.edu.futdata.config.RelojConfig;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.time.Instant;
@@ -17,7 +18,7 @@ import java.util.Locale;
  */
 public final class FormatoColombiano {
 
-    public static final ZoneId ZONA = ZoneId.of("America/Bogota");
+    public static final ZoneId ZONA = RelojConfig.ZONA_COLOMBIA;
 
     private static final String[] MESES = {"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
             "agosto", "septiembre", "octubre", "noviembre", "diciembre"};

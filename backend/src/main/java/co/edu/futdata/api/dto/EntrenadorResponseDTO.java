@@ -10,6 +10,7 @@ import java.util.UUID;
  * {@code fechaNacimiento} y {@code direccion}). Los opcionales vacíos llegan como {@code null}.
  *
  * @param categorias nombres de las categorías que dirige, en el orden oficial (Sub-8, Sub-10, Sub-12, Sub-14, Sub-16)
+ * @param activo     {@code false} si fue desactivado: conserva su historial, pero no dirige categorías
  */
 public record EntrenadorResponseDTO(
         @Schema(example = "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b") UUID id,
@@ -23,5 +24,6 @@ public record EntrenadorResponseDTO(
         @Schema(example = "Porteros") String especialidad,
         @Schema(example = "[\"Sub-8\", \"Sub-12\"]") List<String> categorias,
         @Schema(example = "Lunes a viernes, 3:30 p. m. a 7:30 p. m.") String horarioTrabajo,
-        @Schema(example = "Calle 40 Sur 75b-81") String direccion) {
+        @Schema(example = "Calle 40 Sur 75b-81") String direccion,
+        @Schema(example = "true") boolean activo) {
 }

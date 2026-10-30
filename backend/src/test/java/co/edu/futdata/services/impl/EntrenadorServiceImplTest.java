@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
+import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorResponseDTO;
@@ -145,7 +146,7 @@ class EntrenadorServiceImplTest {
             assertThat(creado.id()).isNotNull();
             assertThat(creado).isEqualTo(new EntrenadorResponseDTO(creado.id(), "Luis", "Pérez", "CC", "1098765432",
                     LocalDate.of(1990, 5, 14), "3001112233", "luis.perez@pradofc.co", "Porteros", List.of(), null,
-                    "Calle 40 Sur 75b-81"));
+                    "Calle 40 Sur 75b-81", true));
             assertThat(entrenadores.filas).hasSize(3);
         }
 
@@ -349,23 +350,18 @@ class EntrenadorServiceImplTest {
         }
 
         @Test
-        void quitarUnaCategoriaEs409PorqueNoPuedeQuedarSinEntrenador() {
-            ConflictoException e = catchThrowableOfType(ConflictoException.class,
-                    () -> servicio.asignarCategorias(diaz, pedir(true, "Sub-8", "Sub-16")));
+        void quitarUnaCategoriaLaDejaSinEntrenador() {
+            EntrenadorResponseDTO r = servicio.asignarCategorias(diaz, pedir(null, "Sub-8", "Sub-16"));
 
-            assertThat(e).hasMessage("No se pueden quitar Sub-10 y Sub-14: cada categoría debe tener un entrenador. "
-                    + "Para quitárselas, asígnalas a otro entrenador.");
-            assertThat(e.getCampos()).containsExactly("categorias");
-            assertThat(categorias.asignaciones).isEmpty();
-            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Sub-8", "Sub-10", "Sub-14", "Sub-16");
+            assertThat(r.categorias()).containsExactly("Sub-8", "Sub-16");
+            assertThat(categorias.listar()).filteredOn(c -> List.of("Sub-10", "Sub-14").contains(c.getNombre()))
+                    .extracting(Categoria::getIdEntrenador).containsOnlyNulls();
         }
 
         @Test
-        void unaListaVaciaParaQuienTieneCategoriasEs409EnSingular() {
-            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null)))
-                    .isInstanceOf(ConflictoException.class)
-                    .hasMessage("No se puede quitar Sub-12: cada categoría debe tener un entrenador. "
-                            + "Para quitársela, asígnala a otro entrenador.");
+        void unaListaVaciaLeQuitaTodasSusCategorias() {
+            assertThat(servicio.asignarCategorias(mora, pedir(null)).categorias()).isEmpty();
+            assertThat(servicio.listarCategorias().get(2).entrenador()).isNull();
         }
 
         @Test
@@ -376,11 +372,41 @@ class EntrenadorServiceImplTest {
         }
 
         @Test
-        void siQuitaYTomaDeOtroAlMismoTiempoPrimeroAvisaLoQueQuita() {
-            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(true, "Sub-8")))
-                    .isInstanceOf(ConflictoException.class)
-                    .hasMessageStartingWith("No se puede quitar Sub-12");
-            assertThat(categorias.asignaciones).isEmpty();
+        void unaCategoriaSinEntrenadorSeAsignaSinPedirConfirmacion() {
+            servicio.asignarCategorias(diaz, pedir(null, "Sub-8", "Sub-10", "Sub-14"));
+
+            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(null, "Sub-12", "Sub-16"));
+
+            assertThat(r.categorias()).containsExactly("Sub-12", "Sub-16");
+        }
+
+        @Test
+        void siQuitaYTomaDeOtroAlMismoTiempoHaceLasDosCosas() {
+            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, "Sub-8"));
+
+            assertThat(r.categorias()).containsExactly("Sub-8");
+            assertThat(servicio.listarCategorias().get(2).entrenador()).isNull();
+            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Sub-10", "Sub-14", "Sub-16");
+        }
+
+        @Test
+        void siLaReasignacionNoEstaConfirmadaTampocoQuitaNada() {
+            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null, "Sub-8")))
+                    .isInstanceOf(ConflictoException.class);
+
+            assertThat(servicio.consultar(mora).categorias()).containsExactly("Sub-12");
+        }
+
+        @Test
+        void unEntrenadorInactivoNoRecibeCategorias() {
+            servicio.cambiarEstado(mora, new CambiarEstadoEntrenadorRequestDTO(false));
+
+            ConflictoException e = catchThrowableOfType(ConflictoException.class,
+                    () -> servicio.asignarCategorias(mora, pedir(true, "Sub-12")));
+
+            assertThat(e).hasMessage("El entrenador está inactivo. Actívalo antes de asignarle categorías.");
+            assertThat(e.getCampos()).containsExactly("activo");
+            assertThat(servicio.asignarCategorias(mora, pedir(null)).categorias()).isEmpty();
         }
 
         @Test
@@ -426,6 +452,56 @@ class EntrenadorServiceImplTest {
             assertThatThrownBy(() -> servicio.asignarCategorias(UUID.randomUUID(), pedir(true, "Sub-12")))
                     .isInstanceOf(RecursoNoEncontradoException.class);
             assertThat(categorias.asignaciones).isEmpty();
+        }
+    }
+
+    @Nested
+    class CambiarEstado {
+
+        @Test
+        void desactivarConservaSusDatosYDejaSinEntrenadorSusCategorias() {
+            EntrenadorResponseDTO r = servicio.cambiarEstado(diaz, new CambiarEstadoEntrenadorRequestDTO(false));
+
+            assertThat(r.activo()).isFalse();
+            assertThat(r.categorias()).isEmpty();
+            assertThat(r.apellido()).isEqualTo("Díaz");
+            assertThat(categorias.bloqueadas).isTrue();
+            assertThat(servicio.listarCategorias()).filteredOn(c -> c.entrenador() == null)
+                    .extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-8", "Sub-10", "Sub-14", "Sub-16");
+            assertThat(servicio.consultar(mora).categorias()).containsExactly("Sub-12");
+        }
+
+        @Test
+        void reactivarLoDejaActivoSinCategorias() {
+            servicio.cambiarEstado(diaz, new CambiarEstadoEntrenadorRequestDTO(false));
+
+            EntrenadorResponseDTO r = servicio.cambiarEstado(diaz, new CambiarEstadoEntrenadorRequestDTO(true));
+
+            assertThat(r.activo()).isTrue();
+            assertThat(r.categorias()).isEmpty();
+        }
+
+        @Test
+        void pedirElEstadoQueYaTieneNoCambiaNada() {
+            EntrenadorResponseDTO r = servicio.cambiarEstado(mora, new CambiarEstadoEntrenadorRequestDTO(true));
+
+            assertThat(r.activo()).isTrue();
+            assertThat(r.categorias()).containsExactly("Sub-12");
+            assertThat(categorias.asignaciones).isEmpty();
+        }
+
+        @Test
+        void sinActivoEs400() {
+            assertThatThrownBy(() -> servicio.cambiarEstado(mora, new CambiarEstadoEntrenadorRequestDTO(null)))
+                    .isInstanceOf(DatosInvalidosException.class)
+                    .hasMessage("activo: es obligatorio (true o false)");
+            assertThatThrownBy(() -> servicio.cambiarEstado(mora, null)).isInstanceOf(DatosInvalidosException.class);
+        }
+
+        @Test
+        void unEntrenadorQueNoExisteEs404() {
+            assertThatThrownBy(() -> servicio.cambiarEstado(UUID.randomUUID(), new CambiarEstadoEntrenadorRequestDTO(false)))
+                    .isInstanceOf(RecursoNoEncontradoException.class);
         }
     }
 
@@ -531,6 +607,16 @@ class EntrenadorServiceImplTest {
                 return false;
             }
             filas.put(e.getId(), copia(e));
+            return true;
+        }
+
+        @Override
+        public boolean cambiarActivo(UUID id, boolean activo) {
+            Entrenador fila = filas.get(id);
+            if (fila == null) {
+                return false;
+            }
+            fila.setActivo(activo);
             return true;
         }
 

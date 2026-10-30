@@ -1,6 +1,7 @@
 package co.edu.futdata.api.controllers;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
+import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorResponseDTO;
 import co.edu.futdata.api.dto.ErrorResponseDTO;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -23,7 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-/** Alta, consulta y edición de entrenadores, y asignación de sus categorías (HU-025, CU-10). */
+/** Alta, consulta, edición, activación y categorías de los entrenadores (HU-025, CU-10). */
 // TODO HU-005: solo ADMINISTRADOR
 @RestController
 @RequestMapping("/api/entrenadores")
@@ -79,13 +81,23 @@ public class EntrenadorController {
     @PutMapping("/{id}/categorias")
     @Operation(summary = "Asignar las categorías de un entrenador",
             description = "Lista completa. Una categoría de otro entrenador exige \"reasignar\": true; "
-                    + "no se puede quitar una categoría sin asignarla a otro entrenador")
+                    + "una que tenía y no se envía queda sin entrenador")
     @ApiResponse(responseCode = "200", description = "El entrenador con sus categorías")
     @ApiResponse(responseCode = "404", description = "No existe el entrenador",
             content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
-    @ApiResponse(responseCode = "409", description = "Categorías de otro entrenador sin reasignar, o categorías quitadas",
+    @ApiResponse(responseCode = "409", description = "Categorías de otro entrenador sin reasignar, o entrenador inactivo",
             content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
     public EntrenadorResponseDTO asignarCategorias(@PathVariable UUID id, @RequestBody AsignarCategoriasRequestDTO peticion) {
         return entrenadores.asignarCategorias(id, peticion);
+    }
+
+    @PatchMapping("/{id}/estado")
+    @Operation(summary = "Activar o desactivar un entrenador",
+            description = "Desactivarlo deja sin entrenador las categorías que dirigía y conserva su historial")
+    @ApiResponse(responseCode = "200", description = "El entrenador con su estado")
+    @ApiResponse(responseCode = "404", description = "No existe el entrenador",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    public EntrenadorResponseDTO cambiarEstado(@PathVariable UUID id, @RequestBody CambiarEstadoEntrenadorRequestDTO peticion) {
+        return entrenadores.cambiarEstado(id, peticion);
     }
 }

@@ -22,13 +22,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class EntrenadorDAOImpl implements IEntrenadorDAO {
 
-    // Nombres que PostgreSQL da a las restricciones unique de la migración 001
+    // Nombres de las restricciones unique: la de documento es de la migración 001; la de correo es el índice
+    // único sobre lower(correo) de la migración 004, que conserva el nombre de la restricción que reemplazó
     static final String UNICO_DOCUMENTO = "entrenador_tipo_documento_documento_identidad_key";
     static final String UNICO_CORREO = "entrenador_correo_key";
 
     private static final String COLUMNAS = """
             id_entrenador, nombre, apellido, tipo_documento, documento_identidad, fecha_nacimiento, telefono,
-            correo, direccion, horario_trabajo, especialidad""";
+            correo, direccion, horario_trabajo, especialidad, activo""";
 
     private static final RowMapper<Entrenador> FILA_A_ENTIDAD = EntrenadorDAOImpl::aEntidad;
 
@@ -104,6 +105,12 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
         }
     }
 
+    @Override
+    public boolean cambiarActivo(UUID id, boolean activo) {
+        return jdbc.update("UPDATE entrenador SET activo = :activo WHERE id_entrenador = :id",
+                new MapSqlParameterSource().addValue("activo", activo).addValue("id", id)) > 0;
+    }
+
     private boolean existe(String condicion, MapSqlParameterSource parametros, UUID excluirId) {
         String sql = "SELECT EXISTS (SELECT 1 FROM entrenador WHERE " + condicion;
         if (excluirId != null) {
@@ -155,6 +162,7 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
         e.setDireccion(fila.getString("direccion"));
         e.setHorarioTrabajo(fila.getString("horario_trabajo"));
         e.setEspecialidad(fila.getString("especialidad"));
+        e.setActivo(fila.getBoolean("activo"));
         return e;
     }
 }

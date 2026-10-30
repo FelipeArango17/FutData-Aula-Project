@@ -33,7 +33,8 @@ COPY --from=build --chown=futdata:futdata /app/target/futdata-backend.jar app.ja
 USER futdata
 EXPOSE 8080
 
-# Perfil prod: exige DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL y N8N_WEBHOOK_TOKEN.
+# Perfil prod: exige DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL, N8N_WEBHOOK_TOKEN, SUPABASE_URL y
+# SUPABASE_SERVICE_ROLE_KEY (config.VerificadorVariablesProd). docker-compose.yml lo cambia a local para desarrollo.
 ENV SPRING_PROFILES_ACTIVE=prod \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 

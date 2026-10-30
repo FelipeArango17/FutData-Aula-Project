@@ -21,7 +21,7 @@ public record ErrorResponseDTO(
         @Schema(example = "400") int estado,
         @Schema(example = "Bad Request") String error,
         @Schema(example = "nombre: no debe estar vacío") String mensaje,
-        @Schema(example = "/api/entrenamientos") String ruta,
+        @Schema(example = "/api/entrenadores") String ruta,
         @Schema(example = "[\"nombre\"]") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> campos) {
 
     public ErrorResponseDTO(Instant timestamp, int estado, String error, String mensaje, String ruta) {

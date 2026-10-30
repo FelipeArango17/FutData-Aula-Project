@@ -18,8 +18,8 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * EntrenadorDAOImpl y CategoriaDAOImpl contra un PostgreSQL real con la migración 001 (Testcontainers). Sin
- * Docker, se omiten (ver {@link DockerDisponible}).
+ * EntrenadorDAOImpl y CategoriaDAOImpl contra un PostgreSQL real con las migraciones 001 a 004 (Testcontainers o
+ * una base local). Sin ninguno de los dos, se omiten (ver {@link DockerDisponible}).
  */
 @ExtendWith(DockerDisponible.class)
 class EntrenadorDAOImplTest {
@@ -69,6 +69,42 @@ class EntrenadorDAOImplTest {
         assertThat(leido.getHorarioTrabajo()).isEqualTo("Lunes a viernes, 3:30 p. m. a 7:30 p. m.");
         assertThat(leido.getEspecialidad()).isEqualTo("Porteros");
         assertThat(leido.getCategorias()).isEmpty();
+        assertThat(leido.isActivo()).isTrue();
+    }
+
+    @Test
+    void laMigracionCreaLasCincoCategoriasSinEntrenador() {
+        assertThat(PostgresDePrueba.categoriasDeLaMigracion()).containsExactly(
+                "Sub-8 0-7 sin entrenador", "Sub-10 8-9 sin entrenador", "Sub-12 10-11 sin entrenador",
+                "Sub-14 12-13 sin entrenador", "Sub-16 14-15 sin entrenador");
+    }
+
+    @Test
+    void cambiaElEstadoActivoSinTocarLosDemasDatos() {
+        UUID id = entrenadores.crear(nuevo("1098765432", "luis@pradofc.co"));
+
+        assertThat(entrenadores.cambiarActivo(id, false)).isTrue();
+        Entrenador leido = entrenadores.buscarPorId(id).orElseThrow();
+        assertThat(leido.isActivo()).isFalse();
+        assertThat(leido.getCorreo()).isEqualTo("luis@pradofc.co");
+        assertThat(entrenadores.listar()).extracting(Entrenador::isActivo).containsExactly(false);
+
+        assertThat(entrenadores.cambiarActivo(id, true)).isTrue();
+        assertThat(entrenadores.buscarPorId(id).orElseThrow().isActivo()).isTrue();
+        assertThat(entrenadores.cambiarActivo(UUID.randomUUID(), false)).isFalse();
+    }
+
+    @Test
+    void actualizarNoCambiaElEstadoActivo() {
+        UUID id = entrenadores.crear(nuevo("1098765432", "luis@pradofc.co"));
+        entrenadores.cambiarActivo(id, false);
+        Entrenador cambios = nuevo("1098765432", "luis@pradofc.co");
+        cambios.setId(id);
+        cambios.setNombre("Luis Fernando");
+
+        entrenadores.actualizar(cambios);
+
+        assertThat(entrenadores.buscarPorId(id).orElseThrow().isActivo()).isFalse();
     }
 
     @Test
@@ -210,5 +246,19 @@ class EntrenadorDAOImplTest {
 
         assertThat(entrenadores.buscarPorId(diaz).orElseThrow().getCategorias()).containsExactly("Sub-8", "Sub-10");
         assertThat(entrenadores.buscarPorId(mora).orElseThrow().getCategorias()).containsExactly("Sub-12");
+    }
+
+    @Test
+    void conEntrenadorNullDejaLasCategoriasSinEntrenador() {
+        UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
+        UUID sub8 = PostgresDePrueba.categoria("Sub-8", mora);
+        PostgresDePrueba.categoria("Sub-10", mora);
+
+        categorias.asignarEntrenador(List.of(sub8), null);
+
+        assertThat(categorias.listar()).extracting(Categoria::getNombre, Categoria::getIdEntrenador)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Sub-8", null),
+                        org.assertj.core.groups.Tuple.tuple("Sub-10", mora));
+        assertThat(entrenadores.buscarPorId(mora).orElseThrow().getCategorias()).containsExactly("Sub-10");
     }
 }

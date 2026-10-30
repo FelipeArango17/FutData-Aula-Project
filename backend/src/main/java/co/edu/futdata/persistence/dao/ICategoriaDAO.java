@@ -17,6 +17,9 @@ public interface ICategoriaDAO {
      */
     List<Categoria> listarParaActualizar();
 
-    /** Pasa las categorías indicadas al entrenador {@code idEntrenador}. No hace nada si la lista está vacía. */
+    /**
+     * Pasa las categorías indicadas al entrenador {@code idEntrenador}, o las deja sin entrenador si es
+     * {@code null}. No hace nada si la lista está vacía.
+     */
     void asignarEntrenador(Collection<UUID> idsCategorias, UUID idEntrenador);
 }
