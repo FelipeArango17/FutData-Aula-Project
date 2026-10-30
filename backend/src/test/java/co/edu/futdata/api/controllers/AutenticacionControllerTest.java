@@ -1,27 +1,36 @@
 package co.edu.futdata.api.controllers;
 
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.futdata.api.dto.Codigo2FAResponseDTO;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.ICodigoVerificacionService;
-import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.http.MediaType;
 
+/** /api/auth/2fa por HTTP: el usuario sale del JWT (sub), nunca de un correo en el cuerpo. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(locations = "classpath:pruebas.properties")
 class AutenticacionControllerTest {
+
+    private static final UUID ID = UUID.fromString("6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b");
+
     @Autowired
     private MockMvc mvc;
 
@@ -30,10 +39,9 @@ class AutenticacionControllerTest {
 
     @Test
     void solicitarDevuelve202SinExponerElCodigo() throws Exception {
-        when(servicio.solicitar(anyString())).thenReturn(new Codigo2FAResponseDTO("a***@pradofc.co", 600, 60_000));
+        when(servicio.solicitar(ID)).thenReturn(new Codigo2FAResponseDTO("a***@pradofc.co", 600, 60_000));
 
-        mvc.perform(post("/api/auth/2fa/codigo").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"correo\":\"ana@pradofc.co\"}"))
+        mvc.perform(post("/api/auth/2fa/codigo").with(jwt().jwt(j -> j.subject(ID.toString()))))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.correoEnmascarado").value("a***@pradofc.co"))
                 .andExpect(jsonPath("$.vigenciaSegundos").value(600))
@@ -41,14 +49,50 @@ class AutenticacionControllerTest {
     }
 
     @Test
+    void elCorreoDelCuerpoSeIgnoraYSeUsaElDelToken() throws Exception {
+        when(servicio.solicitar(any())).thenReturn(new Codigo2FAResponseDTO("a***@pradofc.co", 600, 60_000));
+
+        mvc.perform(post("/api/auth/2fa/codigo").with(jwt().jwt(j -> j.subject(ID.toString())))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"correo\":\"otra.persona@pradofc.co\"}"))
+                .andExpect(status().isAccepted());
+
+        verify(servicio).solicitar(ID);
+    }
+
+    @Test
     void reenvioLimitadoDevuelve409ConCampoCodigo() throws Exception {
-        when(servicio.reenviar(anyString())).thenThrow(new CodigoVerificacionException(
+        when(servicio.reenviar(ID)).thenThrow(new CodigoVerificacionException(
                 "DEMASIADO_PRONTO", "Debes esperar antes de solicitar otro código.", 30_000L));
 
-        mvc.perform(post("/api/auth/2fa/reenviar").contentType(MediaType.APPLICATION_JSON)
-                .content("{\"correo\":\"ana@pradofc.co\"}"))
+        mvc.perform(post("/api/auth/2fa/reenviar").with(jwt().jwt(j -> j.subject(ID.toString()))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.campos").isArray())
                 .andExpect(jsonPath("$.campos[0]").value("codigo"));
+    }
+
+    @Test
+    void verificarRecibeSoloElCodigo() throws Exception {
+        mvc.perform(post("/api/auth/2fa/verificar").with(jwt().jwt(j -> j.subject(ID.toString())))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"codigo\":\"012345\"}"))
+                .andExpect(status().isOk());
+
+        verify(servicio).verificar(eq(ID), eq("012345"));
+    }
+
+    @Test
+    void sinElTokenDelPrimerPasoEs401() throws Exception {
+        mvc.perform(post("/api/auth/2fa/codigo")
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"correo\":\"ana@pradofc.co\"}"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(servicio);
+    }
+
+    @Test
+    void unSubQueNoEsUuidEs404() throws Exception {
+        mvc.perform(post("/api/auth/2fa/codigo").with(jwt().jwt(j -> j.subject("no-es-uuid"))))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(servicio);
     }
 }

@@ -5,14 +5,15 @@ import co.edu.futdata.services.facade.IEntrenadorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Categorías del club con su entrenador, para la pantalla de entrenadores (HU-025). */
-// TODO HU-005: solo ADMINISTRADOR y ENTRENADOR
 @RestController
+@PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ENTRENADOR')")
 @RequestMapping("/api/categorias")
 @Tag(name = "Categorías", description = "Categorías por edad y el entrenador que dirige cada una")
 public class CategoriaController {

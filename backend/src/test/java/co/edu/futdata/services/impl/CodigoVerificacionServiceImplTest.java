@@ -11,6 +11,7 @@ import co.edu.futdata.domain.rules.GeneradorCodigo;
 import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
+import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,7 +37,7 @@ class CodigoVerificacionServiceImplTest {
         generador = mock(GeneradorCodigo.class);
         servicio = new CodigoVerificacionServiceImpl(usuarios, codigos, notificador, generador,
                 Clock.fixed(AHORA, ZoneOffset.UTC));
-        when(usuarios.buscarPorCorreo("ana@pradofc.co")).thenReturn(Optional.of(usuario()));
+        when(usuarios.buscarPorId(ID)).thenReturn(Optional.of(usuario()));
     }
 
     @Test
@@ -46,7 +47,7 @@ class CodigoVerificacionServiceImplTest {
         when(generador.hash("012345")).thenReturn("sal$hash");
         when(codigos.guardar(any())).thenReturn(UUID.randomUUID());
 
-        var respuesta = servicio.solicitar(" ana@pradofc.co ");
+        var respuesta = servicio.solicitar(ID);
 
         assertThat(respuesta.correoEnmascarado()).isEqualTo("a***@pradofc.co");
         verify(codigos).guardar(argThat(c -> c.getCodigoHash().equals("sal$hash")
@@ -60,7 +61,7 @@ class CodigoVerificacionServiceImplTest {
         CodigoVerificacion codigo = codigo(AHORA.minusSeconds(30), AHORA.plusSeconds(570), 0);
         when(codigos.buscarUltimo(ID)).thenReturn(Optional.of(codigo));
 
-        assertThatThrownBy(() -> servicio.reenviar("ana@pradofc.co"))
+        assertThatThrownBy(() -> servicio.reenviar(ID))
                 .isInstanceOf(CodigoVerificacionException.class)
                 .hasMessageContaining("esperar");
         verifyNoInteractions(generador, notificador);
@@ -73,7 +74,7 @@ class CodigoVerificacionServiceImplTest {
         when(generador.coincide("111111", "hash")).thenReturn(false);
         when(codigos.incrementarIntentos(codigo.getId())).thenReturn(5);
 
-        assertThatThrownBy(() -> servicio.verificar("ana@pradofc.co", "111111"))
+        assertThatThrownBy(() -> servicio.verificar(ID, "111111"))
                 .isInstanceOf(CodigoVerificacionException.class)
                 .hasMessageContaining("máximo");
         verify(codigos).bloquear(eq(codigo.getId()), eq(AHORA.plusSeconds(900)));
@@ -85,9 +86,30 @@ class CodigoVerificacionServiceImplTest {
         when(codigos.buscarUltimo(ID)).thenReturn(Optional.of(codigo));
         when(generador.coincide("012345", "hash")).thenReturn(true);
 
-        assertThat(servicio.verificar("ana@pradofc.co", "012345").id()).isEqualTo(ID);
+        assertThat(servicio.verificar(ID, "012345").id()).isEqualTo(ID);
         verify(codigos).marcarUsado(codigo.getId());
         verify(codigos, never()).incrementarIntentos(any());
+    }
+
+    @Test
+    void unaCuentaDeAuthSinPerfilEnFutDataEs404YNoEnviaNada() {
+        UUID otro = UUID.randomUUID();
+        when(usuarios.buscarPorId(otro)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.solicitar(otro))
+                .isInstanceOf(RecursoNoEncontradoException.class)
+                .hasMessage("La cuenta no está registrada en FutData.");
+        verifyNoInteractions(notificador);
+    }
+
+    @Test
+    void unaCuentaInactivaNoRecibeCodigo() {
+        Usuario inactivo = usuario();
+        inactivo.setActivo(false);
+        when(usuarios.buscarPorId(ID)).thenReturn(Optional.of(inactivo));
+
+        assertThatThrownBy(() -> servicio.solicitar(ID)).isInstanceOf(RecursoNoEncontradoException.class);
+        verifyNoInteractions(notificador);
     }
 
     private static Usuario usuario() {

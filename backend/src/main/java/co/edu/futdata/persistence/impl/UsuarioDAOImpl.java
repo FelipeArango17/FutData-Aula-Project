@@ -82,6 +82,17 @@ public class UsuarioDAOImpl implements IUsuarioDAO {
                 Map.of(), Long.class);
     }
 
+    @Override
+    public List<String> rolesActivos(UUID idUsuario) {
+        return jdbc.queryForList("""
+                SELECT r.nombre
+                  FROM usuario u
+                  JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario
+                  JOIN rol r ON r.id_rol = ur.id_rol
+                 WHERE u.id_usuario = :id AND u.activo
+                 ORDER BY r.nombre""", Map.of("id", idUsuario), String.class);
+    }
+
     private static Usuario mapear(ResultSet fila, int numero) throws SQLException {
         Usuario u = new Usuario();
         u.setId(fila.getObject("id_usuario", UUID.class));

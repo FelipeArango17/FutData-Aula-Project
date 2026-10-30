@@ -12,7 +12,7 @@ API REST en JSON de FutData. Sigue la arquitectura en capas del PPI con los patr
 | Paquete raíz | `co.edu.futdata` |
 
 > [!WARNING]
-> **La API todavía no tiene autenticación.** El inicio de sesión, la validación del JWT de Supabase, el 2FA y los roles llegan con HU-001, HU-002 y HU-005. Hasta entonces el backend **no debe desplegarse** en un entorno accesible desde internet.
+> **La API valida el JWT de Supabase y los roles, pero todavía no exige el segundo paso del inicio de sesión (HU-002).** Ver [Seguridad](#seguridad). Hasta que exista, no conviene desplegar el backend en un entorno accesible desde internet.
 
 ## Requisitos
 
@@ -62,10 +62,9 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `CORS_ORIGINS` | Orígenes del frontend permitidos, separados por coma | `http://localhost:5173` | Obligatoria |
 | `N8N_BASE_URL` | URL de n8n, sin barra final ([Notificaciones](#notificaciones-n8n)) | `http://localhost:5678` | Obligatoria |
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n (cabecera `X-FutData-Token`) | vacío: la app arranca, pero no envía notificaciones | Obligatoria |
-| `SUPABASE_URL` | URL del proyecto de Supabase ([Storage](#almacenamiento-de-comprobantes-supabase-storage); con HU-001, también Auth) | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
+| `SUPABASE_URL` | URL del proyecto de Supabase: [Storage](#almacenamiento-de-comprobantes-supabase-storage) y las llaves públicas para validar los JWT ([Seguridad](#seguridad)) | vacía: la app arranca, pero no guarda comprobantes y rechaza todo token (`401`) | Obligatoria |
 | `SUPABASE_SERVICE_ROLE_KEY` | Llave `service_role` para Storage. **Secreta, solo backend** | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
 | `SUPABASE_BUCKET_COMPROBANTES`, `SUPABASE_VIGENCIA_URL_FIRMADA` | Bucket de comprobantes y vigencia de las URL firmadas | `comprobantes`, `5m` | Igual |
-| `SUPABASE_JWKS_URL` | Para HU-001 (validar el JWT). **Todavía no se usa** | | |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
 | `DB_POOL_MAX` | Conexiones máximas del pool | `5` | `5` |
@@ -128,7 +127,7 @@ co.edu.futdata
 │   └── external         Clientes de servicios externos: n8n (INotificador / N8nClient), Supabase Storage
 │                        (IAlmacenamientoArchivos / SupabaseStorageClient), Wompi
 ├── util
-│   ├── security         JWT, códigos 2FA, auditoría (HU-001, HU-002, HU-005)
+│   ├── security         Spring Security: JWT de Supabase, roles, 401/403. Con HU-002: códigos 2FA y auditoría
 │   └── reports          Reportes y exportaciones: comprobante de pago en PDF (OpenPDF)
 └── config               CORS, OpenAPI, reloj en hora de Colombia, propiedades tipadas (futdata.cors, futdata.n8n,
                          futdata.club, futdata.supabase)
@@ -264,8 +263,7 @@ La migración `003_codigo_verificacion_2fa.sql` debe ejecutarse en Supabase ante
 
 API para registrar, consultar, editar, activar y desactivar entrenadores, y para asignarles categorías (tarea 335, CU-10). Reemplaza los datos en memoria de `frontend/src/services/entrenadoresService.js`. La fuente de verdad de la base de datos son las migraciones de [`supabase/migrations/`](../supabase/migrations/), en orden; las tablas `entrenador` y `categoria` las ajusta [`004_ajustes_modelo.sql`](../supabase/migrations/004_ajustes_modelo.sql). Lo que todavía no encaja está en [Pendientes](#pendientes--diferencias-con-el-frontend-y-el-esquema).
 
-> [!WARNING]
-> **Todavía sin seguridad por rol (HU-005).** `/api/entrenadores` debe quedar solo para `ADMINISTRADOR`, y `GET /api/categorias` para `ADMINISTRADOR` y `ENTRENADOR`. Está marcado con `// TODO HU-005` en `EntrenadorController` y `CategoriaController`.
+**Permisos:** `/api/entrenadores` solo para `ADMINISTRADOR`; `GET /api/categorias` para `ADMINISTRADOR` y `ENTRENADOR` (`@PreAuthorize` en cada controlador, ver [Seguridad](#seguridad)).
 
 | Capa | Clase | Qué hace |
 | :--- | :--- | :--- |
@@ -450,6 +448,8 @@ Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
 6. **Activo e inactivo:** cada entrenador llega con `activo`. Para desactivar o reactivar: `PATCH /api/entrenadores/{id}/estado` con `{"activo": false}` o `true`. Conviene mostrar los inactivos aparte (o con una etiqueta) y no ofrecerles categorías: asignárselas responde `409` con `campos: ["activo"]`.
 7. **Categorías sin entrenador:** en `GET /api/categorias`, `entrenador` puede ser `null`.
 8. **`campos` en los errores:** los `400` del servicio y los `409` traen `campos`, la lista de campos con error o en conflicto. Con ella se marca el formulario: el duplicado que hoy es `error.duplicado.campo` pasa a ser `error.response.data.campos[0]`, y el mensaje para mostrar sigue en `mensaje`. El formulario usa sus propios textos para los duplicados (`textoDuplicado`), así que puede seguir con ellos.
+9. **Sesión en todas las llamadas:** todo endpoint (salvo `GET /api/health`) exige `Authorization: Bearer <access_token de Supabase>`. Conviene un interceptor de Axios que lo agregue desde `supabase.auth.getSession()`, y `withCredentials: true` para la cookie de "Recordar este equipo". Un `401` significa sesión vencida (volver al inicio de sesión); un `403`, que el rol no alcanza. Ver [Seguridad](#seguridad).
+10. **2FA sin correo en el cuerpo:** `POST /api/auth/2fa/codigo` y `/reenviar` van **sin cuerpo**, y `POST /api/auth/2fa/verificar` lleva solo `{"codigo": "012345"}`. Las tres con el token del primer paso.
 
 ### Pendientes / diferencias con el frontend y el esquema
 
@@ -459,7 +459,7 @@ Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
 - **Ids UUID** en la base y la API, **números** en el frontend (punto 3).
 - **`tipoDocumento` va por código** (punto 4). La tabla permite `TI`, pero la API la rechaza para entrenadores: todos son mayores de edad.
 - `documentos` (carpeta de documentos) e `id_usuario` (cuenta de acceso, CU-06) no los maneja esta historia.
-- Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre), crear la cuenta del entrenador (CU-06) y la seguridad por rol (HU-005).
+- Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre) y crear la cuenta del entrenador (CU-06).
 
 ## Comprobante de pago (PDF)
 
@@ -635,7 +635,7 @@ Algunas versiones de Storage responden `400` con el código real en el cuerpo, p
 
 ### Endpoint de descarga (pendiente)
 
-**Todavía no existe.** Depende de HU-001 (JWT), HU-005 (roles) y de la tabla `Pago`. Así será:
+**Todavía no existe.** Depende del módulo de pagos; la validación del JWT y los roles ya están ([Seguridad](#seguridad)). Así será:
 
 ```text
 GET /api/pagos/{id}/comprobante
@@ -668,7 +668,50 @@ Lee las variables del sistema, no `backend/.env`. `SUPABASE_BUCKET_COMPROBANTES`
 
 - **Proyecto de Supabase y bucket** (Juan Sebastián, lista de arriba). Después, correr la prueba real.
 - **Módulo de pagos:** la columna `pago.recibo_ruta` (migración 004) guarda la ruta. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
-- **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con HU-001 y HU-005.
+- **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con el módulo de pagos.
+
+## Seguridad
+
+Spring Security valida en cada petición el JWT que emite Supabase Auth (RF008, RNF001). Está en `util.security`:
+
+| Clase | Qué hace |
+| :--- | :--- |
+| `SeguridadConfig` | Rutas públicas y protegidas, sin sesión de servidor (stateless), sin CSRF, CORS y `@EnableMethodSecurity` |
+| `JwtValidator` | Valida la firma con las llaves públicas de Supabase, el vencimiento, el emisor y la audiencia; convierte el usuario en sus roles |
+| `RespuestasSeguridad` | `401` y `403` con el [formato de errores](#formato-de-errores-para-el-frontend) de la API |
+| `IUsuarioDAO` / `UsuarioDAOImpl` | Roles del usuario (`usuario_rol`), solo si su cuenta está activa |
+
+**Cómo llega el token.** El frontend inicia sesión con Supabase Auth (`supabase.auth.signInWithPassword`) y envía el `access_token` en cada petición:
+
+```text
+Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
+```
+
+**Qué se valida.** La firma, con las llaves de `{SUPABASE_URL}/auth/v1/.well-known/jwks.json` (ES256 o RS256), y que el token no esté vencido, que lo haya emitido `{SUPABASE_URL}/auth/v1` y que su audiencia sea `authenticated`. Si algo falla: `401`, sin decir qué (el motivo va al log).
+
+> [!IMPORTANT]
+> **El proyecto de Supabase debe firmar con llaves asimétricas** (Project Settings → JWT Keys / JWT Signing Keys). Si todavía usa el secreto compartido antiguo (HS256), el JWKS está vacío y **todo token responde `401`**. Juan Sebastián o quien administre el proyecto lo puede migrar desde el panel; los tokens viejos siguen sirviendo hasta que vencen.
+
+**Roles.** El `sub` del token es `usuario.id_usuario`. Los roles salen de `usuario_rol` en cada petición (`ROLE_ADMINISTRADOR`, `ROLE_TESORERO`, `ROLE_ENTRENADOR`, `ROLE_ACUDIENTE`), así que quitar un rol o desactivar la cuenta (`usuario.activo = false`) surte efecto en la siguiente petición. Un usuario sin perfil en `usuario` o sin roles queda autenticado pero sin permisos: `403`. Cada controlador exige sus roles con `@PreAuthorize`:
+
+| Ruta | Roles |
+| :--- | :--- |
+| `GET /api/health`, Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública. Swagger está apagado en el perfil `prod` |
+| `/api/auth/2fa/**` | Cualquier usuario con el JWT del primer paso (el usuario sale del token) |
+| `/api/usuarios/**`, `/api/deportistas/**` | `ADMINISTRADOR` |
+| `/api/entrenadores/**` | `ADMINISTRADOR` |
+| `GET /api/categorias` | `ADMINISTRADOR`, `ENTRENADOR` |
+| Cualquier otra ruta | Exige sesión; cada módulo nuevo declara sus roles |
+
+**CORS con credenciales.** Se permiten cookies para la cookie HttpOnly de "Recordar este equipo" (HU-002): en Axios, `withCredentials: true`. Por eso `CORS_ORIGINS` tiene que tener orígenes exactos, nunca `*`.
+
+**Probar desde Swagger.** En el perfil `local`, abrir `/swagger-ui.html`, botón **Authorize** y pegar el `access_token` (sin la palabra `Bearer`). Un token se obtiene iniciando sesión en el frontend (en las herramientas del navegador, `localStorage` → `sb-...-auth-token`).
+
+**En las pruebas.** `@WithMockUser(roles = "ADMINISTRADOR")` en las pruebas de MockMvc. `SeguridadTest` recorre la cadena completa con roles de la base simulados, y `JwtValidatorTest` firma tokens de verdad con llaves generadas en la prueba y un JWKS local.
+
+**Segundo paso (2FA).** `/api/auth/2fa/codigo`, `/reenviar` y `/verificar` exigen el JWT del primer paso y toman el usuario del `sub` del token: el cuerpo ya **no lleva el correo** (en `verificar` solo va `{"codigo": "012345"}`). Así nadie puede pedir ni probar códigos de otra cuenta.
+
+**Pendiente.** Exigir que la sesión haya completado el segundo paso (`session_id` del JWT en `sesion_verificada`) en todas las rutas salvo las de `/api/auth/2fa`, y la cookie de equipo de confianza. El modelo de datos ya está en la migración 004. Hoy el 2FA verifica el código, pero el resto de la API no comprueba que se haya hecho.
 
 ## Formato de errores (para el frontend)
 
@@ -696,6 +739,8 @@ Todas las respuestas de error tienen el mismo JSON:
 | Código | Cuándo | `mensaje` de ejemplo |
 | :--- | :--- | :--- |
 | `400` | Bean Validation falla, el JSON está mal formado o un valor no tiene el formato del campo (por ejemplo, una fecha), falta un parámetro o tiene un tipo inválido, o el servicio lanza `DatosInvalidosException`, `ComprobanteInvalidoException` o `ArchivoInvalidoException` | `nombre: no debe estar vacío` |
+| `401` | Sin token, o con un token inválido o vencido. Cabecera `WWW-Authenticate: Bearer` | `Debes iniciar sesión. Si ya la iniciaste, venció: inicia sesión de nuevo.` |
+| `403` | La cuenta no tiene el rol que pide la ruta, o está inactiva | `No tienes permiso para hacer esta acción.` |
 | `404` | La ruta no existe, el servicio lanza `RecursoNoEncontradoException` o el archivo no está en Storage (`ArchivoNoEncontradoException`) | `No existe la ruta GET /api/no-existe` |
 | `409` | El servicio lanza `ConflictoException` (un dato que ya tiene otro registro, o una regla que depende de otros registros), el archivo ya existe en Storage, o la base de datos rechaza la operación por una restricción que el servicio no tradujo | `documento: ya está registrado en otro entrenador` |
 | `405` / `415` | Método HTTP no permitido o tipo de contenido no soportado | `El método POST no está permitido en esta ruta` |

@@ -13,6 +13,7 @@ import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.util.reports.ComprobanteInvalidoException;
+import co.edu.futdata.util.security.RespuestasSeguridad;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -48,6 +50,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * <ul>
  *   <li>{@code 400}: datos de entrada inválidos (Bean Validation, JSON mal formado, parámetros),
  *       {@link DatosInvalidosException} o {@link ComprobanteInvalidoException}.</li>
+ *   <li>{@code 403}: {@code @PreAuthorize} rechazó el rol ({@link AccessDeniedException}). Los {@code 401} y los
+ *       {@code 403} de los filtros los responde {@link RespuestasSeguridad}, con el mismo formato.</li>
  *   <li>{@code 404}: ruta inexistente o {@link RecursoNoEncontradoException}.</li>
  *   <li>{@code 409}: {@link ConflictoException} (duplicados, reglas que dependen de otros registros) y las
  *       restricciones de la base de datos que el servicio no tradujo ({@link DataIntegrityViolationException}).</li>
@@ -148,6 +152,12 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(ComprobanteInvalidoException.class)
     public ResponseEntity<ErrorResponseDTO> comprobanteInvalido(ComprobanteInvalidoException e, HttpServletRequest peticion) {
         return responder(HttpStatus.BAD_REQUEST, e.getMessage(), peticion);
+    }
+
+    /** Sin esto, el {@code 403} de {@code @PreAuthorize} caería en {@link #errorInterno} y respondería {@code 500}. */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponseDTO> sinPermiso(AccessDeniedException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.FORBIDDEN, RespuestasSeguridad.SIN_PERMISO, peticion);
     }
 
     @ExceptionHandler(AlmacenamientoException.class)

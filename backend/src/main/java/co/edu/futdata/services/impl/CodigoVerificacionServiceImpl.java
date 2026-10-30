@@ -50,8 +50,8 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
 
     @Override
     @Transactional
-    public Codigo2FAResponseDTO solicitar(String correo) {
-        Usuario usuario = usuarioActivo(correo);
+    public Codigo2FAResponseDTO solicitar(UUID idUsuario) {
+        Usuario usuario = usuarioActivo(idUsuario);
         CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         Instant ahora = reloj.instant();
         revisarBloqueo(actual, ahora);
@@ -63,8 +63,8 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
 
     @Override
     @Transactional
-    public Codigo2FAResponseDTO reenviar(String correo) {
-        Usuario usuario = usuarioActivo(correo);
+    public Codigo2FAResponseDTO reenviar(UUID idUsuario) {
+        Usuario usuario = usuarioActivo(idUsuario);
         CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         Instant ahora = reloj.instant();
         revisarBloqueo(actual, ahora);
@@ -79,8 +79,8 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
 
     @Override
     @Transactional
-    public UsuarioResponseDTO verificar(String correo, String codigo) {
-        Usuario usuario = usuarioActivo(correo);
+    public UsuarioResponseDTO verificar(UUID idUsuario, String codigo) {
+        Usuario usuario = usuarioActivo(idUsuario);
         CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId())
                 .orElseThrow(() -> new CodigoVerificacionException("SIN_SOLICITUD",
                         "No hay un código pendiente de verificación."));
@@ -129,12 +129,13 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
         return respuesta(usuario, nuevo, ahora);
     }
 
-    private Usuario usuarioActivo(String correo) {
-        if (correo == null || correo.isBlank()) {
-            throw new DatosInvalidosException(Map.of("correo", "es obligatorio"));
+    /** El usuario del token. Sin perfil en {@code usuario} (cuenta de Auth sin registrar en FutData): 404. */
+    private Usuario usuarioActivo(UUID idUsuario) {
+        if (idUsuario == null) {
+            throw new IllegalArgumentException("El id del usuario sale del JWT y no puede ser nulo");
         }
-        Usuario usuario = usuarios.buscarPorCorreo(correo.trim())
-                .orElseThrow(() -> new RecursoNoEncontradoException("No existe un usuario con ese correo."));
+        Usuario usuario = usuarios.buscarPorId(idUsuario)
+                .orElseThrow(() -> new RecursoNoEncontradoException("La cuenta no está registrada en FutData."));
         if (!usuario.isActivo()) {
             throw new RecursoNoEncontradoException("La cuenta no está activa.");
         }

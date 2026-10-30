@@ -15,6 +15,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,11 +27,15 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /** Alta, consulta, edición, activación y categorías de los entrenadores (HU-025, CU-10). */
-// TODO HU-005: solo ADMINISTRADOR
 @RestController
+@PreAuthorize("hasRole('ADMINISTRADOR')")
 @RequestMapping("/api/entrenadores")
 @Tag(name = "Entrenadores", description = "Alta, consulta, edición y categorías de los entrenadores (HU-025)")
 @ApiResponse(responseCode = "400", description = "Datos inválidos o id que no es UUID",
+        content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+@ApiResponse(responseCode = "401", description = "Sin sesión o con un token inválido o vencido",
+        content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+@ApiResponse(responseCode = "403", description = "La cuenta no tiene el rol ADMINISTRADOR",
         content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
 public class EntrenadorController {
 
