@@ -4,7 +4,7 @@
 // Los mensajes que ya ven los usuarios (entrenadores, entrenamientos, inicio de sesión) están aquí TAL CUAL, como
 // constantes; los de los validadores nuevos (nombre, dirección, fecha de nacimiento y monto) todavía no se muestran
 // en ninguna pantalla.
-import { esDomingo, esFechaValida, esHoraValida } from './fechas.js'
+import { esDomingo, esFechaValida, esHoraValida, hoyLocal } from './fechas.js'
 
 export const MENSAJES = {
   // Entrenadores
@@ -31,6 +31,7 @@ export const MENSAJES = {
   entrenamientoEntrenador: 'Selecciona el entrenador.',
   entrenamientoFechaObligatoria: 'Indica la fecha del entrenamiento.',
   entrenamientoFechaInvalida: 'La fecha no es válida. Usa el formato día/mes/año.',
+  entrenamientoFechaPasada: 'No puedes programar un entrenamiento en una fecha pasada.',
   entrenamientoFechaDomingo: 'Los entrenamientos se programan de lunes a sábado.',
   entrenamientoHoraObligatoria: 'Indica la hora del entrenamiento.',
   entrenamientoHoraInvalida: 'La hora no es válida. Usa el formato HH:MM.',
@@ -185,9 +186,12 @@ export function validarFechaPago(valor, hoy = hoySistema()) {
 }
 
 // Reglas del formulario de entrenamientos
-export function validarFechaEntrenamiento(valor) {
+// `hoy`: "AAAA-MM-DD"; una fecha anterior no se puede programar. Al editar, quien llama pasa la fecha original como `hoy`
+// si el valor no cambió, para que conservar una fecha ya pasada no sea un error.
+export function validarFechaEntrenamiento(valor, hoy = hoyLocal()) {
   if (!valor) return MENSAJES.entrenamientoFechaObligatoria
   if (!esFechaValida(valor)) return MENSAJES.entrenamientoFechaInvalida
+  if (valor < hoy) return MENSAJES.entrenamientoFechaPasada
   return esDomingo(valor) ? MENSAJES.entrenamientoFechaDomingo : null
 }
 

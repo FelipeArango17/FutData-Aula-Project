@@ -3,22 +3,24 @@ import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import Icon from '../Icon.jsx'
 import { LUGARES, ENTRENADORES } from '../../services/entrenamientosService.js'
-import { diaLargo, formatHora } from '../../utils/fechas.js'
+import { diaLargo, formatHora, hoyLocal } from '../../utils/fechas.js'
 import { MENSAJES, enLista, validarCampos, validarFechaEntrenamiento, validarHoraEntrenamiento } from '../../utils/validaciones.js'
 
-function validar(v, categorias) {
+// fechaOriginal: la fecha con la que se abrió el formulario al editar (null al crear). Conservarla no da error aunque ya
+// haya pasado; cambiarla a otra fecha pasada sí.
+function validar(v, categorias, fechaOriginal = null) {
   return validarCampos(v, {
     categoria: [enLista(categorias, MENSAJES.entrenamientoCategoria)],
     idEntrenador: [enLista(ENTRENADORES.map((e) => String(e.id)), MENSAJES.entrenamientoEntrenador)],
-    fecha: [validarFechaEntrenamiento],
+    fecha: [(valor) => validarFechaEntrenamiento(valor, valor === fechaOriginal ? valor : hoyLocal())],
     hora: [validarHoraEntrenamiento],
     lugar: [enLista(LUGARES, MENSAJES.entrenamientoLugar)],
   })
 }
 
 // Para buscar conflicto solo hacen falta fecha, hora y lugar válidos
-function tieneHorarioCompleto(v) {
-  const errores = validar(v, [])
+function tieneHorarioCompleto(v, fechaOriginal) {
+  const errores = validar(v, [], fechaOriginal)
   return !errores.fecha && !errores.hora && !errores.lugar
 }
 
@@ -33,6 +35,10 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
   const [intentos, setIntentos] = useState(0)
   const comprobacion = useRef(0) // descarta respuestas viejas si el usuario sigue cambiando campos
   const formRef = useRef(null)
+  const fechaOriginal = ignorarId === null ? null : inicial.fecha
+  const hoy = hoyLocal()
+  // Al editar un entrenamiento que ya pasó no se pone mínimo: el navegador no debe rechazar su fecha original
+  const fechaMinima = fechaOriginal && fechaOriginal < hoy ? undefined : hoy
 
   // Tras un envío con errores, el foco va al primer campo inválido
   useEffect(() => {
@@ -41,7 +47,7 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
 
   async function comprobarConflicto(nuevos) {
     const numero = ++comprobacion.current
-    if (!tieneHorarioCompleto(nuevos)) return setConflicto(null)
+    if (!tieneHorarioCompleto(nuevos, fechaOriginal)) return setConflicto(null)
     const resultado = await detectarConflicto(nuevos, ignorarId)
     if (numero === comprobacion.current) setConflicto(resultado.hayConflicto ? resultado : null)
   }
@@ -56,7 +62,7 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
   async function enviar(event) {
     event.preventDefault()
     if (guardando) return
-    const encontrados = validar(valores, categorias)
+    const encontrados = validar(valores, categorias, fechaOriginal)
     setErrores(encontrados)
     if (Object.keys(encontrados).length > 0) return setIntentos((n) => n + 1)
 
@@ -80,17 +86,18 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
 
   return (
     <form ref={formRef} noValidate onSubmit={enviar} className="flex flex-col gap-4">
-      <Field label="Categoría" id="categoria" as="select" value={valores.categoria} error={errores.categoria} onChange={(e) => cambiar('categoria', e.target.value)}>
+      <p className="text-small text-secondary">* Campo obligatorio</p>
+      <Field label="Categoría" id="categoria" requerido as="select" value={valores.categoria} error={errores.categoria} onChange={(e) => cambiar('categoria', e.target.value)}>
         <option value="">Selecciona una categoría</option>
         {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
       </Field>
-      <Field label="Entrenador" id="idEntrenador" as="select" value={valores.idEntrenador} error={errores.idEntrenador} onChange={(e) => cambiar('idEntrenador', e.target.value)}>
+      <Field label="Entrenador" requerido id="idEntrenador" as="select" value={valores.idEntrenador} error={errores.idEntrenador} onChange={(e) => cambiar('idEntrenador', e.target.value)}>
         <option value="">Selecciona un entrenador</option>
         {ENTRENADORES.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
       </Field>
-      <Field label="Fecha" id="fecha" type="date" value={valores.fecha} error={errores.fecha} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('fecha', e.target.value)} />
-      <Field label="Hora" id="hora" type="time" value={valores.hora} error={errores.hora} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('hora', e.target.value)} />
-      <Field label="Lugar" id="lugar" as="select" value={valores.lugar} error={errores.lugar} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('lugar', e.target.value)}>
+      <Field label="Fecha" requerido id="fecha" type="date" min={fechaMinima} value={valores.fecha} error={errores.fecha} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('fecha', e.target.value)} />
+      <Field label="Hora" requerido id="hora" type="time" value={valores.hora} error={errores.hora} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('hora', e.target.value)} />
+      <Field label="Lugar" requerido id="lugar" as="select" value={valores.lugar} error={errores.lugar} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('lugar', e.target.value)}>
         <option value="">Selecciona el lugar</option>
         {LUGARES.map((l) => <option key={l} value={l}>{l}</option>)}
       </Field>

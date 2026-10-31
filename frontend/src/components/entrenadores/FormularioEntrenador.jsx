@@ -9,6 +9,7 @@ import { erroresPorCampo } from '../../utils/erroresApi.js'
 import {
   MENSAJES, enLista, requerido, validarCampos, validarCorreo, validarDocumento, validarFechaNacimientoEntrenador, validarTelefono,
 } from '../../utils/validaciones.js'
+import { hoyLocal, restarAnios } from '../../utils/fechas.js'
 
 function validar(v) {
   return validarCampos(v, {
@@ -154,19 +155,20 @@ export default function FormularioEntrenador({
   return (
     <form ref={formRef} noValidate onSubmit={enviar} aria-busy={guardando} className="flex flex-col gap-4">
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" onCerrar={() => setAviso(null)} />
+      <p className="text-small text-secondary">* Campo obligatorio</p>
       <fieldset disabled={Boolean(pendiente)} className="flex min-w-0 flex-col gap-4">
         <legend className="sr-only">Datos personales</legend>
-        <Field label="Nombre" id="nombre" autoComplete="off" {...texto('nombre')} />
-        <Field label="Apellido" id="apellido" autoComplete="off" {...texto('apellido')} />
-        <Field label="Tipo de documento" id="tipoDocumento" as="select" {...texto('tipoDocumento')}>
+        <Field label="Nombre" id="nombre" requerido autoComplete="off" {...texto('nombre')} />
+        <Field label="Apellido" id="apellido" requerido autoComplete="off" {...texto('apellido')} />
+        <Field label="Tipo de documento" id="tipoDocumento" requerido as="select" {...texto('tipoDocumento')}>
           <option value="">Selecciona el tipo de documento</option>
           {TIPOS_DOCUMENTO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO_DOCUMENTO[t]}</option>)}
         </Field>
-        <Field label="Número de documento" id="documento" inputMode={valores.tipoDocumento === 'PASAPORTE' ? 'text' : 'numeric'} autoComplete="off" {...texto('documento')} />
-        <Field label="Fecha de nacimiento (18 años o más)" id="fechaNacimiento" type="date" {...texto('fechaNacimiento')} />
-        <Field label="Teléfono" id="telefono" type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
-        <Field label="Correo electrónico" id="correo" type="email" autoComplete="off" {...texto('correo')} />
-        <Field label="Especialidad" id="especialidad" list="especialidades" autoComplete="off" {...texto('especialidad')} />
+        <Field label="Número de documento" id="documento" requerido inputMode={valores.tipoDocumento === 'PASAPORTE' ? 'text' : 'numeric'} autoComplete="off" {...texto('documento')} />
+        <Field label="Fecha de nacimiento (18 años o más)" id="fechaNacimiento" type="date" requerido max={restarAnios(hoyLocal(), 18)} {...texto('fechaNacimiento')} />
+        <Field label="Teléfono" id="telefono" requerido type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
+        <Field label="Correo electrónico" id="correo" requerido type="email" autoComplete="off" {...texto('correo')} />
+        <Field label="Especialidad" id="especialidad" requerido list="especialidades" autoComplete="off" {...texto('especialidad')} />
         <Field label="Dirección (opcional)" id="direccion" autoComplete="street-address" {...texto('direccion')} />
         <datalist id="especialidades">
           {ESPECIALIDADES.map((e) => <option key={e} value={e} />)}

@@ -23,7 +23,7 @@ const dibujar = (props = {}) => renderToStaticMarkup(
 describe('FormularioEntrenador (marcado)', () => {
   it('la fecha de nacimiento es un input date nativo con etiqueta visible', () => {
     const html = dibujar()
-    expect(html).toMatch(/<label[^>]*for="fechaNacimiento"[^>]*>Fecha de nacimiento \(18 años o más\)<\/label>/)
+    expect(html).toMatch(/<label[^>]*for="fechaNacimiento"[^>]*>Fecha de nacimiento \(18 años o más\)<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/label>/)
     expect(html).toMatch(/<input[^>]*id="fechaNacimiento"[^>]*type="date"|<input[^>]*type="date"[^>]*id="fechaNacimiento"/)
   })
 

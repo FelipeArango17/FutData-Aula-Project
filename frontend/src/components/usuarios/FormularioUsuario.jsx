@@ -68,10 +68,11 @@ export default function FormularioUsuario({ onGuardar, onCancelar }) {
   return (
     <form ref={formRef} noValidate onSubmit={enviar} className="flex flex-col gap-4">
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
-      <Field label="Nombres" id="nombre" autoComplete="off" {...texto('nombre')} />
-      <Field label="Apellidos" id="apellido" autoComplete="off" {...texto('apellido')} />
-      <Field label="Correo electrónico" id="correo" type="email" autoComplete="off" {...texto('correo')} />
-      <GrupoRoles id="rol" value={valores.rol} error={errores.rol} onChange={(rol) => cambiar('rol', rol)} />
+      <p className="text-small text-secondary">* Campo obligatorio</p>
+      <Field label="Nombres" id="nombre" requerido autoComplete="off" {...texto('nombre')} />
+      <Field label="Apellidos" id="apellido" requerido autoComplete="off" {...texto('apellido')} />
+      <Field label="Correo electrónico" id="correo" type="email" requerido autoComplete="off" {...texto('correo')} />
+      <GrupoRoles id="rol" requerido value={valores.rol} error={errores.rol} onChange={(rol) => cambiar('rol', rol)} />
       {/* PENDIENTE: invitación por correo (Supabase Auth + n8n). Esta versión NO envía ningún correo. */}
       <p className="break-words text-small text-secondary">
         Esta versión crea la cuenta, pero todavía no envía ninguna invitación por correo.

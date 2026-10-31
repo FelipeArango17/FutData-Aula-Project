@@ -81,5 +81,21 @@ export function momentoLegible(iso) {
   return `${f[0].toUpperCase()}${f.slice(1)}, ${formatHora(hora)}`
 }
 
+// Fecha de HOY según el reloj local del navegador, "AAAA-MM-DD". No usa toISOString: en UTC el día cambia
+// a las 7 p. m. en Colombia. `ahora` (un Date) permite probarla con un instante fijo.
+export function hoyLocal(ahora = new Date()) {
+  const dos = (n) => String(n).padStart(2, '0')
+  return `${ahora.getFullYear()}-${dos(ahora.getMonth() + 1)}-${dos(ahora.getDate())}`
+}
+
+// Resta `n` años a una fecha "AAAA-MM-DD". El 29 de febrero cae en 28 de febrero si el año resultante no es bisiesto.
+export function restarAnios(fecha, n) {
+  const [a, m, d] = fecha.split('-').map(Number)
+  const anio = a - n
+  const bisiesto = (anio % 4 === 0 && anio % 100 !== 0) || anio % 400 === 0
+  const dia = m === 2 && d === 29 && !bisiesto ? 28 : d
+  return `${String(anio).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+}
+
 // Nombre del mes de una fecha "AAAA-MM-DD" (o "AAAA-MM-DD..."): "octubre"
 export const mesEnTexto = (fecha) => MESES[Number(fecha.slice(5, 7)) - 1]

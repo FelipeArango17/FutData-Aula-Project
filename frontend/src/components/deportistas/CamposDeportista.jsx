@@ -1,5 +1,6 @@
 import Field from '../ui/Field.jsx'
 import { HOY_EJEMPLO, TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad } from '../../services/deportistasService.js'
+import { hoyLocal } from '../../utils/fechas.js'
 import { validarFechaNacimiento } from '../../utils/validaciones.js'
 
 // Campos de los datos personales de un deportista. Los comparten el formulario del administrador (FormularioDeportista)
@@ -18,19 +19,20 @@ const columnas = 'grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] 
 export default function CamposDeportista({ texto, fechaNacimiento, categorias = [], mostrarCategoria = true }) {
   return (
     <>
+      <p className="text-small text-secondary">* Campo obligatorio</p>
       <div className={columnas}>
-        <Field label="Nombres" id="nombre" autoComplete="off" {...texto('nombre')} />
-        <Field label="Apellidos" id="apellido" autoComplete="off" {...texto('apellido')} />
+        <Field label="Nombres" id="nombre" requerido autoComplete="off" {...texto('nombre')} />
+        <Field label="Apellidos" id="apellido" requerido autoComplete="off" {...texto('apellido')} />
       </div>
       <div className={columnas}>
-        <Field label="Tipo de documento" id="tipoDocumento" as="select" {...texto('tipoDocumento')}>
+        <Field label="Tipo de documento" id="tipoDocumento" requerido as="select" {...texto('tipoDocumento')}>
           <option value="">Selecciona el tipo de documento</option>
           {TIPOS_DOCUMENTO_DEPORTISTA.map((t) => <option key={t} value={t}>{t}</option>)}
         </Field>
-        <Field label="Número de documento" id="documento" inputMode="numeric" autoComplete="off" {...texto('documento')} />
+        <Field label="Número de documento" id="documento" requerido inputMode="numeric" autoComplete="off" {...texto('documento')} />
       </div>
       <div className={columnas}>
-        <Field label="Fecha de nacimiento" id="fechaNacimiento" type="date" max={HOY_EJEMPLO} {...texto('fechaNacimiento')} />
+        <Field label="Fecha de nacimiento" id="fechaNacimiento" type="date" requerido max={hoyLocal()} {...texto('fechaNacimiento')} />
         <div className="flex flex-col gap-1">
           <Field
             label="Edad"
@@ -43,8 +45,8 @@ export default function CamposDeportista({ texto, fechaNacimiento, categorias = 
           <p id="edad-ayuda" className="break-words text-small text-secondary">Se calcula con la fecha de nacimiento.</p>
         </div>
       </div>
-      <Field label="Teléfono de contacto" id="telefono" type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
-      <Field label="Dirección" id="direccion" autoComplete="off" {...texto('direccion')} />
+      <Field label="Teléfono de contacto" id="telefono" requerido type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
+      <Field label="Dirección" id="direccion" requerido autoComplete="off" {...texto('direccion')} />
       {mostrarCategoria && (
         <Field label="Categoría (opcional)" id="idCategoria" as="select" {...texto('idCategoria')}>
           <option value="">Sin asignar</option>
