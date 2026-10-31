@@ -38,8 +38,8 @@ Arranca con el perfil `local` en http://localhost:8080. **No necesita credencial
 | URL | Qué es |
 | :--- | :--- |
 | http://localhost:8080/api/health | Estado del backend y de la base de datos |
-| http://localhost:8080/swagger-ui.html | Documentación interactiva de la API |
-| http://localhost:8080/v3/api-docs | Especificación OpenAPI en JSON |
+| http://localhost:8080/swagger-ui.html | Documentación interactiva de la API (solo con el perfil `dev`) |
+| http://localhost:8080/v3/api-docs | Especificación OpenAPI en JSON (solo con el perfil `dev`) |
 
 En **IntelliJ IDEA**: abre la carpeta `backend/` (o la raíz del repo) como proyecto Maven y ejecuta `FutDataApplication`.
 
@@ -103,8 +103,9 @@ $env:DB_PASSWORD = "tu-contraseña"
 | :--- | :--- | :--- |
 | `local` | Por defecto al ejecutar sin indicar perfil | Valores por defecto para trabajar sin credenciales y logs `DEBUG` de `co.edu.futdata` |
 | `prod` | En la imagen Docker (`SPRING_PROFILES_ACTIVE=prod`) | Sin valores por defecto: exige las variables obligatorias. SSL obligatorio si `DB_URL` no indica `sslmode` |
+| `dev` | Opcional, junto con `local`: `SPRING_PROFILES_ACTIVE=local,dev` | Publica Swagger UI y `/v3/api-docs` sin token. En cualquier otro perfil están apagados. Nunca en `prod` |
 
-Para usar otro perfil: `SPRING_PROFILES_ACTIVE=prod` (variable de entorno) o `./mvnw spring-boot:run -Dspring-boot.run.profiles=prod`.
+Para usar otro perfil: `SPRING_PROFILES_ACTIVE=prod` (variable de entorno) o `./mvnw spring-boot:run -Dspring-boot.run.profiles=prod`. Con la documentación: `./mvnw spring-boot:run -Dspring-boot.run.profiles=local,dev`.
 
 ## Estructura de capas
 
@@ -237,7 +238,7 @@ La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`
 | Método y ruta | Descripción | Respuestas |
 | :--- | :--- | :--- |
 | `GET /api/usuarios` | Lista usuarios y su rol | `200` |
-| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado | `200`, `404` |
+| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado (exige el 2FA completado) | `200`, `403`, `404` |
 | `GET /api/usuarios/{id}` | Consulta un usuario | `200`, `400`, `404` |
 | `POST /api/usuarios` | Crea e invita un usuario | `201`, `400`, `409` |
 | `PUT /api/usuarios/{id}/rol` | Cambia el rol | `200`, `400`, `404`, `409` |
@@ -256,9 +257,10 @@ La API genera códigos aleatorios de seis dígitos, conserva únicamente un hash
 | :--- | :--- | :--- |
 | `POST /api/auth/2fa/codigo` | Genera y envía el código | `202`, `400`, `404`, `409`, `503` |
 | `POST /api/auth/2fa/reenviar` | Reenvía respetando el minuto de espera | `200`, `400`, `404`, `409`, `503` |
-| `POST /api/auth/2fa/verificar` | Valida el correo y código de seis dígitos | `200`, `400`, `404`, `409` |
+| `POST /api/auth/2fa/verificar` | Valida el código de seis dígitos y marca como verificada la sesión del token | `200`, `400`, `404`, `409` |
+| `POST /api/auth/logout` | Cierra la sesión del token: deja de estar verificada (las demás del usuario no cambian) | `204`, `401`, `403` |
 
-Las migraciones `003_codigo_verificacion_2fa.sql` y `005_seguridad_sesion_2fa.sql` deben ejecutarse en Supabase antes de probar estos endpoints. Nunca se devuelve ni se guarda el código en texto plano; la respuesta solo incluye el correo enmascarado, la vigencia y el tiempo para reenvío. Los errores 2FA incluyen `codigo`, `campos` y, cuando aplica, `msRestantes`.
+Las migraciones `003_codigo_verificacion_2fa.sql`, `005_seguridad_sesion_2fa.sql` y `006_sesion_verificada_por_sesion.sql` deben ejecutarse en Supabase, en orden, antes de probar estos endpoints. Nunca se devuelve ni se guarda el código en texto plano; la respuesta solo incluye el correo enmascarado, la vigencia y el tiempo para reenvío. Los errores 2FA incluyen `codigo`, `campos` y, cuando aplica, `msRestantes`.
 
 ## Entrenadores (HU-025)
 
@@ -697,8 +699,10 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 
 | Ruta | Roles |
 | :--- | :--- |
-| `GET /api/health`, Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública. Swagger está apagado en el perfil `prod` |
-| `/api/auth/2fa/**` | Cualquier usuario con el JWT del primer paso (el usuario sale del token) |
+| `GET /api/health`, `/error`, `OPTIONS` (CORS), `POST /api/pagos/webhook/wompi` (reservado) | Públicas, sin token |
+| Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública **solo con el perfil `dev`**; en los demás perfiles está apagado |
+| `POST /api/auth/2fa/codigo`, `/reenviar`, `/verificar` | Cualquier rol, con el JWT del primer paso y sin haber verificado el código |
+| `POST /api/auth/logout`, `GET /api/usuarios/yo` | Cualquier rol, con la sesión verificada |
 | `/api/usuarios/**` (salvo `/yo`) | `ADMINISTRADOR` |
 | `/api/deportistas/**` | `ADMINISTRADOR`; el listado también `ENTRENADOR` sin teléfono ni dirección |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
@@ -707,13 +711,20 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 
 **CORS con credenciales.** Se permiten cookies para la cookie HttpOnly de "Recordar este equipo" (HU-002): en Axios, `withCredentials: true`. Por eso `CORS_ORIGINS` tiene que tener orígenes exactos, nunca `*`.
 
-**Probar desde Swagger.** En el perfil `local`, abrir `/swagger-ui.html`, botón **Authorize** y pegar el `access_token` (sin la palabra `Bearer`). Un token se obtiene iniciando sesión en el frontend (en las herramientas del navegador, `localStorage` → `sb-...-auth-token`).
+**Probar desde Swagger.** Con los perfiles `local,dev`, abrir `/swagger-ui.html`, botón **Authorize** y pegar el `access_token` (sin la palabra `Bearer`). Un token se obtiene iniciando sesión en el frontend (en las herramientas del navegador, `localStorage` → `sb-...-auth-token`).
 
-**En las pruebas.** `@WithMockUser(roles = "ADMINISTRADOR")` en las pruebas de MockMvc. `SeguridadTest` recorre la cadena completa con roles de la base simulados, y `JwtValidatorTest` firma tokens de verdad con llaves generadas en la prueba y un JWKS local.
+**En las pruebas.** `@WithMockUser(roles = "ADMINISTRADOR")` en las pruebas de MockMvc (el filtro de 2FA solo revisa los JWT). `SeguridadTest` recorre la cadena completa con roles y sesiones verificadas simulados, y `JwtValidatorTest` firma tokens de verdad con llaves generadas en la prueba y un JWKS local.
 
 **Segundo paso (2FA).** `/api/auth/2fa/codigo`, `/reenviar` y `/verificar` exigen el JWT del primer paso y toman el usuario del `sub` del token: el cuerpo ya **no lleva el correo** (en `verificar` solo va `{"codigo": "012345"}`). Así nadie puede pedir ni probar códigos de otra cuenta.
 
-La sesión debe haber completado el segundo paso; `005_seguridad_sesion_2fa.sql` guarda la vigencia en `sesion_verificada` y un filtro rechaza el resto de la API hasta verificar el código. `/api/usuarios/yo` y `/api/auth/2fa/**` son las excepciones necesarias para completar el ingreso.
+**La verificación es por sesión.** Al verificar el código, `sesion_verificada` (migración 006) guarda el claim `session_id` del token con una vigencia de 12 horas (`ReglasVerificacion.VIGENCIA_SESION`). Así, verificar en el celular no habilita una sesión abierta en otro equipo. `SesionVerificadaFilter`, después de validar el JWT:
+1. Sin `session_id` (o si no es un UUID): `401`.
+2. Sin ningún rol en la base de datos (cuenta sin perfil, sin rol o con el acceso revocado): `403`, también en las rutas del 2FA.
+3. Fuera de las rutas sin 2FA, si la sesión del token no está verificada o venció: `403` con `"codigo": "2FA_REQUERIDA"`.
+
+Las rutas sin 2FA están todas en `util.security.RutasSin2FA`, en una sola lista documentada: las tres del segundo paso, el webhook reservado de Wompi, `GET /api/health`, `/error` y `OPTIONS`; con el perfil `dev`, también la documentación. **Agregar una ruta ahí la abre:** hay que justificarla.
+
+`POST /api/auth/logout` borra la sesión del token; el frontend también debe cerrar la sesión en Supabase Auth. Revocar el acceso de un usuario (`POST /api/usuarios/{id}/revocar`) borra todas sus sesiones verificadas: si se le restablece, debe verificar el código otra vez.
 
 ## Formato de errores (para el frontend)
 
@@ -912,7 +923,9 @@ Las pruebas de los DAO (`EntrenadorDAOImplTest`, `EntrenadorServiceImplConPostgr
 
 | Prueba | Qué revisa |
 | :--- | :--- |
-| `FutDataApplicationTests` | El contexto arranca sin base de datos y sin JPA; propiedades de n8n (timeout 5 s, token oculto en `toString`); OpenAPI y Swagger UI |
+| `FutDataApplicationTests` | El contexto arranca sin base de datos y sin JPA; propiedades de n8n (timeout 5 s, token oculto en `toString`); sin el perfil `dev` no hay OpenAPI ni Swagger UI |
+| `DocumentacionPerfilDevTest` | Con el perfil `dev`, OpenAPI (con `/api/health` y `/api/auth/logout`) y Swagger UI se publican sin token |
+| `SesionVerificadaDAOImplTest` | Contra PostgreSQL: cada sesión se verifica por separado, el `sub` de otro usuario no sirve, vencimiento, logout de una sola sesión, revocación de todas, y la migración 006 aplicada sobre una base con la 005 y filas |
 | `NumeroEnLetrasTest`, `FormatoColombianoTest` | Montos en letras (1, 21, 100, 101, 1.000, 150.000, 1.000.000, 1.250.500...), pesos, fechas en hora de Colombia, NIT y celular |
 | `ComprobantePdfGeneratorTest` | Texto del PDF leído con PDFBox: datos, monto en número y en letras, fechas, club (y líneas vacías), tildes y ñ, concepto largo, metadatos sin datos personales, que no salgan la nota ni quién registró, y DTO inválido (incluida la referencia Wompi obligatoria en línea y la fecha de pago posterior a la emisión). Deja ejemplos en `target/comprobantes-ejemplo/` |
 | `ComprobanteConfiguracionTest` | Valores por defecto de `futdata.club` y el generador como bean |

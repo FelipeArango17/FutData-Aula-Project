@@ -5,7 +5,8 @@ import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -21,18 +22,17 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
  * <ul>
  *   <li>Cada petición trae el JWT de Supabase Auth en {@code Authorization: Bearer ...}. Lo valida
  *       {@link JwtValidator}. Sin token o con uno inválido: {@code 401}.</li>
- *   <li>Públicas: {@code GET /api/health}, la documentación OpenAPI (en el perfil {@code prod} está apagada,
- *       ver {@code application.yml}) y las peticiones {@code OPTIONS} de CORS. Todo lo demás exige sesión.</li>
+ *   <li>Las rutas sin 2FA están todas en {@link RutasSin2FA}: las públicas van con {@code permitAll} (salud,
+ *       {@code /error}, preflight de CORS, el webhook reservado de Wompi y, solo con el perfil {@code dev}, la
+ *       documentación OpenAPI). Todo lo demás exige sesión.</li>
+ *   <li>{@link SesionVerificadaFilter}, después de validar el JWT: sin {@code session_id}, {@code 401}; sin rol en la
+ *       base de datos, {@code 403}; y fuera de las rutas del segundo paso, la sesión del token debe haber
+ *       completado el 2FA ({@code 403 2FA_REQUERIDA}).</li>
  *   <li>Los roles se exigen en cada controlador con {@code @PreAuthorize} (por ejemplo, entrenadores solo para
  *       {@code ADMINISTRADOR}). Sin el rol: {@code 403}.</li>
  *   <li>Sin estado: no hay sesión de servidor ni cookie de sesión, así que no aplica la protección CSRF. La cookie
  *       de "Recordar este equipo" (HU-002) solo identifica el equipo y siempre va junto con el JWT.</li>
  * </ul>
- *
- * <p>Las rutas del segundo paso ({@code /api/auth/2fa/**}) exigen el JWT pero ningún rol: el usuario sale del token.
- *
- * <p>Un filtro adicional exige que la sesión haya completado el segundo paso en todas las rutas protegidas,
- * salvo {@code /api/auth/2fa/**} y {@code /api/usuarios/yo}, que son necesarias para completar el ingreso.
  */
 @Configuration
 @EnableMethodSecurity
@@ -40,8 +40,9 @@ public class SeguridadConfig {
 
     @Bean
     public SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, JwtValidator validador, RespuestasSeguridad respuestas,
-                                                 SesionVerificadaFilter sesionVerificada)
+                                                 SesionVerificadaFilter sesionVerificada, Environment entorno)
             throws Exception {
+        boolean documentacion = entorno.acceptsProfiles(Profiles.of(RutasSin2FA.PERFIL_DOCUMENTACION));
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
@@ -49,10 +50,7 @@ public class SeguridadConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(rutas -> rutas
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers(RutasSin2FA.publicas(documentacion)).permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(recurso -> recurso
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(validador))
