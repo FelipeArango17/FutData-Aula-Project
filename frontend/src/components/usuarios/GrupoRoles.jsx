@@ -4,12 +4,16 @@ import { DESCRIPCION_ROL, ETIQUETAS_ROL, ROLES } from '../../services/usuariosSe
 // Roles como grupo de opciones (radio) con una línea que explica qué puede hacer cada uno.
 // Con texto grande (menos de 22 rem de ancho) el botón de opción va arriba del texto.
 // Sin borde ni relleno propio por opción: así no se anida relleno dentro de la tarjeta que lo contiene.
+// requerido: asterisco junto a la leyenda.
 // error: mensaje de validación (se asocia al grupo y a cada opción con aria-describedby).
-export default function GrupoRoles({ legend = 'Rol', id, value, onChange, error, disabled = false }) {
+export default function GrupoRoles({ legend = 'Rol', id, value, onChange, error, requerido = false, disabled = false }) {
   const errorId = error ? `${id}-error` : undefined
   return (
     <fieldset aria-describedby={errorId} disabled={disabled} className="flex min-w-0 flex-col gap-1">
-      <legend className="mb-1 break-words text-body-medium">{legend}</legend>
+      <legend className="mb-1 break-words text-body-medium">
+        {legend}
+        {requerido && <span aria-hidden="true" className="text-danger"> *</span>}
+      </legend>
       <div className="flex flex-col divide-y">
         {ROLES.map((rol) => (
           <label key={rol} className="flex min-h-11 cursor-pointer flex-col items-start gap-1 py-2 min-[22rem]:flex-row min-[22rem]:gap-3">

@@ -307,10 +307,24 @@ describe('validarMonto', () => {
 
 describe('validaciones del formulario de entrenamientos', () => {
   it('fecha: obligatoria, inexistente y domingo', () => {
-    expect(validarFechaEntrenamiento('')).toBe('Indica la fecha del entrenamiento.')
-    expect(validarFechaEntrenamiento('2026-02-30')).toBe('La fecha no es válida. Usa el formato día/mes/año.')
-    expect(validarFechaEntrenamiento('2026-10-25')).toBe('Los entrenamientos se programan de lunes a sábado.')
-    expect(validarFechaEntrenamiento('2026-10-24')).toBeNull()
+    expect(validarFechaEntrenamiento('', HOY)).toBe('Indica la fecha del entrenamiento.')
+    expect(validarFechaEntrenamiento('2026-02-30', HOY)).toBe('La fecha no es válida. Usa el formato día/mes/año.')
+    expect(validarFechaEntrenamiento('2026-10-25', HOY)).toBe('Los entrenamientos se programan de lunes a sábado.')
+    expect(validarFechaEntrenamiento('2026-10-24', HOY)).toBeNull()
+  })
+
+  it('fecha: hoy y mañana se permiten, ayer se bloquea', () => {
+    const pasada = 'No puedes programar un entrenamiento en una fecha pasada.'
+    expect(validarFechaEntrenamiento('2026-10-22', HOY)).toBeNull()
+    expect(validarFechaEntrenamiento('2026-10-23', HOY)).toBeNull()
+    expect(validarFechaEntrenamiento('2026-10-21', HOY)).toBe(pasada)
+  })
+
+  it('fecha: al editar, conservar la fecha original (aunque sea pasada) no da error; cambiarla a otra pasada sí', () => {
+    const original = '2026-10-19'
+    // el formulario pasa la fecha original como `hoy` cuando el valor no cambió
+    expect(validarFechaEntrenamiento(original, original)).toBeNull()
+    expect(validarFechaEntrenamiento('2026-10-20', HOY)).toBe('No puedes programar un entrenamiento en una fecha pasada.')
   })
 
   it('hora: obligatoria e inválida', () => {

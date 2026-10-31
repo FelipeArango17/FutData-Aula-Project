@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+/* global process */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   diaCorto, diaLargo, diasDeSemana, esDomingo, esFechaValida, esHoraValida, fechaLargaConAnio,
-  formatHora, lunesDe, mesEnTexto, momentoLegible, partesMomento, rangoSemana, sumarDias, sumarMinutos,
+  formatHora, hoyLocal, lunesDe, mesEnTexto, momentoLegible, partesMomento, restarAnios, rangoSemana, sumarDias, sumarMinutos,
 } from './fechas.js'
 
 describe('esFechaValida', () => {
@@ -152,5 +153,46 @@ describe('mesEnTexto', () => {
     expect(mesEnTexto('2026-10-22')).toBe('octubre')
     expect(mesEnTexto('2026-01-01')).toBe('enero')
     expect(mesEnTexto('2026-12-31')).toBe('diciembre')
+  })
+})
+
+describe('hoyLocal', () => {
+  const tzOriginal = process.env.TZ
+  beforeEach(() => {
+    process.env.TZ = 'America/Bogota'
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    if (tzOriginal === undefined) delete process.env.TZ
+    else process.env.TZ = tzOriginal
+  })
+
+  it('devuelve la fecha local AAAA-MM-DD del reloj', () => {
+    vi.setSystemTime(new Date('2026-10-22T15:00:00-05:00'))
+    expect(hoyLocal()).toBe('2026-10-22')
+  })
+
+  it('a las 8 p. m. en Colombia sigue siendo el mismo día (en UTC ya sería el siguiente)', () => {
+    vi.setSystemTime(new Date('2026-10-22T20:00:00-05:00'))
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-23')
+    expect(hoyLocal()).toBe('2026-10-22')
+  })
+
+  it('acepta un instante fijo como parámetro y rellena mes y día con cero', () => {
+    expect(hoyLocal(new Date(2026, 0, 5, 23, 59))).toBe('2026-01-05')
+  })
+})
+
+describe('restarAnios', () => {
+  it('resta años a una fecha normal', () => {
+    expect(restarAnios('2026-10-22', 18)).toBe('2008-10-22')
+    expect(restarAnios('2026-10-22', 0)).toBe('2026-10-22')
+  })
+
+  it('el 29 de febrero pasa al 28 si el año resultante no es bisiesto, y se conserva si lo es', () => {
+    expect(restarAnios('2028-02-29', 18)).toBe('2010-02-28')
+    expect(restarAnios('2028-02-29', 4)).toBe('2024-02-29')
+    expect(restarAnios('2000-02-29', 100)).toBe('1900-02-28')
   })
 })
