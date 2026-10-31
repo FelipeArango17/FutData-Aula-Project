@@ -78,7 +78,7 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = CodigoVerificacionException.class)
     public UsuarioResponseDTO verificar(UUID idUsuario, String codigo) {
         Usuario usuario = usuarioActivo(idUsuario);
         CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId())
