@@ -21,6 +21,7 @@ function validar(valores) {
 const MENSAJES = {
   CREDENCIALES: 'Correo o contraseña incorrectos.',
   INACTIVA: 'Tu cuenta no está activa. Contacta al administrador.',
+  PERFIL: 'No pudimos cargar tu perfil. Contacta al administrador.',
 }
 
 function textoBloqueo(msRestantes) {
@@ -31,7 +32,7 @@ function textoBloqueo(msRestantes) {
 // Paso 1 del ingreso (HU-001): correo y contraseña. Pantalla pública, fuera del AppShell.
 // PENDIENTE: el bloqueo por intentos fallidos de CONTRASEÑA lo gestiona Supabase Auth; aquí no se implementa.
 export default function Login() {
-  const { estado, usuario, iniciarSesion } = useAuth()
+  const { estado, usuario, iniciarSesion, retomarCodigo } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const titulo = useRef(null)
@@ -60,6 +61,8 @@ export default function Login() {
   }, [intentos])
 
   if (estado === 'verificada') return <Navigate to={inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
+  // Sesión de Supabase restaurada sin 2FA en esta pestaña: se vuelve al paso del código, no se entra directo
+  if (estado === 'pendiente' && retomarCodigo) return <Navigate to="/verificar" replace />
 
   function cambiar(campo, valor) {
     setValores({ ...valores, [campo]: valor })

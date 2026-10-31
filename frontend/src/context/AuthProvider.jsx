@@ -1,12 +1,41 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AuthContext } from './AuthContext.js'
 import { useRole } from './RoleContext.js'
 import { VACIA, guardarSesion, leerSesion, limpiarSesion } from './sesion.js'
-import * as servicio from '../services/authService.js'
+import { configurarAlNoAutorizado } from '../services/apiClient.js'
+import { servicio } from '../services/auth.js'
 
 export default function AuthProvider({ children }) {
   const { setRole } = useRole()
   const [sesion, setSesion] = useState(leerSesion)
+  // true cuando la sesión de Supabase de una recarga o de otra pestaña vuelve al paso del código (ver Login)
+  const [retomarCodigo, setRetomarCodigo] = useState(false)
+  const estadoInicial = useRef(sesion.estado)
+
+  // Solo con el servicio real (Supabase): al cargar, comprueba que la sesión siga vigente; si hay sesión pero esta
+  // pestaña no completó el 2FA, vuelve al paso del código. Un 401 del backend o un cierre de sesión hecho en otra
+  // pestaña limpian el estado y las rutas llevan a /login.
+  useEffect(() => {
+    const cerrar = () => setSesion(limpiarSesion())
+    configurarAlNoAutorizado(cerrar)
+    const darDeBaja = servicio.alCerrarSesionExterna?.(cerrar)
+    let activo = true
+    servicio.restaurarSesion?.({ verificada: estadoInicial.current === 'verificada' }).then((restaurada) => {
+      if (!activo) return
+      if (!restaurada) return cerrar()
+      if (restaurada.estado === 'pendiente') {
+        const nueva = { estado: 'pendiente', usuario: restaurada.usuario }
+        setSesion(nueva)
+        guardarSesion(nueva)
+        setRetomarCodigo(true)
+      }
+    }, () => {})
+    return () => {
+      activo = false
+      configurarAlNoAutorizado(null)
+      darDeBaja?.()
+    }
+  }, [])
 
   const value = useMemo(() => {
     const fijar = (nueva) => {
@@ -24,6 +53,7 @@ export default function AuthProvider({ children }) {
     return {
       estado: sesion.estado,
       usuario: sesion.usuario,
+      retomarCodigo,
       // Paso 1. Si sale bien queda pendiente del código; si este equipo es de confianza, queda verificada de una vez.
       // Devuelve el estado resultante ('pendiente' | 'verificada').
       async iniciarSesion(correo, contrasena) {
@@ -58,7 +88,7 @@ export default function AuthProvider({ children }) {
       estadoEquipo: servicio.estadoEquipo,
       dejarDeRecordarEquipo: servicio.dejarDeRecordarEquipo,
     }
-  }, [sesion, setRole])
+  }, [sesion, retomarCodigo, setRole])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
