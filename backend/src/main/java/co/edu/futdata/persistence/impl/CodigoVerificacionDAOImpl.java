@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -39,8 +40,14 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
 
     @Override
     public void bloquearUsuario(UUID usuarioId) {
-        jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(cast(:usuario as text), 0))",
-                Map.of("usuario", usuarioId), Long.class);
+        jdbc.query("select pg_advisory_xact_lock(hashtextextended(cast(:usuario as text), 0))",
+                Map.of("usuario", usuarioId),
+                (ResultSetExtractor<Void>) resultado -> {
+                    while (resultado.next()) {
+                        // pg_advisory_xact_lock returns void; consume the result without type conversion.
+                    }
+                    return null;
+                });
     }
 
     @Override
