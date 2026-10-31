@@ -30,6 +30,7 @@ beforeEach(async () => {
     'POST /auth/2fa/codigo': () => respuesta(202, codigo202),
     'POST /auth/2fa/verificar': () => respuesta(200, perfil()),
     'POST /auth/2fa/reenviar': () => respuesta(200, codigo202),
+    'POST /auth/logout': () => respuesta(204),
   }
   fetchSimulado = vi.fn(async (url, opciones) => {
     const clave = `${opciones.method ?? 'GET'} ${url.replace(/^.*\/api/, '')}`
@@ -47,15 +48,23 @@ const entrar = (correo = ' tesorero@pradofc.co ') => auth.iniciarSesion(correo, 
 const rechazo = (promesa) => promesa.then(() => null, (error) => error)
 
 describe('iniciarSesion', () => {
-  it('con credenciales válidas pide el perfil y el código, y devuelve la sesión pendiente', async () => {
+  it('con credenciales válidas pide el código SIN pedir el perfil, y devuelve la sesión pendiente', async () => {
     const usuario = await entrar()
     expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'tesorero@pradofc.co', password: 'Clave2026!' })
-    expect(usuario).toEqual({ correo: 'tesorero@pradofc.co', rol: 'tesorero', nombre: 'Laura', verificada: false })
-    // el perfil lleva el token; /codigo va sin cuerpo (el usuario sale del JWT)
-    expect(llamada('GET', '/usuarios/yo').opciones.headers.Authorization).toBe('Bearer token-de-prueba')
+    // el nombre y el rol llegan al verificar el código
+    expect(usuario).toEqual({ correo: 'tesorero@pradofc.co', rol: null, nombre: '', verificada: false })
+    // /usuarios/yo exige el 2FA en el backend nuevo: no se llama antes del código
+    expect(llamada('GET', '/usuarios/yo')).toBeUndefined()
+    // /codigo lleva el token y va sin cuerpo (el usuario sale del JWT)
     const codigo = llamada('POST', '/auth/2fa/codigo')
+    expect(codigo.opciones.headers.Authorization).toBe('Bearer token-de-prueba')
     expect(codigo.opciones.body).toBeUndefined()
     expect(codigo.opciones.credentials).toBe('include')
+  })
+
+  it('el correo de la sesión sale de Supabase si lo trae', async () => {
+    supabase.auth.signInWithPassword.mockResolvedValue({ data: { user: { id: ID, email: 'Tesorero@PradoFC.co' } }, error: null })
+    expect((await entrar('tesorero@pradofc.co')).correo).toBe('tesorero@pradofc.co')
   })
 
   it('estadoCodigo sale de la respuesta de /codigo', async () => {
@@ -63,8 +72,8 @@ describe('iniciarSesion', () => {
     expect(auth.estadoCodigo()).toEqual({
       correo: 'tesorero@pradofc.co',
       correoEnmascarado: 't***@pradofc.co',
-      rol: 'tesorero',
-      nombre: 'Laura',
+      rol: null,
+      nombre: '',
       intentosRestantes: 5,
       reenvioDisponibleEn: Date.now() + 60000,
       bloqueoHasta: null,
@@ -102,23 +111,28 @@ describe('iniciarSesion', () => {
     expect((await rechazo(entrar())).codigo).toBe('RED')
   })
 
-  it('perfil con 403 (rol sin permiso para GET /api/usuarios/{id}): PERFIL, cierra la sesión y no pide código', async () => {
-    rutas['GET /usuarios/yo'] = () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })
-    const error = await rechazo(entrar())
-    expect(error).toMatchObject({ codigo: 'PERFIL', estado: 403 })
+  it('401 en /codigo (backend nuevo: token sin session_id): SESION_INVALIDA y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/codigo'] = () => respuesta(401, { estado: 401, mensaje: 'Debes iniciar sesión. Si ya la iniciaste, venció: inicia sesión de nuevo.' })
+    expect((await rechazo(entrar())).codigo).toBe('SESION_INVALIDA')
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
-    expect(llamada('POST', '/auth/2fa/codigo')).toBeUndefined()
     expect(auth.estadoCodigo()).toBeNull()
   })
 
-  it('perfil con 404 (cuenta de Auth sin perfil en FutData): PERFIL', async () => {
-    rutas['GET /usuarios/yo'] = () => respuesta(404, { mensaje: 'No existe un usuario con ese id.' })
+  it('403 en /codigo (backend nuevo: cuenta sin roles): SIN_ROL y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/codigo'] = () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })
+    expect((await rechazo(entrar())).codigo).toBe('SIN_ROL')
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(auth.estadoCodigo()).toBeNull()
+  })
+
+  it('404 en /codigo (backend de develop: cuenta sin perfil en FutData): PERFIL y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/codigo'] = () => respuesta(404, { estado: 404, mensaje: 'La cuenta no está registrada en FutData.' })
     expect((await rechazo(entrar())).codigo).toBe('PERFIL')
     expect(supabase.auth.signOut).toHaveBeenCalled()
   })
 
-  it('cuenta inactiva en el perfil: INACTIVA y cierra la sesión', async () => {
-    rutas['GET /usuarios/yo'] = () => respuesta(200, perfil({ activo: false }))
+  it('404 en /codigo (backend de develop: cuenta inactiva): INACTIVA y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/codigo'] = () => respuesta(404, { estado: 404, mensaje: 'La cuenta no está activa.' })
     expect((await rechazo(entrar())).codigo).toBe('INACTIVA')
     expect(supabase.auth.signOut).toHaveBeenCalled()
   })
@@ -150,11 +164,30 @@ describe('verificarCodigo', () => {
     expect(fetchSimulado).not.toHaveBeenCalled()
   })
 
-  it('con el código correcto envía SOLO { codigo }, devuelve el usuario y limpia la solicitud', async () => {
+  it('con el código correcto envía SOLO { codigo }, toma el perfil de la respuesta y limpia la solicitud', async () => {
     const usuario = await auth.verificarCodigo('123456', { recordar: true })
+    // UsuarioResponseDTO: { id, nombre, apellido, correo, rol, activo, creadoEn }
     expect(usuario).toEqual({ correo: 'tesorero@pradofc.co', rol: 'tesorero', nombre: 'Laura' })
     const { opciones } = llamada('POST', '/auth/2fa/verificar')
     expect(JSON.parse(opciones.body)).toEqual({ codigo: '123456' })
+    expect(auth.estadoCodigo()).toBeNull()
+    expect(llamada('GET', '/usuarios/yo')).toBeUndefined()
+  })
+
+  it('si la respuesta dice que la cuenta no está activa: INACTIVA y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/verificar'] = () => respuesta(200, perfil({ activo: false }))
+    expect((await rechazo(auth.verificarCodigo('123456'))).codigo).toBe('INACTIVA')
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(auth.estadoCodigo()).toBeNull()
+  })
+
+  it.each([
+    [401, 'SESION_INVALIDA'],
+    [403, 'SIN_ROL'],
+  ])('un %i al verificar: %s, cierra la sesión y descarta la solicitud', async (estado, codigo) => {
+    rutas['POST /auth/2fa/verificar'] = () => respuesta(estado, { estado, mensaje: 'texto del backend' })
+    expect((await rechazo(auth.verificarCodigo('123456'))).codigo).toBe(codigo)
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
     expect(auth.estadoCodigo()).toBeNull()
   })
 
@@ -234,6 +267,12 @@ describe('reenviarCodigo', () => {
     rutas['POST /auth/2fa/reenviar'] = () => error2FA('La verificación está bloqueada temporalmente.')
     expect((await rechazo(auth.reenviarCodigo())).codigo).toBe('BLOQUEADO')
   })
+
+  it('un 403 al reenviar (acceso revocado a mitad del ingreso): SIN_ROL y cierra la sesión', async () => {
+    rutas['POST /auth/2fa/reenviar'] = () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })
+    expect((await rechazo(auth.reenviarCodigo())).codigo).toBe('SIN_ROL')
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
 })
 
 describe('cerrar sesión', () => {
@@ -244,9 +283,44 @@ describe('cerrar sesión', () => {
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
   })
 
-  it('cerrarSesionGlobal cierra en todos los equipos', async () => {
+  it('cancelarSolicitud ("Volver al inicio de sesión") no llama al logout del backend', async () => {
+    await entrar()
+    await auth.cancelarSolicitud()
+    expect(llamada('POST', '/auth/logout')).toBeUndefined()
+  })
+
+  it('cerrarSesion llama a POST /api/auth/logout con el token y DESPUÉS cierra Supabase', async () => {
+    await auth.cerrarSesion()
+    const logout = llamada('POST', '/auth/logout')
+    expect(logout.opciones.headers.Authorization).toBe('Bearer token-de-prueba')
+    expect(logout.opciones.body).toBeUndefined()
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+    expect(fetchSimulado.mock.invocationCallOrder[0]).toBeLessThan(supabase.auth.signOut.mock.invocationCallOrder[0])
+  })
+
+  it.each([
+    ['404 (backend de develop, sin el endpoint)', () => respuesta(404, { estado: 404, mensaje: 'No encontrado' })],
+    ['403 (sesión sin 2FA)', () => respuesta(403, { estado: 403, codigo: '2FA_REQUERIDA', mensaje: 'Debes verificar el código 2FA antes de continuar.' })],
+    ['401', () => respuesta(401, { estado: 401, mensaje: 'Debes iniciar sesión.' })],
+    ['500', () => respuesta(500, { estado: 500, mensaje: 'Ocurrió un error interno.' })],
+    ['sin red', () => { throw new TypeError('Failed to fetch') }],
+  ])('si el logout falla con %s, cierra Supabase igual y no lanza', async (_nombre, fallo) => {
+    rutas['POST /auth/logout'] = fallo
+    await expect(auth.cerrarSesion()).resolves.toBeUndefined()
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('sin sesión de Supabase no llama al logout del backend', async () => {
+    supabase.auth.getSession.mockResolvedValue({ data: { session: null } })
+    await auth.cerrarSesion()
+    expect(fetchSimulado).not.toHaveBeenCalled()
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('cerrarSesionGlobal avisa al backend y cierra en todos los equipos', async () => {
     await entrar()
     await auth.cerrarSesionGlobal('tesorero@pradofc.co')
+    expect(llamada('POST', '/auth/logout')).toBeDefined()
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'global' })
     expect(auth.estadoCodigo()).toBeNull()
   })
@@ -264,9 +338,42 @@ describe('restaurarSesion', () => {
     expect(fetchSimulado).not.toHaveBeenCalled()
   })
 
-  it('con sesión y 2FA completo en esta pestaña sigue verificada, sin llamar al backend', async () => {
+  it('con sesión y 2FA completo en esta pestaña sigue verificada y actualiza el perfil con /usuarios/yo', async () => {
+    rutas['GET /usuarios/yo'] = () => respuesta(200, perfil({ rol: 'ADMINISTRADOR' }))
+    expect(await auth.restaurarSesion({ verificada: true })).toEqual({
+      estado: 'verificada',
+      usuario: { correo: 'tesorero@pradofc.co', rol: 'administrador', nombre: 'Laura' },
+    })
+    expect(llamada('GET', '/usuarios/yo').opciones.headers.Authorization).toBe('Bearer token-de-prueba')
+    expect(llamada('POST', '/auth/2fa/codigo')).toBeUndefined()
+  })
+
+  it('si el backend ya no da la sesión por verificada (403 2FA_REQUERIDA), vuelve al paso del código', async () => {
+    rutas['GET /usuarios/yo'] = () => respuesta(403, { estado: 403, codigo: '2FA_REQUERIDA', mensaje: 'Debes verificar el código 2FA antes de continuar.' })
+    const restaurada = await auth.restaurarSesion({ verificada: true })
+    expect(restaurada).toMatchObject({ estado: 'pendiente', usuario: { correo: 'tesorero@pradofc.co' } })
+    expect(llamada('POST', '/auth/2fa/codigo')).toBeDefined()
+  })
+
+  it.each([
+    ['403 sin roles', () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })],
+    ['404 sin perfil', () => respuesta(404, { estado: 404, mensaje: 'No existe un usuario con ese id.' })],
+    ['cuenta inactiva', () => respuesta(200, perfil({ activo: false }))],
+  ])('al recargar con %s cierra la sesión y devuelve null', async (_nombre, contestar) => {
+    rutas['GET /usuarios/yo'] = contestar
+    expect(await auth.restaurarSesion({ verificada: true })).toBeNull()
+    expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
+  })
+
+  it('al recargar sin red conserva la sesión verificada', async () => {
+    rutas['GET /usuarios/yo'] = () => { throw new TypeError('Failed to fetch') }
     expect(await auth.restaurarSesion({ verificada: true })).toEqual({ estado: 'verificada' })
-    expect(fetchSimulado).not.toHaveBeenCalled()
+    expect(supabase.auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('sin 2FA en esta pestaña no llama a /usuarios/yo', async () => {
+    await auth.restaurarSesion({ verificada: false })
+    expect(llamada('GET', '/usuarios/yo')).toBeUndefined()
   })
 
   it('con sesión pero sin 2FA en esta pestaña vuelve al paso del código (pide el código)', async () => {
@@ -281,7 +388,7 @@ describe('restaurarSesion', () => {
     await entrar()
     fetchSimulado.mockClear()
     const restaurada = await auth.restaurarSesion({ verificada: false })
-    expect(restaurada).toMatchObject({ estado: 'pendiente', usuario: { rol: 'tesorero', nombre: 'Laura' } })
+    expect(restaurada).toMatchObject({ estado: 'pendiente', usuario: { correo: 'tesorero@pradofc.co', rol: null } })
     expect(fetchSimulado).not.toHaveBeenCalled()
   })
 
