@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationFilter;
 
 /**
  * Seguridad de la API (RF008, RNF001; HU-001 y HU-005).
@@ -30,15 +31,16 @@ import org.springframework.security.web.SecurityFilterChain;
  *
  * <p>Las rutas del segundo paso ({@code /api/auth/2fa/**}) exigen el JWT pero ningún rol: el usuario sale del token.
  *
- * <p><b>Pendiente:</b> exigir que la sesión haya completado el segundo paso (tabla {@code sesion_verificada}) en
- * todas las rutas salvo {@code /api/auth/2fa/**}.
+ * <p>Un filtro adicional exige que la sesión haya completado el segundo paso en todas las rutas protegidas,
+ * salvo {@code /api/auth/2fa/**} y {@code /api/usuarios/yo}, que son necesarias para completar el ingreso.
  */
 @Configuration
 @EnableMethodSecurity
 public class SeguridadConfig {
 
     @Bean
-    public SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, JwtValidator validador, RespuestasSeguridad respuestas)
+    public SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, JwtValidator validador, RespuestasSeguridad respuestas,
+                                                 SesionVerificadaFilter sesionVerificada)
             throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -56,6 +58,7 @@ public class SeguridadConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(validador))
                         .authenticationEntryPoint(respuestas)
                         .accessDeniedHandler(respuestas))
+                .addFilterAfter(sesionVerificada, BearerTokenAuthenticationFilter.class)
                 .exceptionHandling(errores -> errores
                         .authenticationEntryPoint(respuestas)
                         .accessDeniedHandler(respuestas))

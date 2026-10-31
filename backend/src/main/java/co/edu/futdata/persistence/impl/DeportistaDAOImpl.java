@@ -9,6 +9,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -30,6 +31,15 @@ public class DeportistaDAOImpl implements IDeportistaDAO {
         return Boolean.TRUE.equals(jdbc.queryForObject(
                 "select exists (select 1 from deportista where documento_identidad = :documento)",
                 Map.of("documento", documento), Boolean.class));
+    }
+
+    @Override
+    public List<Deportista> listar() {
+        return jdbc.query("""
+                select id_deportista, nombre, apellido, tipo_documento, documento_identidad,
+                       fecha_nacimiento, telefono, direccion, id_categoria
+                  from deportista order by apellido, nombre
+                """, FILA);
     }
 
     @Override

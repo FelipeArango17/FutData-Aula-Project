@@ -15,6 +15,7 @@ public interface IUsuarioDAO {
     void actualizarRol(UUID idUsuario, String rol);
     void actualizarActivo(UUID idUsuario, boolean activo);
     long administradoresActivos();
+    void bloquearAdministradores();
 
     /**
      * Nombres de los roles del usuario ({@code ADMINISTRADOR}, {@code TESORERO}, {@code ENTRENADOR},

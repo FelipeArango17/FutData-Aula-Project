@@ -12,7 +12,7 @@ const error2FA = (mensaje, extra = {}) => respuesta(409, { estado: 409, mensaje,
 
 let auth
 let fetchSimulado
-let rutas // { 'GET /usuarios/<id>': () => Response, ... }
+let rutas // { 'GET /usuarios/yo': () => Response, ... }
 
 const llamadas = () => fetchSimulado.mock.calls.map(([url, opciones]) => ({ ruta: url.replace(/^.*\/api/, ''), metodo: opciones.method ?? 'GET', opciones }))
 const llamada = (metodo, ruta) => llamadas().find((l) => l.metodo === metodo && l.ruta === ruta)
@@ -26,7 +26,7 @@ beforeEach(async () => {
   supabase.auth.getSession.mockReset().mockResolvedValue({ data: { session: { access_token: 'token-de-prueba', user: { email: 'Tesorero@pradofc.co' } } } })
   supabase.auth.onAuthStateChange.mockReset().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
   rutas = {
-    [`GET /usuarios/${ID}`]: () => respuesta(200, perfil()),
+    'GET /usuarios/yo': () => respuesta(200, perfil()),
     'POST /auth/2fa/codigo': () => respuesta(202, codigo202),
     'POST /auth/2fa/verificar': () => respuesta(200, perfil()),
     'POST /auth/2fa/reenviar': () => respuesta(200, codigo202),
@@ -52,7 +52,7 @@ describe('iniciarSesion', () => {
     expect(supabase.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'tesorero@pradofc.co', password: 'Clave2026!' })
     expect(usuario).toEqual({ correo: 'tesorero@pradofc.co', rol: 'tesorero', nombre: 'Laura', verificada: false })
     // el perfil lleva el token; /codigo va sin cuerpo (el usuario sale del JWT)
-    expect(llamada('GET', `/usuarios/${ID}`).opciones.headers.Authorization).toBe('Bearer token-de-prueba')
+    expect(llamada('GET', '/usuarios/yo').opciones.headers.Authorization).toBe('Bearer token-de-prueba')
     const codigo = llamada('POST', '/auth/2fa/codigo')
     expect(codigo.opciones.body).toBeUndefined()
     expect(codigo.opciones.credentials).toBe('include')
@@ -103,7 +103,7 @@ describe('iniciarSesion', () => {
   })
 
   it('perfil con 403 (rol sin permiso para GET /api/usuarios/{id}): PERFIL, cierra la sesión y no pide código', async () => {
-    rutas[`GET /usuarios/${ID}`] = () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })
+    rutas['GET /usuarios/yo'] = () => respuesta(403, { estado: 403, mensaje: 'No tienes permiso para hacer esta acción.' })
     const error = await rechazo(entrar())
     expect(error).toMatchObject({ codigo: 'PERFIL', estado: 403 })
     expect(supabase.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
@@ -112,13 +112,13 @@ describe('iniciarSesion', () => {
   })
 
   it('perfil con 404 (cuenta de Auth sin perfil en FutData): PERFIL', async () => {
-    rutas[`GET /usuarios/${ID}`] = () => respuesta(404, { mensaje: 'No existe un usuario con ese id.' })
+    rutas['GET /usuarios/yo'] = () => respuesta(404, { mensaje: 'No existe un usuario con ese id.' })
     expect((await rechazo(entrar())).codigo).toBe('PERFIL')
     expect(supabase.auth.signOut).toHaveBeenCalled()
   })
 
   it('cuenta inactiva en el perfil: INACTIVA y cierra la sesión', async () => {
-    rutas[`GET /usuarios/${ID}`] = () => respuesta(200, perfil({ activo: false }))
+    rutas['GET /usuarios/yo'] = () => respuesta(200, perfil({ activo: false }))
     expect((await rechazo(entrar())).codigo).toBe('INACTIVA')
     expect(supabase.auth.signOut).toHaveBeenCalled()
   })

@@ -140,7 +140,7 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(CodigoVerificacionException.class)
     public ResponseEntity<ErrorResponseDTO> codigoVerificacion(CodigoVerificacionException e,
                                                                  HttpServletRequest peticion) {
-        return responder(HttpStatus.CONFLICT, e.getMessage(), e.getCampos(), peticion);
+        return responder(HttpStatus.CONFLICT, e.getMessage(), e.getCampos(), e.getCodigo(), e.getMsRestantes(), peticion);
     }
 
     @ExceptionHandler(CodigoNoEnviadoException.class)
@@ -246,9 +246,15 @@ public class ManejadorGlobalErrores {
 
     private ResponseEntity<ErrorResponseDTO> responder(HttpStatusCode estado, String mensaje, List<String> campos,
                                                        HttpServletRequest peticion) {
+        return responder(estado, mensaje, campos, null, null, peticion);
+    }
+
+    private ResponseEntity<ErrorResponseDTO> responder(HttpStatusCode estado, String mensaje, List<String> campos,
+                                                       String codigo, Long msRestantes, HttpServletRequest peticion) {
         HttpStatus conocido = HttpStatus.resolve(estado.value());
         String error = conocido != null ? conocido.getReasonPhrase() : String.valueOf(estado.value());
-        ErrorResponseDTO cuerpo = new ErrorResponseDTO(Instant.now(), estado.value(), error, mensaje, peticion.getRequestURI(), campos);
+        ErrorResponseDTO cuerpo = new ErrorResponseDTO(Instant.now(), estado.value(), error, mensaje,
+                peticion.getRequestURI(), campos, codigo, msRestantes);
         return ResponseEntity.status(estado).body(cuerpo);
     }
 }

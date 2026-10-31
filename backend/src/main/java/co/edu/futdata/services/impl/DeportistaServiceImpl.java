@@ -16,6 +16,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,13 @@ public class DeportistaServiceImpl implements IDeportistaService {
     DeportistaServiceImpl(IDeportistaDAO deportistas, Clock reloj) {
         this.deportistas = deportistas;
         this.reloj = reloj;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeportistaResponseDTO> listar(boolean datosPrivados) {
+        return deportistas.listar().stream()
+                .map(d -> respuesta(d, datosPrivados)).toList();
     }
 
     @Override
@@ -58,8 +66,13 @@ public class DeportistaServiceImpl implements IDeportistaService {
     public DeportistaResponseDTO consultar(UUID id) {
         Deportista d = deportistas.buscarPorId(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("No existe un deportista con ese id."));
+        return respuesta(d, true);
+    }
+
+    private DeportistaResponseDTO respuesta(Deportista d, boolean datosPrivados) {
         int edad = d.getFechaNacimiento().until(LocalDate.now(reloj)).getYears();
         return new DeportistaResponseDTO(d.getId(), d.getNombre(), d.getApellido(), d.getTipoDocumento(),
-                d.getDocumento(), d.getFechaNacimiento(), edad, d.getTelefono(), d.getDireccion(), d.getIdCategoria());
+                d.getDocumento(), d.getFechaNacimiento(), edad,
+                datosPrivados ? d.getTelefono() : null, datosPrivados ? d.getDireccion() : null, d.getIdCategoria());
     }
 }
