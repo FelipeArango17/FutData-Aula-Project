@@ -4,6 +4,11 @@
 //
 // Diferencias con el simulado, que vienen del backend:
 // - El backend toma al usuario del JWT: /codigo y /reenviar van sin cuerpo y /verificar solo lleva { codigo }.
+// - El perfil (nombre, rol, activo) NO se pide antes del código: GET /api/usuarios/yo exige el 2FA completado
+//   (backend con la verificación por sesión) y respondería 403. Sale de la respuesta de POST /api/auth/2fa/verificar
+//   (UsuarioResponseDTO: { id, nombre, apellido, correo, rol, activo, creadoEn }), y /usuarios/yo solo se llama con
+//   la sesión ya verificada (al recargar la página).
+// - Al cerrar sesión se avisa al backend (POST /api/auth/logout) antes de cerrar la de Supabase.
 // - Los errores del 2FA traen { codigo, msRestantes, campos: ['codigo'] }. Se conserva el mapeo por texto para
 //   compatibilidad con instalaciones anteriores del backend.
 // - PENDIENTE backend: "Recordar este equipo" (cookie HttpOnly de equipo de confianza). No se envía nada.
@@ -118,6 +123,23 @@ function traducirError2FA(error) {
   }
 }
 
+// ---- Errores de acceso del backend (401 y 403 que no son del 2FA) ----
+// 401: el token no sirve (backend nuevo: no trae session_id). 403: la cuenta no tiene rol en FutData o le revocaron
+// el acceso. 404 (backend anterior): la cuenta no está registrada o no está activa. En todos los casos no hay
+// sesión posible: se cierra la de Supabase y se vuelve al login con el motivo (ver MENSAJES en Login.jsx).
+function errorDeAcceso(error) {
+  if (error.estado === 401) return fallo('SESION_INVALIDA')
+  if (error.estado === 403 && error.codigo !== '2FA_REQUERIDA') return fallo('SIN_ROL')
+  if (error.estado === 404) return fallo(quitarAcentos(error.mensaje).includes('no esta activa') ? 'INACTIVA' : 'PERFIL')
+  return null
+}
+
+async function cerrarPorAcceso(errorTraducido) {
+  guardar(null)
+  await cerrarSupabase({ scope: 'local' })
+  return errorTraducido
+}
+
 // POST /api/auth/2fa/codigo: el backend no repite el envío si hay un código vigente de hace menos de un minuto.
 // Si el código no se pudo enviar (503) o el backend no responde, el inicio de sesión falla como RED.
 async function pedirCodigo(usuario) {
@@ -127,7 +149,7 @@ async function pedirCodigo(usuario) {
   } catch (error) {
     if (error.estado === 409) throw traducirError2FA(error)
     if (error.codigo === 'RED' || error.estado >= 500) throw fallo('RED')
-    throw error
+    throw errorDeAcceso(error) ?? error
   }
   const previa = leer()
   const mismaCuenta = previa?.correo === usuario.correo
@@ -143,8 +165,10 @@ async function pedirCodigo(usuario) {
   return solicitud
 }
 
-// Paso 1: correo y contraseña en Supabase; luego el perfil (nombre y rol) y el código por correo.
-// Errores (error.codigo): RED, CREDENCIALES, INACTIVA, BLOQUEADO, PERFIL (no se pudo leer el perfil).
+// Paso 1: correo y contraseña en Supabase y, enseguida, el código por correo. El nombre y el rol todavía no se
+// conocen (llegan al verificar el código): el usuario pendiente lleva rol null y nombre vacío.
+// Errores (error.codigo): RED, CREDENCIALES, INACTIVA, BLOQUEADO, SESION_INVALIDA (401), SIN_ROL (403) y
+// PERFIL (404: cuenta sin perfil en FutData, backend anterior).
 export async function iniciarSesion(correo, contrasena) {
   let resultado
   try {
@@ -154,21 +178,13 @@ export async function iniciarSesion(correo, contrasena) {
   }
   if (resultado.error) throw errorDeSupabase(resultado.error)
 
+  const usuario = { correo: normalizar(resultado.data?.user?.email ?? correo), rol: null, nombre: '' }
   try {
-    const perfil = await apiRequest('/usuarios/yo')
-    if (perfil.activo === false) throw fallo('INACTIVA')
-    const usuario = { correo: normalizar(perfil.correo ?? correo), rol: enMinusculas(perfil.rol), nombre: perfil.nombre }
     await pedirCodigo(usuario)
     return { ...usuario, verificada: false }
   } catch (error) {
     // Sin 2FA no hay sesión: no se deja la de Supabase abierta a medias.
-    guardar(null)
-    await cerrarSupabase({ scope: 'local' })
-    if (error.codigo === 'PERMISOS' || error.estado === 403 || error.estado === 404) {
-      throw fallo('PERFIL', { estado: error.estado })
-    }
-    if (error.codigo === 'RED' || error.estado >= 500) throw fallo('RED')
-    throw error
+    throw await cerrarPorAcceso(error)
   }
 }
 
@@ -187,19 +203,30 @@ export function estadoCodigo() {
   }
 }
 
+// El perfil que devuelven /2fa/verificar y /usuarios/yo (UsuarioResponseDTO) en el formato de la sesión.
+const desdePerfil = (perfil) => ({ correo: normalizar(perfil.correo), rol: enMinusculas(perfil.rol), nombre: perfil.nombre })
+
+// 401 o 403 durante el paso del código: se cierra todo y la pantalla vuelve al login con el motivo.
+async function traducirErrorDelPaso2(error) {
+  const acceso = errorDeAcceso(error)
+  return acceso ? cerrarPorAcceso(acceso) : traducirError2FA(error)
+}
+
 // Paso 2: código de 6 dígitos. Errores: SIN_SOLICITUD, BLOQUEADO (msRestantes), FORMATO, VENCIDO, INCORRECTO
-// (intentosRestantes, contados aquí). El segundo parámetro del contrato ({ recordar }) se ignora a propósito:
-// PENDIENTE backend (equipo de confianza), no se envía nada.
+// (intentosRestantes, contados aquí), INACTIVA, SESION_INVALIDA y SIN_ROL. El perfil sale de la respuesta.
+// El segundo parámetro del contrato ({ recordar }) se ignora a propósito: PENDIENTE backend (equipo de
+// confianza), no se envía nada.
 export async function verificarCodigo(codigo) {
   if (!/^\d{6}$/.test(codigo)) throw fallo('FORMATO')
-  let usuario
+  let perfil
   try {
-    usuario = await apiRequest('/auth/2fa/verificar', { method: 'POST', body: JSON.stringify({ codigo }) })
+    perfil = await apiRequest('/auth/2fa/verificar', { method: 'POST', body: JSON.stringify({ codigo }) })
   } catch (error) {
-    throw traducirError2FA(error)
+    throw await traducirErrorDelPaso2(error)
   }
+  if (perfil.activo === false) throw await cerrarPorAcceso(fallo('INACTIVA'))
   guardar(null)
-  return { correo: normalizar(usuario.correo), rol: enMinusculas(usuario.rol), nombre: usuario.nombre }
+  return desdePerfil(perfil)
 }
 
 // Reenvío del código (uno por minuto). Errores: BLOQUEADO, DEMASIADO_PRONTO (msRestantes).
@@ -208,7 +235,7 @@ export async function reenviarCodigo() {
   try {
     respuesta = await apiRequest('/auth/2fa/reenviar', { method: 'POST' })
   } catch (error) {
-    throw traducirError2FA(error)
+    throw await traducirErrorDelPaso2(error)
   }
   const reenvioDisponibleEn = Date.now() + respuesta.reenvioDisponibleEn
   const solicitud = leer()
@@ -216,21 +243,57 @@ export async function reenviarCodigo() {
   return { reenvioDisponibleEn }
 }
 
-// "Volver al inicio de sesión" y cierre de sesión de este equipo: descarta la solicitud y cierra la sesión de Supabase.
+// "Volver al inicio de sesión" (sin código verificado): descarta la solicitud y cierra la sesión de Supabase.
 export function cancelarSolicitud() {
   guardar(null)
   return cerrarSupabase({ scope: 'local' })
 }
 
-// Cierre en todos los equipos: invalida los refresh tokens de la cuenta en Supabase.
+// POST /api/auth/logout (204): el backend deja de considerar verificada la sesión de este token. Va ANTES de cerrar
+// Supabase, porque necesita el token. Cualquier fallo se ignora (red, 401, 403 sin 2FA o 404 de un backend que
+// todavía no tiene el endpoint): la sesión de Supabase se cierra igual.
+async function avisarLogout() {
+  try {
+    const { data } = await supabase.auth.getSession()
+    if (!data?.session?.access_token) return
+    await apiRequest('/auth/logout', { method: 'POST' })
+  } catch {
+    // se cierra de todos modos
+  }
+}
+
+// Cierre de sesión de este equipo: avisa al backend y luego cierra la sesión de Supabase.
+export async function cerrarSesion() {
+  guardar(null)
+  await avisarLogout()
+  await cerrarSupabase({ scope: 'local' })
+}
+
+// Cierre en todos los equipos: avisa al backend por esta sesión e invalida los refresh tokens de la cuenta en Supabase.
 export async function cerrarSesionGlobal() {
   guardar(null)
+  await avisarLogout()
   await cerrarSupabase({ scope: 'global' })
 }
 
 // PENDIENTE backend: equipo de confianza ("Recordar este equipo"). Todavía no existe.
 export const estadoEquipo = () => null
 export const dejarDeRecordarEquipo = () => {}
+
+// Con la sesión verificada en esta pestaña: GET /api/usuarios/yo actualiza el perfil (un cambio de rol surte efecto
+// al recargar). Si el backend dice que la sesión ya no está verificada (403 2FA_REQUERIDA: venció o se cerró en el
+// servidor), se vuelve a pedir el código. Sin red se conserva la sesión tal como está.
+async function perfilVerificado(sesion) {
+  try {
+    const perfil = await apiRequest('/usuarios/yo')
+    if (perfil.activo === false) return cerrarPorAcceso(null)
+    return { estado: 'verificada', usuario: desdePerfil(perfil) }
+  } catch (error) {
+    if (error.estado === 403 && error.codigo === '2FA_REQUERIDA') return pendienteDeCodigo(sesion)
+    if (error.estado === 401 || errorDeAcceso(error)) return cerrarPorAcceso(null)
+    return { estado: 'verificada' }
+  }
+}
 
 // Al cargar la página: ¿hay sesión de Supabase? Devuelve null si no. Si la hay y esta pestaña no completó el 2FA
 // (`verificada` es false), deja lista la solicitud del código y devuelve el usuario con estado 'pendiente'.
@@ -241,7 +304,11 @@ export async function restaurarSesion({ verificada }) {
     guardar(null)
     return null
   }
-  if (verificada) return { estado: 'verificada' }
+  if (verificada) return perfilVerificado(sesion)
+  return pendienteDeCodigo(sesion)
+}
+
+async function pendienteDeCodigo(sesion) {
   const previa = leer()
   const correo = normalizar(sesion.user.email)
   if (previa?.correo === correo) return { estado: 'pendiente', usuario: { correo, rol: previa.rol, nombre: previa.nombre } }

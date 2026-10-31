@@ -11,10 +11,13 @@ export default function AuthProvider({ children }) {
   // true cuando la sesión de Supabase de una recarga o de otra pestaña vuelve al paso del código (ver Login)
   const [retomarCodigo, setRetomarCodigo] = useState(false)
   const estadoInicial = useRef(sesion.estado)
+  // setRole del primer render: solo escribe el rol (futdata.rol), así que sirve dentro del efecto de carga
+  const fijarRolAlCargar = useRef(setRole)
 
   // Solo con el servicio real (Supabase): al cargar, comprueba que la sesión siga vigente; si hay sesión pero esta
-  // pestaña no completó el 2FA, vuelve al paso del código. Un 401 del backend o un cierre de sesión hecho en otra
-  // pestaña limpian el estado y las rutas llevan a /login.
+  // pestaña no completó el 2FA (o el backend ya no la da por verificada), vuelve al paso del código. Con la sesión
+  // verificada, actualiza el perfil (nombre y rol). Un 401 del backend o un cierre de sesión hecho en otra pestaña
+  // limpian el estado y las rutas llevan a /login.
   useEffect(() => {
     const cerrar = () => setSesion(limpiarSesion())
     configurarAlNoAutorizado(cerrar)
@@ -23,6 +26,12 @@ export default function AuthProvider({ children }) {
     servicio.restaurarSesion?.({ verificada: estadoInicial.current === 'verificada' }).then((restaurada) => {
       if (!activo) return
       if (!restaurada) return cerrar()
+      if (restaurada.estado === 'verificada' && restaurada.usuario) {
+        const actualizada = { estado: 'verificada', usuario: restaurada.usuario }
+        fijarRolAlCargar.current(restaurada.usuario.rol)
+        setSesion(actualizada)
+        guardarSesion(actualizada)
+      }
       if (restaurada.estado === 'pendiente') {
         const nueva = { estado: 'pendiente', usuario: restaurada.usuario }
         setSesion(nueva)
@@ -46,8 +55,10 @@ export default function AuthProvider({ children }) {
     // Tampoco limpia el rol de desarrollo (futdata.rol): ese valor solo alimenta el selector de rol de desarrollo
     // (RoleSwitcher), que debe seguir funcionando sin sesión, y el próximo inicio de sesión lo vuelve a fijar con el
     // rol real de la cuenta. No es un dato de la persona ni un secreto.
+    // Con el servicio real avisa al backend (POST /api/auth/logout) antes de cerrar Supabase; no se espera: la pantalla
+    // vuelve al login enseguida y un fallo del backend no impide cerrar.
     const cerrarSesion = () => {
-      servicio.cancelarSolicitud()
+      ;(servicio.cerrarSesion ?? servicio.cancelarSolicitud)()
       setSesion(limpiarSesion())
     }
     return {

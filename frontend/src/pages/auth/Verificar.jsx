@@ -13,6 +13,9 @@ import { inicioDe } from '../../config/menus.js'
 
 const reloj = (segundos) => `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`
 
+// Errores con los que no hay sesión posible: se vuelve al login, que muestra el mensaje de cada uno
+const SESION_RECHAZADA = ['SESION_INVALIDA', 'SIN_ROL', 'INACTIVA']
+
 // Paso 2 del ingreso (HU-002): código de 6 dígitos enviado al correo. Pantalla pública, fuera del AppShell.
 // Las reglas (vigencia, intentos, bloqueo, reenvío) las aplica el servicio; aquí solo se muestran.
 export default function Verificar() {
@@ -62,6 +65,12 @@ export default function Verificar() {
 
   const enfocarCodigo = () => setTimeout(() => primeraCasilla.current?.focus(), 0)
 
+  // El backend rechazó la sesión (401, 403 o cuenta inactiva): el servicio ya la cerró; el login muestra el motivo
+  function salirConMotivo(motivo) {
+    navigate('/login', { replace: true, state: { motivo } })
+    volverAlLogin()
+  }
+
   function cambiarCodigo(nuevo) {
     setCodigo(nuevo)
     setErrorCampo(null)
@@ -100,6 +109,8 @@ export default function Verificar() {
         enfocarCodigo()
       } else if (error.codigo === 'SIN_SOLICITUD') {
         volverAlLogin()
+      } else if (SESION_RECHAZADA.includes(error.codigo)) {
+        return salirConMotivo(error.codigo)
       } else if (error.codigo !== 'BLOQUEADO') {
         throw error
       }
@@ -122,6 +133,7 @@ export default function Verificar() {
       enfocarCodigo()
     } catch (error) {
       if (error.codigo === 'SIN_SOLICITUD') volverAlLogin()
+      else if (SESION_RECHAZADA.includes(error.codigo)) salirConMotivo(error.codigo)
       else if (!['DEMASIADO_PRONTO', 'BLOQUEADO'].includes(error.codigo)) throw error
     } finally {
       setInfo(estadoCodigo())
