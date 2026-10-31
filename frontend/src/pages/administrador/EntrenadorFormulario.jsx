@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
+import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import FormularioEntrenador from '../../components/entrenadores/FormularioEntrenador.jsx'
+import Mensaje from '../../components/usuarios/Mensaje.jsx'
 import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 
 const VOLVER = '/administrador/usuarios/entrenadores' // la lista de entrenadores (antes era /administrador/usuarios)
@@ -15,7 +17,10 @@ const VACIO = {
 export default function EntrenadorFormulario() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { entrenadores, cargado, crear, editar, detectarDuplicado } = useEntrenadores()
+  const {
+    entrenadores, categorias, cargado, estadoCarga, errorCarga, reintentar,
+    crear, editar, asignarCategorias, avisar, detectarDuplicado,
+  } = useEntrenadores()
   const titulo = useRef(null)
   const editando = id ? entrenadores.find((e) => String(e.id) === id) : null
   const listo = !id || Boolean(editando)
@@ -27,11 +32,33 @@ export default function EntrenadorFormulario() {
 
   // Un id que no existe vuelve a la lista de entrenadores
   if (id && cargado && !editando) return <Navigate to={VOLVER} replace />
-  if (!listo) return null
+  if (!listo) {
+    // Al editar con la lista sin cargar (abierto directo o con error): estado de carga con reintento
+    return (
+      <Page title="Editar entrenador">
+        {estadoCarga === 'error' ? (
+          <AvisoEstado
+            aviso={{
+              id: 'error-carga',
+              texto: errorCarga?.estado === 403 ? errorCarga.mensaje : 'No se pudo cargar el entrenador.',
+              accion: errorCarga?.estado === 403 ? undefined : { texto: 'Reintentar', onClick: reintentar },
+            }}
+            rol="alert"
+            tono="danger"
+            enfocar={false}
+          />
+        ) : (
+          <Mensaje icono="clock">
+            <p role="status">Cargando entrenador…</p>
+          </Mensaje>
+        )}
+      </Page>
+    )
+  }
 
-  async function guardar(valores) {
-    if (editando) await editar(editando.id, valores)
-    else await crear(valores)
+  const guardar = (valores) => (editando ? editar(editando.id, valores) : crear(valores))
+  const terminar = () => {
+    avisar(editando ? 'Entrenador actualizado.' : 'Entrenador registrado.')
     navigate(VOLVER)
   }
 
@@ -42,8 +69,11 @@ export default function EntrenadorFormulario() {
           key={editando?.id ?? 'nuevo'}
           inicial={editando ? { ...VACIO, ...editando } : VACIO}
           ignorarId={editando?.id ?? null}
+          categorias={categorias}
           detectarDuplicado={detectarDuplicado}
           onGuardar={guardar}
+          onAsignarCategorias={asignarCategorias}
+          onTerminar={terminar}
           onCancelar={() => navigate(VOLVER)}
         />
       </Card>
