@@ -237,6 +237,7 @@ La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`
 | Método y ruta | Descripción | Respuestas |
 | :--- | :--- | :--- |
 | `GET /api/usuarios` | Lista usuarios y su rol | `200` |
+| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado | `200`, `404` |
 | `GET /api/usuarios/{id}` | Consulta un usuario | `200`, `400`, `404` |
 | `POST /api/usuarios` | Crea e invita un usuario | `201`, `400`, `409` |
 | `PUT /api/usuarios/{id}/rol` | Cambia el rol | `200`, `400`, `404`, `409` |
@@ -257,7 +258,7 @@ La API genera códigos aleatorios de seis dígitos, conserva únicamente un hash
 | `POST /api/auth/2fa/reenviar` | Reenvía respetando el minuto de espera | `200`, `400`, `404`, `409`, `503` |
 | `POST /api/auth/2fa/verificar` | Valida el correo y código de seis dígitos | `200`, `400`, `404`, `409` |
 
-La migración `003_codigo_verificacion_2fa.sql` debe ejecutarse en Supabase antes de probar estos endpoints. Nunca se devuelve ni se guarda el código en texto plano; la respuesta solo incluye el correo enmascarado, la vigencia y el tiempo para reenvío.
+Las migraciones `003_codigo_verificacion_2fa.sql` y `005_seguridad_sesion_2fa.sql` deben ejecutarse en Supabase antes de probar estos endpoints. Nunca se devuelve ni se guarda el código en texto plano; la respuesta solo incluye el correo enmascarado, la vigencia y el tiempo para reenvío. Los errores 2FA incluyen `codigo`, `campos` y, cuando aplica, `msRestantes`.
 
 ## Entrenadores (HU-025)
 
@@ -698,7 +699,8 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 | :--- | :--- |
 | `GET /api/health`, Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública. Swagger está apagado en el perfil `prod` |
 | `/api/auth/2fa/**` | Cualquier usuario con el JWT del primer paso (el usuario sale del token) |
-| `/api/usuarios/**`, `/api/deportistas/**` | `ADMINISTRADOR` |
+| `/api/usuarios/**` (salvo `/yo`) | `ADMINISTRADOR` |
+| `/api/deportistas/**` | `ADMINISTRADOR`; el listado también `ENTRENADOR` sin teléfono ni dirección |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
 | `GET /api/categorias` | `ADMINISTRADOR`, `ENTRENADOR` |
 | Cualquier otra ruta | Exige sesión; cada módulo nuevo declara sus roles |
@@ -711,7 +713,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 
 **Segundo paso (2FA).** `/api/auth/2fa/codigo`, `/reenviar` y `/verificar` exigen el JWT del primer paso y toman el usuario del `sub` del token: el cuerpo ya **no lleva el correo** (en `verificar` solo va `{"codigo": "012345"}`). Así nadie puede pedir ni probar códigos de otra cuenta.
 
-**Pendiente.** Exigir que la sesión haya completado el segundo paso (`session_id` del JWT en `sesion_verificada`) en todas las rutas salvo las de `/api/auth/2fa`, y la cookie de equipo de confianza. El modelo de datos ya está en la migración 004. Hoy el 2FA verifica el código, pero el resto de la API no comprueba que se haya hecho.
+La sesión debe haber completado el segundo paso; `005_seguridad_sesion_2fa.sql` guarda la vigencia en `sesion_verificada` y un filtro rechaza el resto de la API hasta verificar el código. `/api/usuarios/yo` y `/api/auth/2fa/**` son las excepciones necesarias para completar el ingreso.
 
 ## Formato de errores (para el frontend)
 

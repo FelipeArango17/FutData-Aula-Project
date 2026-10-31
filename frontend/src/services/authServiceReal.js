@@ -4,10 +4,8 @@
 //
 // Diferencias con el simulado, que vienen del backend:
 // - El backend toma al usuario del JWT: /codigo y /reenviar van sin cuerpo y /verificar solo lleva { codigo }.
-// - Los errores del 2FA son todos 409 con { mensaje, campos: ['codigo'] }: NO traen el código del error ni los
-//   milisegundos restantes. Mientras tanto se mapea por el TEXTO del mensaje (ver CODIGOS_POR_MENSAJE) y los tiempos
-//   y los intentos se llevan aquí (aproximados). Si el backend añade `codigo` y `msRestantes` al cuerpo, se usan
-//   tal cual (apiClient los copia al error).
+// - Los errores del 2FA traen { codigo, msRestantes, campos: ['codigo'] }. Se conserva el mapeo por texto para
+//   compatibilidad con instalaciones anteriores del backend.
 // - PENDIENTE backend: "Recordar este equipo" (cookie HttpOnly de equipo de confianza). No se envía nada.
 import { apiRequest } from './apiClient.js'
 import { supabase } from './supabaseClient.js'
@@ -75,7 +73,7 @@ const CODIGOS_POR_MENSAJE = [
   ['debes esperar', 'DEMASIADO_PRONTO'],
   ['codigo no es correcto', 'INCORRECTO'],
 ]
-const CODIGOS_CONOCIDOS = ['SIN_SOLICITUD', 'VENCIDO', 'BLOQUEADO', 'DEMASIADO_PRONTO', 'INCORRECTO', 'FORMATO']
+const CODIGOS_CONOCIDOS = ['SIN_SOLICITUD', 'VENCIDO', 'USADO', 'BLOQUEADO', 'DEMASIADO_PRONTO', 'INCORRECTO', 'FORMATO']
 
 function codigoDelError(error) {
   if (CODIGOS_CONOCIDOS.includes(error.codigo)) return error.codigo
@@ -108,6 +106,8 @@ function traducirError2FA(error) {
     }
     case 'VENCIDO':
       return fallo('VENCIDO')
+    case 'USADO':
+      return fallo('USADO')
     case 'SIN_SOLICITUD':
       guardar(null)
       return fallo('SIN_SOLICITUD')
@@ -145,8 +145,6 @@ async function pedirCodigo(usuario) {
 
 // Paso 1: correo y contraseña en Supabase; luego el perfil (nombre y rol) y el código por correo.
 // Errores (error.codigo): RED, CREDENCIALES, INACTIVA, BLOQUEADO, PERFIL (no se pudo leer el perfil).
-// PENDIENTE: GET /api/usuarios/{id} hoy solo lo permite ADMINISTRADOR; con otros roles responde 403 y el ingreso falla
-// con PERFIL. El backend debería ofrecer algo como GET /api/usuarios/yo (cualquier usuario autenticado).
 export async function iniciarSesion(correo, contrasena) {
   let resultado
   try {
@@ -157,7 +155,7 @@ export async function iniciarSesion(correo, contrasena) {
   if (resultado.error) throw errorDeSupabase(resultado.error)
 
   try {
-    const perfil = await apiRequest(`/usuarios/${encodeURIComponent(resultado.data.user.id)}`)
+    const perfil = await apiRequest('/usuarios/yo')
     if (perfil.activo === false) throw fallo('INACTIVA')
     const usuario = { correo: normalizar(perfil.correo ?? correo), rol: enMinusculas(perfil.rol), nombre: perfil.nombre }
     await pedirCodigo(usuario)

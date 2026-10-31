@@ -292,7 +292,7 @@ Copy-Item n8n\.env.example n8n\.env
 **2. Complétalos:**
 
 - `n8n/.env`: `N8N_ENCRYPTION_KEY`, `N8N_WEBHOOK_TOKEN` y `SMTP_FROM` (ver [`n8n/README.md`](n8n/README.md), paso 1). Un valor aleatorio se genera con `openssl rand -hex 32` (PowerShell: ver el comentario de `n8n/.env.example`).
-- `backend/.env`: `DB_URL`, `DB_USER` y `DB_PASSWORD` de Supabase y `CORS_ORIGINS`. **`N8N_WEBHOOK_TOKEN` debe ser el MISMO valor en los dos archivos**; si difieren, n8n rechaza al backend con `401`.
+- `backend/.env`: `DB_URL`, `DB_USER` y `DB_PASSWORD` de Supabase y `CORS_ORIGINS`. En producción agrega el dominio exacto de Vercel, por ejemplo `https://TU_DOMINIO.vercel.app`, separado por coma del origen local si también lo necesitas. **`N8N_WEBHOOK_TOKEN` debe ser el MISMO valor en los dos archivos**; si difieren, n8n rechaza al backend con `401`.
 
 - Perfil de Spring: el compose arranca el backend con **`local`** por defecto, que funciona sin Supabase ni base de datos (guardar comprobantes o enviar correos falla con un mensaje claro). Para probar el perfil de producción: `SPRING_PROFILES_ACTIVE=prod docker compose up -d`. Ese perfil **exige las ocho variables** (`DB_URL`, `DB_USER`, `DB_PASSWORD`, `CORS_ORIGINS`, `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) y si falta alguna el contenedor se detiene diciendo cuál. La imagen sola (`docker run`, sin el compose) sigue usando `prod`.
 

@@ -22,9 +22,16 @@ public record ErrorResponseDTO(
         @Schema(example = "Bad Request") String error,
         @Schema(example = "nombre: no debe estar vacío") String mensaje,
         @Schema(example = "/api/entrenadores") String ruta,
-        @Schema(example = "[\"nombre\"]") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> campos) {
+        @Schema(example = "[\"nombre\"]") @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> campos,
+        @Schema(example = "INCORRECTO") @JsonInclude(JsonInclude.Include.NON_NULL) String codigo,
+        @Schema(example = "120000") @JsonInclude(JsonInclude.Include.NON_NULL) Long msRestantes) {
 
     public ErrorResponseDTO(Instant timestamp, int estado, String error, String mensaje, String ruta) {
-        this(timestamp, estado, error, mensaje, ruta, List.of());
+        this(timestamp, estado, error, mensaje, ruta, List.of(), null, null);
+    }
+
+    public ErrorResponseDTO(Instant timestamp, int estado, String error, String mensaje, String ruta,
+                            List<String> campos) {
+        this(timestamp, estado, error, mensaje, ruta, campos, null, null);
     }
 }

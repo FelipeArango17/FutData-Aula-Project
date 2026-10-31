@@ -1,6 +1,7 @@
 package co.edu.futdata.util.security;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
+import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
 import co.edu.futdata.services.facade.ICodigoVerificacionService;
 import co.edu.futdata.services.facade.IDeportistaService;
 import co.edu.futdata.services.facade.IEntrenadorService;
@@ -61,6 +63,9 @@ class SeguridadTest {
     private IUsuarioDAO usuarios;
 
     @MockitoBean
+    private ICodigoVerificacionDAO codigosPersistencia;
+
+    @MockitoBean
     private IEntrenadorService entrenadores;
 
     @MockitoBean
@@ -88,6 +93,7 @@ class SeguridadTest {
         when(usuarios.rolesActivos(ENTRENADOR)).thenReturn(List.of("ENTRENADOR"));
         when(usuarios.rolesActivos(ACUDIENTE)).thenReturn(List.of("ACUDIENTE"));
         when(usuarios.rolesActivos(INACTIVO)).thenReturn(List.of());
+        when(codigosPersistencia.sesionVerificada(any(), any())).thenReturn(true);
         when(entrenadores.listar()).thenReturn(List.of());
         when(entrenadores.listarCategorias()).thenReturn(List.of());
         when(salud.consultar()).thenReturn(new SaludResponseDTO("UP", "UP", "prueba"));
@@ -129,6 +135,7 @@ class SeguridadTest {
     @Test
     void elEntrenadorVeLasCategoriasPeroNoGestionaEntrenadores() throws Exception {
         pedir("/api/categorias", "token-" + ENTRENADOR).andExpect(status().isOk());
+        pedir("/api/deportistas", "token-" + ENTRENADOR).andExpect(status().isOk());
         error(pedir("/api/entrenadores", "token-" + ENTRENADOR), 403, RespuestasSeguridad.SIN_PERMISO, "/api/entrenadores");
         verify(entrenadores, never()).listar();
     }
@@ -155,6 +162,21 @@ class SeguridadTest {
         }
         verify(usuariosServicio, org.mockito.Mockito.times(1)).listar();
         verify(deportistas, never()).consultar(any());
+    }
+
+    @Test
+    void elPerfilPropioEsAccesibleParaCualquierRolAutenticado() throws Exception {
+        pedir("/api/usuarios/yo", "token-" + ENTRENADOR).andExpect(status().isOk());
+    }
+
+    @Test
+    void unaRutaProtegidaExigeHaberCompletadoEl2fa() throws Exception {
+        when(codigosPersistencia.sesionVerificada(eq(ADMIN), any())).thenReturn(false);
+
+        pedir("/api/categorias", "token-" + ADMIN)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"))
+                .andExpect(jsonPath("$.campos[0]").value("codigo"));
     }
 
     @Test

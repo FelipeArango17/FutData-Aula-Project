@@ -102,10 +102,10 @@ DB_URL=jdbc:postgresql://HOST_DEL_SESSION_POOLER:5432/postgres?sslmode=require
 DB_USER=postgres.TU_PROJECT_REF
 DB_PASSWORD=SU_CONTRASEÑA_DE_BASE_DE_DATOS
 
-CORS_ORIGINS=http://localhost:5173
+# En local y producción, separados por coma si hay más de un frontend.
+CORS_ORIGINS=http://localhost:5173,https://TU_DOMINIO.vercel.app
 
 SUPABASE_URL=https://TU_PROJECT_REF.supabase.co
-SUPABASE_JWKS_URL=https://TU_PROJECT_REF.supabase.co/auth/v1/.well-known/jwks.json
 
 N8N_BASE_URL=http://localhost:5678
 N8N_WEBHOOK_TOKEN=TOKEN_LOCAL_DE_N8N
@@ -309,4 +309,3 @@ Todavía requiere trabajo de las siguientes historias:
 - HU-002: tablas y reglas de 2FA.
 - HU-005: autorización por roles.
 - Políticas RLS específicas, cuando se defina si las consultas serán solo mediante backend o también desde el frontend.
-

@@ -38,6 +38,31 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
     }
 
     @Override
+    public void bloquearUsuario(UUID usuarioId) {
+        jdbc.queryForObject("select pg_advisory_xact_lock(hashtextextended(cast(:usuario as text), 0))",
+                Map.of("usuario", usuarioId), Long.class);
+    }
+
+    @Override
+    public void invalidarPendientes(UUID usuarioId) {
+        jdbc.update("update codigo_verificacion set usado = true where id_usuario = :usuario and not usado",
+                Map.of("usuario", usuarioId));
+    }
+
+    @Override
+    public void limpiarVencidos(UUID usuarioId, Instant ahora) {
+        jdbc.update("""
+                delete from codigo_verificacion
+                 where id_usuario = :usuario
+                   and expira_en < :ahora
+                   and (bloqueado_hasta is null or bloqueado_hasta <= :ahora)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("usuario", usuarioId)
+                        .addValue("ahora", fechaJDBC(ahora), Types.TIMESTAMP_WITH_TIMEZONE));
+    }
+
+    @Override
     public UUID guardar(CodigoVerificacion codigo) {
         return jdbc.queryForObject("""
                 insert into codigo_verificacion
@@ -69,6 +94,29 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
     public void marcarUsado(UUID id) {
         jdbc.update("update codigo_verificacion set usado = true where id_codigo = :id",
                 Map.of("id", id));
+    }
+
+    @Override
+    public void marcarSesionVerificada(UUID usuarioId, Instant hasta) {
+        jdbc.update("""
+                insert into sesion_verificada (id_usuario, verificada_hasta)
+                values (:usuario, :hasta)
+                on conflict (id_usuario) do update set verificada_hasta = excluded.verificada_hasta
+                """, new MapSqlParameterSource()
+                .addValue("usuario", usuarioId)
+                .addValue("hasta", fechaJDBC(hasta), Types.TIMESTAMP_WITH_TIMEZONE));
+    }
+
+    @Override
+    public boolean sesionVerificada(UUID usuarioId, Instant ahora) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(
+                    select 1 from sesion_verificada
+                     where id_usuario = :usuario and verificada_hasta > :ahora
+                )
+                """, new MapSqlParameterSource()
+                        .addValue("usuario", usuarioId)
+                        .addValue("ahora", fechaJDBC(ahora), Types.TIMESTAMP_WITH_TIMEZONE), Boolean.class));
     }
 
     private static MapSqlParameterSource parametros(CodigoVerificacion codigo) {
