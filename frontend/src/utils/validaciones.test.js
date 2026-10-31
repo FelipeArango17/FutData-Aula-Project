@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MENSAJES, casillaMarcada, enLista, esCorreoValido, maximoCaracteres, requeridoSi, validarFechaPago, validarMes, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
-  validarFechaEntrenamiento, validarFechaNacimiento, validarHoraEntrenamiento, validarMonto, validarNombre, validarTelefono,
+  validarFechaEntrenamiento, validarFechaNacimiento, validarFechaNacimientoEntrenador, validarHoraEntrenamiento, validarMonto, validarNombre, validarTelefono,
 } from './validaciones.js'
 
 const HOY = '2026-10-22'
@@ -71,6 +71,60 @@ describe('validarDocumento', () => {
     for (const malo of ['12ab56', 'abcdefgh', '1.234.567', '123 456 789', '-1234567', '+573001', '12345e6', '１２３４５６７', '123456\n7']) {
       expect(validarDocumento(malo), malo).toBe(msg)
     }
+  })
+})
+
+describe('validarDocumento con tipo de documento', () => {
+  it('CC y CE siguen aceptando solo dígitos', () => {
+    for (const tipo of ['CC', 'CE']) {
+      expect(validarDocumento('1098765432', tipo)).toBeNull()
+      expect(validarDocumento('AB123456', tipo)).toBe(MENSAJES.documentoFormato)
+      expect(validarDocumento('12345', tipo)).toBe(MENSAJES.documentoRango)
+    }
+  })
+
+  it('PASAPORTE acepta letras y números de 6 a 12 (límites exactos)', () => {
+    expect(validarDocumento('AB1234', 'PASAPORTE')).toBeNull()
+    expect(validarDocumento('ab1234567890', 'PASAPORTE')).toBeNull()
+    expect(validarDocumento('123456', 'PASAPORTE')).toBeNull()
+    expect(validarDocumento('  AB123456  ', 'PASAPORTE')).toBeNull()
+    expect(validarDocumento('AB123', 'PASAPORTE')).toBe(MENSAJES.pasaporteRango)
+    expect(validarDocumento('AB12345678901', 'PASAPORTE')).toBe(MENSAJES.pasaporteRango)
+  })
+
+  it('PASAPORTE rechaza espacios, signos, tildes y ñ', () => {
+    for (const malo of ['AB 12345', 'AB-12345', 'AB.12345', 'ÁB12345', 'AÑ12345', 'AB12345_']) {
+      expect(validarDocumento(malo, 'PASAPORTE'), malo).toBe(MENSAJES.pasaporteFormato)
+    }
+  })
+
+  it('PASAPORTE vacío: obligatorio', () => {
+    expect(validarDocumento('', 'PASAPORTE')).toBe(MENSAJES.documentoObligatorio)
+    expect(validarDocumento(null, 'PASAPORTE')).toBe(MENSAJES.documentoObligatorio)
+  })
+})
+
+describe('validarFechaNacimientoEntrenador', () => {
+  it('acepta 18 años cumplidos hoy o más', () => {
+    expect(validarFechaNacimientoEntrenador('2008-10-22', HOY)).toBeNull() // cumple 18 hoy
+    expect(validarFechaNacimientoEntrenador('1990-05-14', HOY)).toBeNull()
+  })
+
+  it('rechaza a quien cumple 18 mañana y a los menores', () => {
+    expect(validarFechaNacimientoEntrenador('2008-10-23', HOY)).toBe(MENSAJES.fechaNacimientoMenorDeEdad)
+    expect(validarFechaNacimientoEntrenador('2015-01-01', HOY)).toBe('El entrenador debe tener al menos 18 años.')
+  })
+
+  it('conserva los errores de la fecha: obligatoria, formato, futura y más de 100 años', () => {
+    expect(validarFechaNacimientoEntrenador('', HOY)).toBe(MENSAJES.fechaNacimientoObligatoria)
+    expect(validarFechaNacimientoEntrenador('2018-02-30', HOY)).toBe(MENSAJES.fechaNacimientoFormato)
+    expect(validarFechaNacimientoEntrenador('2027-01-01', HOY)).toBe(MENSAJES.fechaNacimientoFutura)
+    expect(validarFechaNacimientoEntrenador('1900-01-01', HOY)).toBe(MENSAJES.fechaNacimientoEdad)
+  })
+
+  it('sin fecha de referencia usa la del sistema', () => {
+    expect(validarFechaNacimientoEntrenador('1990-05-14')).toBeNull()
+    expect(validarFechaNacimientoEntrenador('2999-01-01')).toBe(MENSAJES.fechaNacimientoFutura)
   })
 })
 

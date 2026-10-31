@@ -14,6 +14,8 @@ export const MENSAJES = {
   documentoObligatorio: 'Escribe el número de documento.',
   documentoFormato: 'El documento solo puede tener números, sin puntos ni espacios.',
   documentoRango: 'El documento debe tener entre 6 y 12 dígitos.',
+  pasaporteFormato: 'El pasaporte solo puede tener letras sin tilde y números, sin espacios ni signos.',
+  pasaporteRango: 'El pasaporte debe tener entre 6 y 12 caracteres.',
   telefonoObligatorio: 'Escribe el teléfono.',
   telefonoFormato: 'El teléfono debe tener exactamente 10 dígitos, sin espacios.',
   correoObligatorio: 'Escribe el correo electrónico.',
@@ -65,6 +67,7 @@ export const MENSAJES = {
   fechaNacimientoFormato: 'La fecha de nacimiento no es válida. Usa el formato día/mes/año.',
   fechaNacimientoFutura: 'La fecha de nacimiento no puede ser futura.',
   fechaNacimientoEdad: 'La edad no puede superar los 100 años.',
+  fechaNacimientoMenorDeEdad: 'El entrenador debe tener al menos 18 años.',
   montoObligatorio: 'Escribe el monto.',
   montoFormato: 'El monto debe ser un número entero de pesos, sin puntos, comas, símbolo $ ni signos.',
   montoPositivo: 'El monto debe ser mayor que cero.',
@@ -83,9 +86,15 @@ export function validarCorreo(valor, { obligatorio = MENSAJES.correoObligatorio,
   return esCorreoValido(correo) ? null : formato
 }
 
-export function validarDocumento(valor) {
+// Con tipo 'PASAPORTE' acepta letras (sin tilde) y números, de 6 a 12, sin espacios ni signos. Con cualquier otro tipo,
+// o sin tipo, solo dígitos (CC, CE y los formularios que no distinguen el tipo).
+export function validarDocumento(valor, tipo) {
   const documento = texto(valor)
   if (!documento) return MENSAJES.documentoObligatorio
+  if (tipo === 'PASAPORTE') {
+    if (!/^[A-Za-z0-9]+$/.test(documento)) return MENSAJES.pasaporteFormato
+    return documento.length < 6 || documento.length > 12 ? MENSAJES.pasaporteRango : null
+  }
   if (!/^\d+$/.test(documento)) return MENSAJES.documentoFormato
   if (documento.length < 6 || documento.length > 12) return MENSAJES.documentoRango
   return null
@@ -132,6 +141,15 @@ export function validarFechaNacimiento(valor, hoy = hoySistema()) {
   if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(fecha) || !esFechaValida(fecha)) return MENSAJES.fechaNacimientoFormato
   if (fecha > hoy) return MENSAJES.fechaNacimientoFutura
   return edadEn(fecha, hoy) > EDAD_MAXIMA ? MENSAJES.fechaNacimientoEdad : null
+}
+
+export const EDAD_MINIMA_ENTRENADOR = 18
+
+// Como validarFechaNacimiento, y además con al menos 18 años cumplidos a la fecha `hoy` (regla del backend para entrenadores).
+export function validarFechaNacimientoEntrenador(valor, hoy = hoySistema()) {
+  const error = validarFechaNacimiento(valor, hoy)
+  if (error) return error
+  return edadEn(texto(valor), hoy) < EDAD_MINIMA_ENTRENADOR ? MENSAJES.fechaNacimientoMenorDeEdad : null
 }
 
 // Pesos colombianos: un número entero positivo, o un texto de solo dígitos. No acepta separadores de miles,
