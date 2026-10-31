@@ -7,6 +7,7 @@ import co.edu.futdata.datasource.external.ISupabaseAuthAdmin;
 import co.edu.futdata.domain.entities.Usuario;
 import co.edu.futdata.domain.rules.ReglasUsuario;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
@@ -15,6 +16,8 @@ import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -23,13 +26,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class UsuarioServiceImpl implements IUsuarioService {
     private static final String NO_EXISTE = "No existe un usuario con ese id.";
+    private static final Logger log = LoggerFactory.getLogger(UsuarioServiceImpl.class);
     private final IUsuarioDAO usuarios;
     private final ISupabaseAuthAdmin auth;
+    private final ISesionVerificadaDAO sesiones;
 
     @Autowired
-    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth) {
+    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth, ISesionVerificadaDAO sesiones) {
         this.usuarios = usuarios;
         this.auth = auth;
+        this.sesiones = sesiones;
     }
 
     @Override
@@ -63,7 +69,11 @@ public class UsuarioServiceImpl implements IUsuarioService {
             usuarios.asignarRol(id, rol);
             return consultar(id);
         } catch (DuplicateKeyException | DatoDuplicadoException e) {
+            eliminarInvitacion(id);
             throw duplicado();
+        } catch (RuntimeException e) {
+            eliminarInvitacion(id);
+            throw e;
         }
     }
 
@@ -76,6 +86,7 @@ public class UsuarioServiceImpl implements IUsuarioService {
         errores.remove("nombre"); errores.remove("apellido"); errores.remove("correo");
         if (!errores.isEmpty()) throw new DatosInvalidosException(errores);
         if (nuevo.equals(actual.getRol())) throw new ConflictoException("El usuario ya tiene ese rol.", List.of("rol"));
+        usuarios.bloquearAdministradores();
         if ("ADMINISTRADOR".equals(actual.getRol()) && !"ADMINISTRADOR".equals(nuevo)
                 && usuarios.administradoresActivos() <= 1) {
             throw new ConflictoException("Debe existir al menos un administrador activo.", List.of("rol"));
@@ -92,11 +103,34 @@ public class UsuarioServiceImpl implements IUsuarioService {
             throw new ConflictoException(activo ? "El usuario ya tiene acceso." : "El acceso ya está revocado.",
                     List.of("activo"));
         }
+        usuarios.bloquearAdministradores();
         if (!activo && "ADMINISTRADOR".equals(actual.getRol()) && usuarios.administradoresActivos() <= 1) {
             throw new ConflictoException("Debe existir al menos un administrador activo.", List.of("activo"));
         }
-        usuarios.actualizarActivo(id, activo);
+        auth.cambiarAcceso(id, activo);
+        try {
+            usuarios.actualizarActivo(id, activo);
+            if (!activo) {
+                // Sin acceso, ninguna de sus sesiones sigue verificada: si vuelve a tenerlo, debe pasar el 2FA otra vez.
+                sesiones.eliminarDeUsuario(id);
+            }
+        } catch (RuntimeException e) {
+            try {
+                auth.cambiarAcceso(id, !activo);
+            } catch (RuntimeException rollback) {
+                log.error("No se pudo revertir el acceso de Auth para {}", id, rollback);
+            }
+            throw e;
+        }
         return consultar(id);
+    }
+
+    private void eliminarInvitacion(UUID id) {
+        try {
+            auth.eliminar(id);
+        } catch (RuntimeException rollback) {
+            log.error("No se pudo limpiar la cuenta de Auth {}", id, rollback);
+        }
     }
 
     private Usuario buscar(UUID id) {

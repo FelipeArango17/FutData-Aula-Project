@@ -9,6 +9,7 @@ import co.edu.futdata.domain.entities.CodigoVerificacion;
 import co.edu.futdata.domain.entities.Usuario;
 import co.edu.futdata.domain.rules.GeneradorCodigo;
 import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
@@ -23,8 +24,10 @@ import org.junit.jupiter.api.Test;
 class CodigoVerificacionServiceImplTest {
     private static final UUID ID = UUID.fromString("6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b");
     private static final Instant AHORA = Instant.parse("2026-10-30T04:00:00Z");
+    private static final UUID SESION = UUID.fromString("5e55a000-3b4d-4e5f-8a7b-1c2d3e4f5a6b");
     private IUsuarioDAO usuarios;
     private ICodigoVerificacionDAO codigos;
+    private ISesionVerificadaDAO sesiones;
     private INotificador notificador;
     private GeneradorCodigo generador;
     private CodigoVerificacionServiceImpl servicio;
@@ -33,9 +36,10 @@ class CodigoVerificacionServiceImplTest {
     void preparar() {
         usuarios = mock(IUsuarioDAO.class);
         codigos = mock(ICodigoVerificacionDAO.class);
+        sesiones = mock(ISesionVerificadaDAO.class);
         notificador = mock(INotificador.class);
         generador = mock(GeneradorCodigo.class);
-        servicio = new CodigoVerificacionServiceImpl(usuarios, codigos, notificador, generador,
+        servicio = new CodigoVerificacionServiceImpl(usuarios, codigos, sesiones, notificador, generador,
                 Clock.fixed(AHORA, ZoneOffset.UTC));
         when(usuarios.buscarPorId(ID)).thenReturn(Optional.of(usuario()));
     }
@@ -74,10 +78,11 @@ class CodigoVerificacionServiceImplTest {
         when(generador.coincide("111111", "hash")).thenReturn(false);
         when(codigos.incrementarIntentos(codigo.getId())).thenReturn(5);
 
-        assertThatThrownBy(() -> servicio.verificar(ID, "111111"))
+        assertThatThrownBy(() -> servicio.verificar(ID, SESION, "111111"))
                 .isInstanceOf(CodigoVerificacionException.class)
                 .hasMessageContaining("máximo");
         verify(codigos).bloquear(eq(codigo.getId()), eq(AHORA.plusSeconds(900)));
+        verifyNoInteractions(sesiones);
     }
 
     @Test
@@ -86,9 +91,36 @@ class CodigoVerificacionServiceImplTest {
         when(codigos.buscarUltimo(ID)).thenReturn(Optional.of(codigo));
         when(generador.coincide("012345", "hash")).thenReturn(true);
 
-        assertThat(servicio.verificar(ID, "012345").id()).isEqualTo(ID);
+        assertThat(servicio.verificar(ID, SESION, "012345").id()).isEqualTo(ID);
         verify(codigos).marcarUsado(codigo.getId());
         verify(codigos, never()).incrementarIntentos(any());
+    }
+
+    @Test
+    void codigoCorrectoMarcaSoloLaSesionDelTokenConLaVigenciaDeLasReglas() {
+        CodigoVerificacion codigo = codigo(AHORA.minusSeconds(30), AHORA.plusSeconds(570), 0);
+        when(codigos.buscarUltimo(ID)).thenReturn(Optional.of(codigo));
+        when(generador.coincide("012345", "hash")).thenReturn(true);
+
+        servicio.verificar(ID, SESION, "012345");
+
+        verify(sesiones).marcarVerificada(SESION, ID, AHORA,
+                AHORA.plus(co.edu.futdata.domain.rules.ReglasVerificacion.VIGENCIA_SESION));
+        verify(sesiones, never()).eliminarDeUsuario(any());
+    }
+
+    @Test
+    void sinSesionNoSeVerifica() {
+        assertThatThrownBy(() -> servicio.verificar(ID, null, "012345")).isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(codigos, sesiones);
+    }
+
+    @Test
+    void cerrarSesionBorraSoloLaSesionDelToken() {
+        servicio.cerrarSesion(ID, SESION);
+
+        verify(sesiones).eliminar(SESION, ID);
+        verify(sesiones, never()).eliminarDeUsuario(any());
     }
 
     @Test

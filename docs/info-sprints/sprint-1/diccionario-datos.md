@@ -343,14 +343,21 @@ Tabla intermedia para asociar usuarios con roles.
 
 ### 2.21 `SesionVerificada`
 
-**Migración 004.** Sesiones de Supabase Auth que ya completaron el segundo paso (D16).
+Sesiones de Supabase Auth que ya completaron el segundo paso (D16, D17). Una fila por **sesión**, no por usuario: verificar el código en un equipo no habilita las demás sesiones del mismo usuario (PPI 4.2: "la sesión queda marcada como verificada").
+
+Historia de la tabla:
+- **Migración 004:** la crea por sesión (`id_sesion`, `id_usuario`, `verificada_en`, `expira_en`).
+- **Migración 005:** la cambió a una fila por usuario (`id_usuario` como PK y `verificada_hasta`). Con ese diseño, verificar en un equipo habilitaba todas las sesiones del usuario durante 12 horas.
+- **Migración 006:** vuelve a una fila por sesión, identificada por el claim `session_id` del JWT. Descarta las filas de la 005, lo que solo obliga a verificar de nuevo. Es la estructura vigente.
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
-| `id_sesion` | `UUID` | PK | El `session_id` del JWT de Supabase. |
-| `id_usuario` | `UUID` | FK | Dueño de la sesión. Referencia `Usuario.id_usuario`. |
+| `id_sesion` | `UUID` | PK | El claim `session_id` del JWT de Supabase. Un token sin ese claim se rechaza con `401`. |
+| `id_usuario` | `UUID` | FK | Dueño de la sesión. Referencia `Usuario.id_usuario` (borrado en cascada). Índice `sesion_verificada_usuario_idx`, para cerrar todas sus sesiones. |
 | `verificada_en` | `datetime` | — | Momento en que se completó el segundo paso. |
-| `expira_en` | `datetime` | — | Hasta cuándo vale la verificación. |
+| `expira_en` | `datetime` | — | Hasta cuándo vale la verificación: `verificada_en` + `ReglasVerificacion.VIGENCIA_SESION` (12 horas). Debe ser posterior a `verificada_en`. |
+
+Se borra una fila al cerrar sesión (`POST /api/auth/logout`, solo la de ese token) y todas las del usuario cuando se le revoca el acceso. Las vencidas se limpian al verificar un código nuevo.
 
 ### 2.22 `Auditoria`
 
@@ -457,6 +464,7 @@ Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres esta
 | D14 | El reporte financiero tenía `ingresos_ventas`, pero no existía de dónde sacar las ventas. | El club solo vende uniformes: tabla `Venta` con concepto, cantidad, valor unitario y total calculado. |
 | D15 | `Entrenamiento` solo tenía hora de inicio, así que no se podían detectar cruces de horario (CU-05); y eliminar un entrenamiento dejaba sus avisos sin referencia. | `hora_fin` y `estado` (`PROGRAMADO`, `CANCELADO`). Tres restricciones de exclusión impiden cruces de cancha, de categoría y de entrenador entre entrenamientos programados. Cancelar reemplaza a borrar. |
 | D16 | El PPI define la verificación en dos pasos, los equipos de confianza, la auditoría y las preferencias de accesibilidad (4.1, 4.2, CU-00 y CU-08), pero no había dónde guardarlos. | **Migración 003:** `CodigoVerificacion`. **Migración 004:** `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y en `Usuario` las columnas `alto_contraste`, `tamano_texto` y `paleta_daltonismo`. "Recordar este equipo" usa una cookie HttpOnly, como dice el PPI. |
+| D17 | La migración 005 dejó `SesionVerificada` con una fila por usuario: verificar el código en un equipo habilitaba todas las sesiones de ese usuario durante 12 horas, incluso las abiertas después en otro equipo. El PPI marca como verificada la sesión. | **Migración 006:** `SesionVerificada` por `session_id` del JWT (§2.21). El backend rechaza con `401` los tokens sin ese claim, borra la sesión al cerrar sesión y todas las del usuario al revocar su acceso. |
 
 Además, los correos de `Usuario`, `Entrenador`, `Deportista` y `Acudiente` pasan a ser únicos sin distinguir mayúsculas.
 

@@ -1,17 +1,20 @@
 package co.edu.futdata.util.security;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.services.facade.ICodigoVerificacionService;
 import co.edu.futdata.services.facade.IDeportistaService;
 import co.edu.futdata.services.facade.IEntrenadorService;
@@ -40,6 +43,9 @@ import org.springframework.test.web.servlet.ResultActions;
  * La cadena de seguridad completa por HTTP: el token pasa por el decodificador (simulado: la firma se prueba en
  * {@link JwtValidatorTest}), los roles salen de {@link IUsuarioDAO} (simulado) a través del {@link JwtValidator} real,
  * y {@code @PreAuthorize} decide. Revisa los {@code 401} y {@code 403} con el formato de errores de la API.
+ *
+ * <p>Cada token trae su {@code session_id}; la sesión verificada sale de {@link ISesionVerificadaDAO} (simulado):
+ * por defecto todas lo están, y cada prueba de 2FA dice cuáles no.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -50,6 +56,9 @@ class SeguridadTest {
     private static final UUID ENTRENADOR = UUID.fromString("00000000-0000-0000-0000-00000000000e");
     private static final UUID ACUDIENTE = UUID.fromString("00000000-0000-0000-0000-0000000000ac");
     private static final UUID INACTIVO = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
+    /** Dos sesiones del mismo usuario (por ejemplo, celular y computador). */
+    private static final UUID SESION_A = UUID.fromString("5e55a000-0000-0000-0000-00000000000a");
+    private static final UUID SESION_B = UUID.fromString("5e55b000-0000-0000-0000-00000000000b");
 
     @Autowired
     private MockMvc mvc;
@@ -59,6 +68,9 @@ class SeguridadTest {
 
     @MockitoBean
     private IUsuarioDAO usuarios;
+
+    @MockitoBean
+    private ISesionVerificadaDAO sesiones;
 
     @MockitoBean
     private IEntrenadorService entrenadores;
@@ -78,19 +90,32 @@ class SeguridadTest {
     @BeforeEach
     void prepararTokens() {
         for (UUID id : List.of(ADMIN, ENTRENADOR, ACUDIENTE, INACTIVO)) {
-            when(decoder.decode("token-" + id)).thenReturn(Jwt.withTokenValue("token-" + id).header("alg", "ES256")
-                    .subject(id.toString()).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600)).build());
+            token("token-" + id, id.toString(), UUID.randomUUID().toString());
         }
-        when(decoder.decode("token-sub-raro")).thenReturn(Jwt.withTokenValue("token-sub-raro").header("alg", "ES256")
-                .subject("no-es-uuid").build());
+        token("token-sub-raro", "no-es-uuid", UUID.randomUUID().toString());
+        token("token-admin-sesion-a", ADMIN.toString(), SESION_A.toString());
+        token("token-admin-sesion-b", ADMIN.toString(), SESION_B.toString());
+        token("token-sin-sesion", ADMIN.toString(), null);
+        token("token-sesion-rara", ADMIN.toString(), "no-es-uuid");
         when(decoder.decode("token-vencido")).thenThrow(new BadJwtException("Jwt expired at 2026-10-30T10:00:00Z"));
         when(usuarios.rolesActivos(ADMIN)).thenReturn(List.of("ADMINISTRADOR"));
         when(usuarios.rolesActivos(ENTRENADOR)).thenReturn(List.of("ENTRENADOR"));
         when(usuarios.rolesActivos(ACUDIENTE)).thenReturn(List.of("ACUDIENTE"));
         when(usuarios.rolesActivos(INACTIVO)).thenReturn(List.of());
+        when(sesiones.estaVerificada(any(), any(), any())).thenReturn(true);
         when(entrenadores.listar()).thenReturn(List.of());
         when(entrenadores.listarCategorias()).thenReturn(List.of());
         when(salud.consultar()).thenReturn(new SaludResponseDTO("UP", "UP", "prueba"));
+    }
+
+    /** Un JWT ya validado por el decodificador simulado; {@code sesion} {@code null}: sin el claim session_id. */
+    private void token(String valor, String sub, String sesion) {
+        Jwt.Builder jwt = Jwt.withTokenValue(valor).header("alg", "ES256").subject(sub)
+                .issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(3600));
+        if (sesion != null) {
+            jwt.claim(JwtValidator.CLAIM_SESION, sesion);
+        }
+        when(decoder.decode(valor)).thenReturn(jwt.build());
     }
 
     private ResultActions pedir(String ruta, String token) throws Exception {
@@ -129,6 +154,7 @@ class SeguridadTest {
     @Test
     void elEntrenadorVeLasCategoriasPeroNoGestionaEntrenadores() throws Exception {
         pedir("/api/categorias", "token-" + ENTRENADOR).andExpect(status().isOk());
+        pedir("/api/deportistas", "token-" + ENTRENADOR).andExpect(status().isOk());
         error(pedir("/api/entrenadores", "token-" + ENTRENADOR), 403, RespuestasSeguridad.SIN_PERMISO, "/api/entrenadores");
         verify(entrenadores, never()).listar();
     }
@@ -158,13 +184,98 @@ class SeguridadTest {
     }
 
     @Test
-    void el2faExigeElTokenPeroNoUnRol() throws Exception {
-        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/2fa/codigo")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer token-" + INACTIVO))
-                .andExpect(status().isAccepted());
-        verify(codigos).solicitar(INACTIVO);
-        error(mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/auth/2fa/codigo")),
+    void elPerfilPropioEsAccesibleParaCualquierRolConLaSesionVerificada() throws Exception {
+        pedir("/api/usuarios/yo", "token-" + ENTRENADOR).andExpect(status().isOk());
+    }
+
+    @Test
+    void elPerfilPropioSin2faEs403() throws Exception {
+        when(sesiones.estaVerificada(any(), eq(ENTRENADOR), any())).thenReturn(false);
+
+        pedir("/api/usuarios/yo", "token-" + ENTRENADOR)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"));
+        verify(usuariosServicio, never()).consultar(any());
+    }
+
+    @Test
+    void unaRutaProtegidaExigeHaberCompletadoEl2fa() throws Exception {
+        when(sesiones.estaVerificada(any(), eq(ADMIN), any())).thenReturn(false);
+
+        pedir("/api/categorias", "token-" + ADMIN)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"))
+                .andExpect(jsonPath("$.campos[0]").value("codigo"));
+    }
+
+    @Test
+    void verificarLaSesionANoHabilitaLaSesionBDelMismoUsuario() throws Exception {
+        when(sesiones.estaVerificada(eq(SESION_A), eq(ADMIN), any())).thenReturn(true);
+        when(sesiones.estaVerificada(eq(SESION_B), eq(ADMIN), any())).thenReturn(false);
+
+        pedir("/api/categorias", "token-admin-sesion-a").andExpect(status().isOk());
+        pedir("/api/categorias", "token-admin-sesion-b")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"));
+    }
+
+    @Test
+    void unTokenSinSessionIdEs401AunqueElUsuarioTengaRol() throws Exception {
+        error(pedir("/api/categorias", "token-sin-sesion"), 401, RespuestasSeguridad.SIN_SESION, "/api/categorias");
+        error(pedir("/api/categorias", "token-sesion-rara"), 401, RespuestasSeguridad.SIN_SESION, "/api/categorias");
+        error(mvc.perform(post("/api/auth/2fa/codigo").header(HttpHeaders.AUTHORIZATION, "Bearer token-sin-sesion")),
                 401, RespuestasSeguridad.SIN_SESION, "/api/auth/2fa/codigo");
+        verify(sesiones, never()).estaVerificada(any(), any(), any());
+        verify(codigos, never()).solicitar(any());
+    }
+
+    @Test
+    void el2faExigeElTokenYUnRolPeroNoLaSesionVerificada() throws Exception {
+        when(sesiones.estaVerificada(any(), any(), any())).thenReturn(false);
+
+        mvc.perform(post("/api/auth/2fa/codigo").header(HttpHeaders.AUTHORIZATION, "Bearer token-" + ACUDIENTE))
+                .andExpect(status().isAccepted());
+        verify(codigos).solicitar(ACUDIENTE);
+        error(mvc.perform(post("/api/auth/2fa/codigo")), 401, RespuestasSeguridad.SIN_SESION, "/api/auth/2fa/codigo");
+    }
+
+    @Test
+    void unTokenSinRolesEs403TambienEnEl2faYEnElPerfil() throws Exception {
+        for (String ruta : List.of("/api/usuarios/yo", "/api/categorias")) {
+            error(pedir(ruta, "token-" + INACTIVO), 403, RespuestasSeguridad.SIN_PERMISO, ruta);
+        }
+        error(mvc.perform(post("/api/auth/2fa/codigo").header(HttpHeaders.AUTHORIZATION, "Bearer token-" + INACTIVO)),
+                403, RespuestasSeguridad.SIN_PERMISO, "/api/auth/2fa/codigo");
+        verify(codigos, never()).solicitar(any());
+        verify(usuariosServicio, never()).consultar(any());
+    }
+
+    @Test
+    void elLogoutExigeLaSesionVerificadaYCierraSoloLaDelToken() throws Exception {
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer token-admin-sesion-a"))
+                .andExpect(status().isNoContent());
+        verify(codigos).cerrarSesion(ADMIN, SESION_A);
+
+        when(sesiones.estaVerificada(eq(SESION_B), eq(ADMIN), any())).thenReturn(false);
+        mvc.perform(post("/api/auth/logout").header(HttpHeaders.AUTHORIZATION, "Bearer token-admin-sesion-b"))
+                .andExpect(status().isForbidden());
+        verify(codigos, never()).cerrarSesion(ADMIN, SESION_B);
+    }
+
+    @Test
+    void elWebhookDeWompiEstaReservadoSinTokenYSin2fa() throws Exception {
+        // Todavía no hay controlador: la seguridad lo deja pasar y responde la API (no 401 ni 403).
+        mvc.perform(post(RutasSin2FA.WEBHOOK_WOMPI))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
+                        .isNotIn(401, 403));
+        verify(decoder, never()).decode(any());
+    }
+
+    @Test
+    void laDocumentacionNoEstaFueraDelPerfilDev() throws Exception {
+        for (String ruta : List.of("/v3/api-docs", "/swagger-ui.html")) {
+            error(mvc.perform(get(ruta)), 401, RespuestasSeguridad.SIN_SESION, ruta);
+        }
     }
 
     @Test

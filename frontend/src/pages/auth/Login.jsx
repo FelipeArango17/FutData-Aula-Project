@@ -22,6 +22,10 @@ const MENSAJES = {
   CREDENCIALES: 'Correo o contraseña incorrectos.',
   INACTIVA: 'Tu cuenta no está activa. Contacta al administrador.',
   PERFIL: 'No pudimos cargar tu perfil. Contacta al administrador.',
+  // 401 del backend: el token no sirve (por ejemplo, no trae el id de la sesión)
+  SESION_INVALIDA: 'No pudimos validar tu sesión. Inicia sesión de nuevo.',
+  // 403 del backend: la cuenta no tiene un rol en FutData o le revocaron el acceso
+  SIN_ROL: 'Tu cuenta no tiene acceso a FutData: no tiene un rol asignado o su acceso fue revocado. Contacta al administrador.',
 }
 
 function textoBloqueo(msRestantes) {
@@ -43,16 +47,17 @@ export default function Login() {
   const [intentos, setIntentos] = useState(0)
   const [verContrasena, setVerContrasena] = useState(false)
   const [enviando, setEnviando] = useState(false)
-  const [aviso, setAviso] = useState(null)
+  // Error que llega desde /verificar cuando el backend rechaza la sesión (motivo: SESION_INVALIDA, SIN_ROL, INACTIVA)
+  const [aviso, setAviso] = useState(() => (MENSAJES[location.state?.motivo] ? { id: 'motivo-ruta', texto: MENSAJES[location.state.motivo] } : null))
   // Aviso de éxito que llega al cerrar sesión ("Sesión cerrada"). El foco se queda en el título; el aviso es role="status".
   const [avisoOk, setAvisoOk] = useState(() => (location.state?.aviso ? { id: 'aviso-ruta', texto: location.state.aviso } : null))
 
   // Al abrir, el foco va al título (en /verificar también)
   useEffect(() => titulo.current?.focus(), [])
 
-  // El aviso viaja en el estado de la ruta: se limpia para que no reaparezca al recargar
+  // El aviso y el motivo viajan en el estado de la ruta: se limpian para que no reaparezcan al recargar
   useEffect(() => {
-    if (location.state?.aviso) navigate(location.pathname, { replace: true, state: null })
+    if (location.state?.aviso || location.state?.motivo) navigate(location.pathname, { replace: true, state: null })
   }, [location.pathname, location.state, navigate])
 
   // Tras un envío con errores, el foco va al primer campo inválido

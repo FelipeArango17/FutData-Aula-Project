@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -35,6 +36,37 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
                  order by creado_en desc
                  limit 1
                 """, Map.of("usuario", usuarioId), MAPEO).stream().findFirst();
+    }
+
+    @Override
+    public void bloquearUsuario(UUID usuarioId) {
+        jdbc.query("select pg_advisory_xact_lock(hashtextextended(cast(:usuario as text), 0))",
+                Map.of("usuario", usuarioId),
+                (ResultSetExtractor<Void>) resultado -> {
+                    while (resultado.next()) {
+                        // pg_advisory_xact_lock returns void; consume the result without type conversion.
+                    }
+                    return null;
+                });
+    }
+
+    @Override
+    public void invalidarPendientes(UUID usuarioId) {
+        jdbc.update("update codigo_verificacion set usado = true where id_usuario = :usuario and not usado",
+                Map.of("usuario", usuarioId));
+    }
+
+    @Override
+    public void limpiarVencidos(UUID usuarioId, Instant ahora) {
+        jdbc.update("""
+                delete from codigo_verificacion
+                 where id_usuario = :usuario
+                   and expira_en < :ahora
+                   and (bloqueado_hasta is null or bloqueado_hasta <= :ahora)
+                """,
+                new MapSqlParameterSource()
+                        .addValue("usuario", usuarioId)
+                        .addValue("ahora", fechaJDBC(ahora), Types.TIMESTAMP_WITH_TIMEZONE));
     }
 
     @Override

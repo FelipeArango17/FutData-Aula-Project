@@ -6,6 +6,7 @@ public final class ReglasVerificacion {
     public static final Duration VIGENCIA_CODIGO = Duration.ofMinutes(10);
     public static final Duration BLOQUEO = Duration.ofMinutes(15);
     public static final Duration INTERVALO_REENVIO = Duration.ofMinutes(1);
+    public static final Duration VIGENCIA_SESION = Duration.ofHours(12);
     public static final int MAX_INTENTOS = 5;
 
     private ReglasVerificacion() { }

@@ -19,6 +19,12 @@ public interface ICodigoVerificacionService {
     /** Envía otro código; como máximo uno por minuto. */
     Codigo2FAResponseDTO reenviar(UUID idUsuario);
 
-    /** Valida el código del usuario; tras 5 intentos fallidos bloquea la verificación 15 minutos. */
-    UsuarioResponseDTO verificar(UUID idUsuario, String codigo);
+    /**
+     * Valida el código del usuario; tras 5 intentos fallidos bloquea la verificación 15 minutos. Si es correcto, marca
+     * como verificada solo la sesión {@code idSesion} (claim {@code session_id} del JWT), no las demás del usuario.
+     */
+    UsuarioResponseDTO verificar(UUID idUsuario, UUID idSesion, String codigo);
+
+    /** Cierre de sesión: la sesión {@code idSesion} del usuario deja de estar verificada. */
+    void cerrarSesion(UUID idUsuario, UUID idSesion);
 }

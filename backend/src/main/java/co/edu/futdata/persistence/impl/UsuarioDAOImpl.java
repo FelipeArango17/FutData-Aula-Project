@@ -83,6 +83,11 @@ public class UsuarioDAOImpl implements IUsuarioDAO {
     }
 
     @Override
+    public void bloquearAdministradores() {
+        jdbc.queryForObject("select pg_advisory_xact_lock(17432906)", Map.of(), Long.class);
+    }
+
+    @Override
     public List<String> rolesActivos(UUID idUsuario) {
         return jdbc.queryForList("""
                 SELECT r.nombre

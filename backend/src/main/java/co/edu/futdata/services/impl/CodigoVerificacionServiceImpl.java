@@ -10,6 +10,7 @@ import co.edu.futdata.domain.entities.Usuario;
 import co.edu.futdata.domain.rules.GeneradorCodigo;
 import co.edu.futdata.domain.rules.ReglasVerificacion;
 import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
@@ -29,20 +30,22 @@ import org.springframework.transaction.annotation.Transactional;
 public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService {
     private final IUsuarioDAO usuarios;
     private final ICodigoVerificacionDAO codigos;
+    private final ISesionVerificadaDAO sesiones;
     private final INotificador notificador;
     private final GeneradorCodigo generador;
     private final Clock reloj;
 
     @Autowired
     public CodigoVerificacionServiceImpl(IUsuarioDAO usuarios, ICodigoVerificacionDAO codigos,
-                                         INotificador notificador) {
-        this(usuarios, codigos, notificador, new GeneradorCodigo(), Clock.systemUTC());
+                                         ISesionVerificadaDAO sesiones, INotificador notificador) {
+        this(usuarios, codigos, sesiones, notificador, new GeneradorCodigo(), Clock.systemUTC());
     }
 
-    CodigoVerificacionServiceImpl(IUsuarioDAO usuarios, ICodigoVerificacionDAO codigos,
+    CodigoVerificacionServiceImpl(IUsuarioDAO usuarios, ICodigoVerificacionDAO codigos, ISesionVerificadaDAO sesiones,
                                   INotificador notificador, GeneradorCodigo generador, Clock reloj) {
         this.usuarios = usuarios;
         this.codigos = codigos;
+        this.sesiones = sesiones;
         this.notificador = notificador;
         this.generador = generador;
         this.reloj = reloj;
@@ -52,12 +55,15 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
     @Transactional
     public Codigo2FAResponseDTO solicitar(UUID idUsuario) {
         Usuario usuario = usuarioActivo(idUsuario);
-        CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         Instant ahora = reloj.instant();
+        codigos.bloquearUsuario(usuario.getId());
+        codigos.limpiarVencidos(usuario.getId(), ahora);
+        CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         revisarBloqueo(actual, ahora);
         if (vigente(actual, ahora) && ahora.isBefore(actual.getUltimoEnvio().plus(ReglasVerificacion.INTERVALO_REENVIO))) {
             return respuesta(usuario, actual, ahora);
         }
+        codigos.invalidarPendientes(usuario.getId());
         return emitir(usuario, ahora);
     }
 
@@ -65,8 +71,10 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
     @Transactional
     public Codigo2FAResponseDTO reenviar(UUID idUsuario) {
         Usuario usuario = usuarioActivo(idUsuario);
-        CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         Instant ahora = reloj.instant();
+        codigos.bloquearUsuario(usuario.getId());
+        codigos.limpiarVencidos(usuario.getId(), ahora);
+        CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId()).orElse(null);
         revisarBloqueo(actual, ahora);
         if (actual != null && ahora.isBefore(actual.getUltimoEnvio().plus(ReglasVerificacion.INTERVALO_REENVIO))) {
             long ms = actual.getUltimoEnvio().plus(ReglasVerificacion.INTERVALO_REENVIO).toEpochMilli()
@@ -74,13 +82,18 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
             throw new CodigoVerificacionException("DEMASIADO_PRONTO",
                     "Debes esperar antes de solicitar otro código.", ms);
         }
+        codigos.invalidarPendientes(usuario.getId());
         return emitir(usuario, ahora);
     }
 
     @Override
     @Transactional(noRollbackFor = CodigoVerificacionException.class)
-    public UsuarioResponseDTO verificar(UUID idUsuario, String codigo) {
+    public UsuarioResponseDTO verificar(UUID idUsuario, UUID idSesion, String codigo) {
+        if (idSesion == null) {
+            throw new IllegalArgumentException("El id de la sesión sale del JWT (session_id) y no puede ser nulo");
+        }
         Usuario usuario = usuarioActivo(idUsuario);
+        codigos.bloquearUsuario(usuario.getId());
         CodigoVerificacion actual = codigos.buscarUltimo(usuario.getId())
                 .orElseThrow(() -> new CodigoVerificacionException("SIN_SOLICITUD",
                         "No hay un código pendiente de verificación."));
@@ -88,6 +101,9 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
         revisarBloqueo(actual, ahora);
         if (!ReglasVerificacion.formatoValido(codigo)) {
             throw new DatosInvalidosException(Map.of("codigo", "debe tener exactamente 6 dígitos"));
+        }
+        if (actual.isUsado()) {
+            throw new CodigoVerificacionException("USADO", "El código ya fue utilizado. Solicita uno nuevo.");
         }
         if (!ahora.isBefore(actual.getExpiraEn())) {
             throw new CodigoVerificacionException("VENCIDO", "El código expiró. Solicita uno nuevo.");
@@ -105,7 +121,18 @@ public class CodigoVerificacionServiceImpl implements ICodigoVerificacionService
                     "El código no es correcto.", null);
         }
         codigos.marcarUsado(actual.getId());
+        sesiones.limpiarVencidas(usuario.getId(), ahora);
+        sesiones.marcarVerificada(idSesion, usuario.getId(), ahora, ahora.plus(ReglasVerificacion.VIGENCIA_SESION));
         return UsuarioMapper.toDTO(usuario);
+    }
+
+    @Override
+    @Transactional
+    public void cerrarSesion(UUID idUsuario, UUID idSesion) {
+        if (idUsuario == null || idSesion == null) {
+            throw new IllegalArgumentException("El usuario y la sesión salen del JWT y no pueden ser nulos");
+        }
+        sesiones.eliminar(idSesion, idUsuario);
     }
 
     private Codigo2FAResponseDTO emitir(Usuario usuario, Instant ahora) {
