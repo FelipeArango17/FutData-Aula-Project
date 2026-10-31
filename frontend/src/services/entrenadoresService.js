@@ -19,6 +19,7 @@
 // - La tabla Entrenador también tiene fecha_nacimiento, dirección y documentos, que esta pantalla
 //   NO captura todavía.
 // - La base de datos también deberá exigir que documento y correo no se repitan (observación 2).
+import { apiRequest } from './apiClient.js'
 import { CATEGORIAS } from './entrenamientosService.js'
 
 export { CATEGORIAS }
@@ -129,25 +130,10 @@ async function editarMock(id, datos) {
   return copiar(actualizado)
 }
 
-const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/api\/?$/, '')
 const datosPersonales = (datos) => {
   const personales = { ...datos }
   delete personales.categorias
   return datosLimpios(personales)
-}
-
-async function apiRequest(ruta, opciones = {}) {
-  const respuesta = await fetch(`${API_BASE}/api${ruta}`, {
-    headers: { 'Content-Type': 'application/json', ...opciones.headers },
-    ...opciones,
-  })
-  if (!respuesta.ok) {
-    const cuerpo = await respuesta.json().catch(() => ({}))
-    const error = new Error(cuerpo.mensaje ?? 'No se pudo completar la operación.')
-    Object.assign(error, { estado: respuesta.status, campos: cuerpo.campos ?? [] })
-    throw error
-  }
-  return respuesta.status === 204 ? null : respuesta.json()
 }
 
 const usarApi = import.meta.env.MODE !== 'test'
