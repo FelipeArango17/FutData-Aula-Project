@@ -7,6 +7,7 @@ import co.edu.futdata.datasource.external.ISupabaseAuthAdmin;
 import co.edu.futdata.domain.entities.Usuario;
 import co.edu.futdata.domain.rules.ReglasUsuario;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
@@ -28,11 +29,13 @@ public class UsuarioServiceImpl implements IUsuarioService {
     private static final Logger log = LoggerFactory.getLogger(UsuarioServiceImpl.class);
     private final IUsuarioDAO usuarios;
     private final ISupabaseAuthAdmin auth;
+    private final ISesionVerificadaDAO sesiones;
 
     @Autowired
-    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth) {
+    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth, ISesionVerificadaDAO sesiones) {
         this.usuarios = usuarios;
         this.auth = auth;
+        this.sesiones = sesiones;
     }
 
     @Override
@@ -107,6 +110,10 @@ public class UsuarioServiceImpl implements IUsuarioService {
         auth.cambiarAcceso(id, activo);
         try {
             usuarios.actualizarActivo(id, activo);
+            if (!activo) {
+                // Sin acceso, ninguna de sus sesiones sigue verificada: si vuelve a tenerlo, debe pasar el 2FA otra vez.
+                sesiones.eliminarDeUsuario(id);
+            }
         } catch (RuntimeException e) {
             try {
                 auth.cambiarAcceso(id, !activo);

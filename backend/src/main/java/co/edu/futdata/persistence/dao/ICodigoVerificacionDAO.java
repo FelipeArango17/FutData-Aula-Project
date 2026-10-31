@@ -14,6 +14,4 @@ public interface ICodigoVerificacionDAO {
     int incrementarIntentos(UUID id);
     void bloquear(UUID id, Instant hasta);
     void marcarUsado(UUID id);
-    void marcarSesionVerificada(UUID usuarioId, Instant hasta);
-    boolean sesionVerificada(UUID usuarioId, Instant ahora);
 }

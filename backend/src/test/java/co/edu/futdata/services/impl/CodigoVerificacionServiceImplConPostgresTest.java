@@ -7,11 +7,14 @@ import co.edu.futdata.datasource.external.INotificador;
 import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
 import co.edu.futdata.domain.entities.CodigoVerificacion;
 import co.edu.futdata.domain.rules.GeneradorCodigo;
+import co.edu.futdata.domain.rules.ReglasVerificacion;
 import co.edu.futdata.persistence.dao.ICodigoVerificacionDAO;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.persistence.impl.CodigoVerificacionDAOImpl;
 import co.edu.futdata.persistence.impl.DockerDisponible;
 import co.edu.futdata.persistence.impl.PostgresDePrueba;
+import co.edu.futdata.persistence.impl.SesionVerificadaDAOImpl;
 import co.edu.futdata.persistence.impl.UsuarioDAOImpl;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
@@ -69,14 +72,20 @@ class CodigoVerificacionServiceImplConPostgresTest {
         }
 
         @Bean
-        ICodigoVerificacionService servicio(NamedParameterJdbcTemplate jdbc, ICodigoVerificacionDAO codigos) {
+        ISesionVerificadaDAO sesiones(NamedParameterJdbcTemplate jdbc) {
+            return new SesionVerificadaDAOImpl(jdbc);
+        }
+
+        @Bean
+        ICodigoVerificacionService servicio(NamedParameterJdbcTemplate jdbc, ICodigoVerificacionDAO codigos,
+                                            ISesionVerificadaDAO sesiones) {
             IUsuarioDAO usuarios = new UsuarioDAOImpl(jdbc);
             INotificador notificador = (evento, datos) -> {
                 if (!CORREO_SALE.get()) {
                     throw new NotificacionNoEnviadaException("n8n no responde", evento, null, null);
                 }
             };
-            return new CodigoVerificacionServiceImpl(usuarios, codigos, notificador, new GeneradorCodigo(),
+            return new CodigoVerificacionServiceImpl(usuarios, codigos, sesiones, notificador, new GeneradorCodigo(),
                     Clock.systemUTC());
         }
     }
@@ -84,6 +93,7 @@ class CodigoVerificacionServiceImplConPostgresTest {
     private AnnotationConfigApplicationContext contexto;
     private ICodigoVerificacionService servicio;
     private ICodigoVerificacionDAO codigos;
+    private ISesionVerificadaDAO sesiones;
     private NamedParameterJdbcTemplate jdbc;
     private UUID idUsuario;
 
@@ -93,6 +103,7 @@ class CodigoVerificacionServiceImplConPostgresTest {
         contexto = new AnnotationConfigApplicationContext(Config.class);
         servicio = contexto.getBean(ICodigoVerificacionService.class);
         codigos = contexto.getBean(ICodigoVerificacionDAO.class);
+        sesiones = contexto.getBean(ISesionVerificadaDAO.class);
         jdbc = PostgresDePrueba.jdbc();
         idUsuario = UUID.randomUUID();
         jdbc.update("INSERT INTO auth.users (id) VALUES (:id)", Map.of("id", idUsuario));
@@ -132,7 +143,7 @@ class CodigoVerificacionServiceImplConPostgresTest {
     void unCodigoIncorrectoConservaElIntentoAunqueSeLanceLaExcepcion() {
         codigoPendiente();
 
-        assertThatThrownBy(() -> servicio.verificar(idUsuario, CODIGO_INCORRECTO))
+        assertThatThrownBy(() -> servicio.verificar(idUsuario, UUID.randomUUID(), CODIGO_INCORRECTO))
                 .isInstanceOfSatisfying(CodigoVerificacionException.class,
                         e -> assertThat(e.getCodigo()).isEqualTo("INCORRECTO"));
 
@@ -144,18 +155,18 @@ class CodigoVerificacionServiceImplConPostgresTest {
         codigoPendiente();
 
         for (int i = 1; i <= 4; i++) {
-            assertThatThrownBy(() -> servicio.verificar(idUsuario, CODIGO_INCORRECTO))
+            assertThatThrownBy(() -> servicio.verificar(idUsuario, UUID.randomUUID(), CODIGO_INCORRECTO))
                     .isInstanceOfSatisfying(CodigoVerificacionException.class,
                             e -> assertThat(e.getCodigo()).isEqualTo("INCORRECTO"));
         }
-        assertThatThrownBy(() -> servicio.verificar(idUsuario, CODIGO_INCORRECTO))
+        assertThatThrownBy(() -> servicio.verificar(idUsuario, UUID.randomUUID(), CODIGO_INCORRECTO))
                 .isInstanceOfSatisfying(CodigoVerificacionException.class,
                         e -> assertThat(e.getCodigo()).isEqualTo("BLOQUEADO"));
 
         assertThat(intentos()).isEqualTo(5);
         assertThat(bloqueado()).isTrue();
         // Ni siquiera el código real pasa mientras dura el bloqueo.
-        assertThatThrownBy(() -> servicio.verificar(idUsuario, CODIGO_REAL))
+        assertThatThrownBy(() -> servicio.verificar(idUsuario, UUID.randomUUID(), CODIGO_REAL))
                 .isInstanceOfSatisfying(CodigoVerificacionException.class,
                         e -> assertThat(e.getCodigo()).isEqualTo("BLOQUEADO"));
     }
@@ -169,5 +180,47 @@ class CodigoVerificacionServiceImplConPostgresTest {
         Integer filas = jdbc.queryForObject("SELECT count(*) FROM codigo_verificacion WHERE id_usuario = :id",
                 Map.of("id", idUsuario), Integer.class);
         assertThat(filas).isZero();
+    }
+
+    @Test
+    void verificarEnLaSesionANoHabilitaLaSesionBDelMismoUsuario() {
+        UUID sesionA = UUID.randomUUID();
+        UUID sesionB = UUID.randomUUID();
+        codigoPendiente();
+
+        servicio.verificar(idUsuario, sesionA, CODIGO_REAL);
+
+        assertThat(sesiones.estaVerificada(sesionA, idUsuario, Instant.now())).isTrue();
+        assertThat(sesiones.estaVerificada(sesionB, idUsuario, Instant.now())).isFalse();
+        Instant expira = jdbc.queryForObject("SELECT expira_en FROM sesion_verificada WHERE id_sesion = :id",
+                Map.of("id", sesionA), java.time.OffsetDateTime.class).toInstant();
+        assertThat(expira).isBetween(Instant.now().plus(ReglasVerificacion.VIGENCIA_SESION).minusSeconds(60),
+                Instant.now().plus(ReglasVerificacion.VIGENCIA_SESION));
+    }
+
+    @Test
+    void elLogoutCierraSoloLaSesionDelToken() {
+        UUID sesionA = UUID.randomUUID();
+        UUID sesionB = UUID.randomUUID();
+        codigoPendiente();
+        servicio.verificar(idUsuario, sesionA, CODIGO_REAL);
+        codigoPendiente();
+        servicio.verificar(idUsuario, sesionB, CODIGO_REAL);
+
+        servicio.cerrarSesion(idUsuario, sesionA);
+
+        assertThat(sesiones.estaVerificada(sesionA, idUsuario, Instant.now())).isFalse();
+        assertThat(sesiones.estaVerificada(sesionB, idUsuario, Instant.now())).isTrue();
+    }
+
+    @Test
+    void elLogoutConLaSesionDeOtroUsuarioNoLaCierra() {
+        UUID sesion = UUID.randomUUID();
+        codigoPendiente();
+        servicio.verificar(idUsuario, sesion, CODIGO_REAL);
+
+        servicio.cerrarSesion(UUID.randomUUID(), sesion);
+
+        assertThat(sesiones.estaVerificada(sesion, idUsuario, Instant.now())).isTrue();
     }
 }

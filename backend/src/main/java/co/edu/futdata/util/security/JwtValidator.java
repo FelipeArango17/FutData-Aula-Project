@@ -44,6 +44,9 @@ public class JwtValidator implements Converter<Jwt, AbstractAuthenticationToken>
     /** Audiencia de los tokens de usuarios que iniciaron sesión en Supabase Auth. */
     public static final String AUDIENCIA = "authenticated";
 
+    /** Claim con el id de la sesión de Supabase Auth: la verificación 2FA se guarda por sesión (migración 006). */
+    public static final String CLAIM_SESION = "session_id";
+
     private static final Logger log = LoggerFactory.getLogger(JwtValidator.class);
 
     private final IUsuarioDAO usuarios;
@@ -97,9 +100,23 @@ public class JwtValidator implements Converter<Jwt, AbstractAuthenticationToken>
         return new JwtAuthenticationToken(jwt, roles, jwt.getSubject());
     }
 
+    /** El {@code session_id} del token; vacío si no viene o no es un UUID ({@link SesionVerificadaFilter} responde 401). */
+    public static Optional<UUID> idSesion(Jwt jwt) {
+        return comoUuid(jwt.getClaimAsString(CLAIM_SESION));
+    }
+
+    /** El {@code sub} del token como id de usuario; vacío si no es un UUID. */
+    public static Optional<UUID> idUsuario(Jwt jwt) {
+        return idUsuario(jwt.getSubject());
+    }
+
     private static Optional<UUID> idUsuario(String sub) {
+        return comoUuid(sub);
+    }
+
+    private static Optional<UUID> comoUuid(String valor) {
         try {
-            return Optional.of(UUID.fromString(sub));
+            return Optional.of(UUID.fromString(valor));
         } catch (IllegalArgumentException | NullPointerException e) {
             return Optional.empty();
         }

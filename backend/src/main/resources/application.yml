@@ -1,5 +1,6 @@
 # Configuración del backend de FutData. Los valores salen de variables de entorno (ver backend/.env.example);
-# aquí no va ningún secreto. Perfiles: "local" (por defecto, para desarrollo) y "prod" (contenedor Docker).
+# aquí no va ningún secreto. Perfiles: "local" (por defecto, para desarrollo), "prod" (contenedor Docker) y "dev"
+# (opcional, se suma a "local": publica la documentación OpenAPI). Ejemplo: SPRING_PROFILES_ACTIVE=local,dev
 
 spring:
   application:
@@ -46,10 +47,14 @@ server:
     include-stacktrace: never
     include-message: never
 
+# La documentación OpenAPI está apagada en todos los perfiles menos "dev" (ver el perfil dev al final y
+# util.security.RutasSin2FA.DOCUMENTACION).
 springdoc:
   api-docs:
+    enabled: false
     path: /v3/api-docs
   swagger-ui:
+    enabled: false
     path: /swagger-ui.html
   paths-to-match: /api/**
 
@@ -120,13 +125,19 @@ spring:
         # SSL obligatorio si DB_URL no indica sslmode (si lo indica, manda el de la URL).
         sslmode: require
 
-# En producción no se publica la documentación de la API.
-springdoc:
-  api-docs:
-    enabled: false
-  swagger-ui:
-    enabled: false
-
 logging:
   level:
     root: INFO
+
+---
+# Perfil dev: solo publica la documentación OpenAPI (Swagger UI en /swagger-ui.html, sin token). Nunca en prod.
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

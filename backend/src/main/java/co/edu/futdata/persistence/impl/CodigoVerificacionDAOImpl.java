@@ -103,29 +103,6 @@ public class CodigoVerificacionDAOImpl implements ICodigoVerificacionDAO {
                 Map.of("id", id));
     }
 
-    @Override
-    public void marcarSesionVerificada(UUID usuarioId, Instant hasta) {
-        jdbc.update("""
-                insert into sesion_verificada (id_usuario, verificada_hasta)
-                values (:usuario, :hasta)
-                on conflict (id_usuario) do update set verificada_hasta = excluded.verificada_hasta
-                """, new MapSqlParameterSource()
-                .addValue("usuario", usuarioId)
-                .addValue("hasta", fechaJDBC(hasta), Types.TIMESTAMP_WITH_TIMEZONE));
-    }
-
-    @Override
-    public boolean sesionVerificada(UUID usuarioId, Instant ahora) {
-        return Boolean.TRUE.equals(jdbc.queryForObject("""
-                select exists(
-                    select 1 from sesion_verificada
-                     where id_usuario = :usuario and verificada_hasta > :ahora
-                )
-                """, new MapSqlParameterSource()
-                        .addValue("usuario", usuarioId)
-                        .addValue("ahora", fechaJDBC(ahora), Types.TIMESTAMP_WITH_TIMEZONE), Boolean.class));
-    }
-
     private static MapSqlParameterSource parametros(CodigoVerificacion codigo) {
         return new MapSqlParameterSource()
                 .addValue("usuario", codigo.getUsuarioId())
