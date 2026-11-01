@@ -150,7 +150,6 @@ export default function Deportistas() {
     <Page title="Deportistas" subtitle={subtitulo} tituloRef={tituloRef}>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:self-start">
         <Button to="/administrador/deportistas/inscribir">Inscribir jugador</Button>
-        <Button to="/administrador/deportistas/nuevo" variant="secondary">Nuevo deportista</Button>
       </div>
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
       <div className="grid grid-cols-1 gap-4">

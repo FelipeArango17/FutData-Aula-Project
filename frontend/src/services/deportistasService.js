@@ -315,6 +315,23 @@ const grupoGuardado = ({ fechaNacimiento, grupoEntrenamiento }) => grupoSegunCat
 
 export const ORIGEN_INSCRIPCION_EN_LINEA = 'Inscripción en línea'
 
+// Deja el correo del acudiente en el deportista (`acudiente`), que es lo que usan el estado de cuenta y los documentos del acudiente.
+// El vínculo completo (con el parentesco) está en acudientesService. Solo el administrador.
+export async function vincularAcudiente(idDeportista, correo, actor) {
+  await simularRed()
+  exigirAdministrador(actor)
+  const actual = buscarDeportista(idDeportista)
+  const actualizado = { ...actual, acudiente: String(correo).trim() }
+  deportistas = deportistas.map((x) => (x.id === actual.id ? actualizado : x))
+  return copiar(actualizado)
+}
+
+// ¿Este correo es el del acudiente del deportista? (síncrona: la usan otros servicios para comprobar permisos)
+export const esAcudienteDe = (correo, idDeportista) => {
+  const d = deportistas.find((x) => x.id === Number(idDeportista))
+  return Boolean(d?.acudiente && correo && d.acudiente.toLowerCase() === String(correo).toLowerCase())
+}
+
 // Registro que llega de la inscripción en línea (HU-009, services/inscripcionService.js). No tiene actor (es público):
 // quien llama ya validó los datos. Nace SIN categoría, activo, sin acudiente vinculado y con origen "Inscripción en línea".
 // Si el documento ya existe NO crea nada, y por la misma razón NO devuelve nada: quien llama no puede saber si hubo registro

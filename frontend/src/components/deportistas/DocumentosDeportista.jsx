@@ -55,6 +55,7 @@ function TarjetaDocumento({ documento: d, onRevisar }) {
       </p>
       <p className="break-words text-small text-secondary">
         Cargado el {fechaLargaConAnio(partesMomento(d.cargadoEn).fecha)}
+        {d.cargadoPor && ` · Cargado por: ${d.cargadoPor}`}
         {d.fechaVencimiento && ` · Vence el ${fechaLargaConAnio(d.fechaVencimiento)}`}
       </p>
       {d.estado === 'RECHAZADO' && d.comentario && (

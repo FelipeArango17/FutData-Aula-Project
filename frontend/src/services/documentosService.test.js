@@ -55,7 +55,7 @@ describe('subirDocumento', () => {
     const r = await resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2027-01-15' }), admin))
     expect(r).toMatchObject({
       idDeportista: 3, tipo: 'CERTIFICADO_ESTUDIO', nombreOriginal: 'ficha.pdf', tipoContenido: 'application/pdf', tamanoBytes: 102400,
-      estado: 'PENDIENTE', comentario: null, fechaVencimiento: '2027-01-15', cargadoPor: 'administrador@pradofc.co', revisadoPor: null, revisadoEn: null,
+      estado: 'PENDIENTE', comentario: null, fechaVencimiento: '2027-01-15', cargadoPor: 'Administrador', cargadoPorCorreo: 'administrador@pradofc.co', revisadoPor: null, revisadoEn: null,
     })
     expect(Number.isNaN(Date.parse(r.cargadoEn))).toBe(false)
     expect((await resolver(servicio.listarDocumentos(3)))[0].id).toBe(r.id)
@@ -109,11 +109,29 @@ describe('subirDocumento', () => {
     expect(Object.keys(falla.errores).sort()).toEqual(['archivo', 'fechaVencimiento', 'tipo'])
   })
 
-  it('solo el administrador sube', async () => {
-    for (const actor of [{ rol: 'entrenador' }, { rol: 'acudiente' }, null]) {
+  it('suben el administrador y el acudiente del deportista; nadie más', async () => {
+    for (const actor of [{ rol: 'entrenador' }, { rol: 'tesorero' }, { rol: 'acudiente' }, { rol: 'acudiente', correo: 'otro@correo.co' }, null]) {
       await expect(resolver(servicio.subirDocumento(3, datos(), actor))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
     }
     expect(await resolver(servicio.listarDocumentos(3))).toEqual([])
+  })
+
+  it('cargadoPor dice quién subió: "Administrador" o "Acudiente" (solo con sus deportistas), con cualquiera de los 7 tipos', async () => {
+    const acudiente = { rol: 'acudiente', correo: 'acudiente@pradofc.co' } // Santiago (1) y Valeria (2)
+    for (const tipo of servicio.TIPOS_DOCUMENTO_JUGADOR) {
+      expect(await resolver(servicio.subirDocumento(1, datos({ tipo }), acudiente)), tipo).toMatchObject({ cargadoPor: 'Acudiente', cargadoPorCorreo: 'acudiente@pradofc.co', estado: 'PENDIENTE' })
+      expect(await resolver(servicio.subirDocumento(1, datos({ tipo }), admin)), tipo).toMatchObject({ cargadoPor: 'Administrador', cargadoPorCorreo: 'administrador@pradofc.co' })
+    }
+    await expect(resolver(servicio.subirDocumento(3, datos(), acudiente))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' }) // Emilio no es suyo
+  })
+
+  it('el acudiente no puede aprobar ni rechazar', async () => {
+    await expect(resolver(servicio.revisarDocumento(2, { estado: 'APROBADO' }, { rol: 'acudiente', correo: 'acudiente@pradofc.co' }))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+  })
+
+  it('los documentos de ejemplo traen cargadoPor, de las dos formas', async () => {
+    const todos = (await Promise.all([1, 2, 6].map((id) => resolver(servicio.listarDocumentos(id))))).flat()
+    expect(new Set(todos.map((x) => x.cargadoPor))).toEqual(new Set(['Administrador', 'Acudiente']))
   })
 })
 

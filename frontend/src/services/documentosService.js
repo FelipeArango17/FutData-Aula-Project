@@ -4,14 +4,16 @@
 //
 // Forma de datos (tabla `documento` del backend):
 //   Documento = { id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, estado, comentario, fechaVencimiento,
-//                 cargadoPor, cargadoEn, revisadoPor, revisadoEn }
+//                 cargadoPor, cargadoPorCorreo, cargadoEn, revisadoPor, revisadoEn }
 //     tipo              uno de IDS_TIPOS_DOCUMENTO (utils/documentosClub.js): 'DOCUMENTO_IDENTIDAD' | 'CERTIFICADO_ESTUDIO' |
 //                       'FORMULARIO_INSCRIPCION' | 'AUTORIZACION_HABEAS_DATA' | 'PAZ_Y_SALVO' | 'CARTA_RENUNCIA' | 'TRASPASO_NACIONAL'
 //     tipoContenido     application/pdf, image/jpeg o image/png; tamanoBytes de 1 byte a 5 MB (utils/archivos.js)
 //     estado            'PENDIENTE' | 'APROBADO' | 'RECHAZADO'
 //     comentario        del administrador (obligatorio al rechazar); null si no hay
 //     fechaVencimiento  "AAAA-MM-DD" o null (opcional; si viene no puede ser pasada)
-//     cargadoPor/revisadoPor  correo de quien subió / revisó; cargadoEn/revisadoEn: fecha y hora ISO (revisado* es null si está pendiente)
+//     cargadoPor        quién lo subió: 'Administrador' | 'Acudiente' (CARGADO_POR). Cualquiera de los dos puede subir cualquiera de los 7 tipos:
+//                       si el acudiente no puede, lo sube el administrador, y al revés. Aprobar o rechazar sigue siendo solo del administrador.
+//     cargadoPorCorreo/revisadoPor  correo de quien subió / revisó; cargadoEn/revisadoEn: fecha y hora ISO (revisado* es null si está pendiente)
 //
 // Errores: Error con `codigo` -> 'SIN_PERMISO' | 'ARCHIVO_INVALIDO' (solo falla el archivo; el mensaje dice el motivo y `errores`
 //   trae { archivo }) | 'VALIDACION' (con `errores`: { campo: mensaje }; si falla el archivo junto con otro campo) |
@@ -20,10 +22,12 @@
 // PENDIENTE (backend): guardar el archivo en Supabase Storage; "Ver documento" mostrará una URL firmada (hoy la pantalla solo
 // muestra el nombre y el tamaño, porque los documentos de ejemplo no tienen archivo). Al rechazar, el backend avisará al acudiente
 // por correo (n8n); aquí no se envía nada.
-// Solo el administrador sube o revisa documentos (el servicio lo simula; en producción lo valida el backend con el JWT).
+// El administrador sube y revisa documentos; el acudiente solo sube (y solo los de SUS deportistas). El servicio lo simula; en
+// producción lo valida el backend con el JWT.
 import { TIPOS_DOCUMENTO, validarArchivo } from '../utils/archivos.js'
 import { esFechaValida, hoyLocal } from '../utils/fechas.js'
 import { IDS_TIPOS_DOCUMENTO, NOMBRES_TIPO_DOCUMENTO } from '../utils/documentosClub.js'
+import { esAcudienteDe } from './deportistasService.js'
 
 // Los tipos y sus nombres cortos viven en utils/documentosClub.js; aquí solo se reexportan para las pantallas y el servicio.
 export const TIPOS_DOCUMENTO_JUGADOR = IDS_TIPOS_DOCUMENTO
@@ -31,11 +35,12 @@ export const ETIQUETAS_TIPO_DOCUMENTO_JUGADOR = NOMBRES_TIPO_DOCUMENTO
 export const ESTADOS_DOCUMENTO = ['PENDIENTE', 'APROBADO', 'RECHAZADO']
 export const ETIQUETAS_ESTADO_DOCUMENTO = { PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado' }
 export const COMENTARIO_MAXIMO = 300
+export const CARGADO_POR = { administrador: 'Administrador', acudiente: 'Acudiente' }
 
 const ADMIN_DEMO = 'administrador@pradofc.co'
 const d = (id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, estado, extra = {}) => ({
   id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, estado, comentario: null, fechaVencimiento: null,
-  cargadoPor: ADMIN_DEMO, cargadoEn: '2026-10-05T14:30:00.000Z', revisadoPor: null, revisadoEn: null, ...extra,
+  cargadoPor: CARGADO_POR.administrador, cargadoPorCorreo: ADMIN_DEMO, cargadoEn: '2026-10-05T14:30:00.000Z', revisadoPor: null, revisadoEn: null, ...extra,
 })
 
 // Archivos ficticios (no existen). Santiago (1): identidad aprobada, certificado pendiente y formulario aprobado;
@@ -44,13 +49,13 @@ const d = (id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, e
 // La foto tipo documento no está aquí: es la foto de perfil (fotosService).
 let documentos = [
   d(1, 1, 'DOCUMENTO_IDENTIDAD', 'registro-civil-ejemplo.pdf', 'application/pdf', 245 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-06T16:00:00.000Z' }),
-  d(2, 1, 'CERTIFICADO_ESTUDIO', 'certificado-estudio-ejemplo.jpg', 'image/jpeg', Math.round(1.8 * 1024 * 1024), 'PENDIENTE', { cargadoEn: '2026-10-20T15:10:00.000Z' }),
+  d(2, 1, 'CERTIFICADO_ESTUDIO', 'certificado-estudio-ejemplo.jpg', 'image/jpeg', Math.round(1.8 * 1024 * 1024), 'PENDIENTE', { cargadoEn: '2026-10-20T15:10:00.000Z', cargadoPor: CARGADO_POR.acudiente, cargadoPorCorreo: 'acudiente@pradofc.co' }),
   d(3, 2, 'DOCUMENTO_IDENTIDAD', 'documento-ejemplo-borroso.png', 'image/png', 890 * 1024, 'RECHAZADO', {
     comentario: 'La imagen está borrosa; sube una foto más clara.', revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-08T13:45:00.000Z',
   }),
   d(4, 6, 'DOCUMENTO_IDENTIDAD', 'tarjeta-identidad-mateo-ejemplo.pdf', 'application/pdf', 512 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:20:00.000Z' }),
   d(5, 1, 'FORMULARIO_INSCRIPCION', 'formulario-inscripcion-ejemplo.pdf', 'application/pdf', 410 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-06T16:10:00.000Z' }),
-  d(6, 2, 'AUTORIZACION_HABEAS_DATA', 'habeas-data-ejemplo.pdf', 'application/pdf', 150 * 1024, 'PENDIENTE', { cargadoEn: '2026-10-21T13:00:00.000Z' }),
+  d(6, 2, 'AUTORIZACION_HABEAS_DATA', 'habeas-data-ejemplo.pdf', 'application/pdf', 150 * 1024, 'PENDIENTE', { cargadoEn: '2026-10-21T13:00:00.000Z', cargadoPor: CARGADO_POR.acudiente, cargadoPorCorreo: 'acudiente@pradofc.co' }),
   d(7, 6, 'CERTIFICADO_ESTUDIO', 'certificado-estudio-mateo-ejemplo.pdf', 'application/pdf', 600 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:30:00.000Z' }),
   d(8, 6, 'FORMULARIO_INSCRIPCION', 'formulario-inscripcion-mateo-ejemplo.pdf', 'application/pdf', 380 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:35:00.000Z' }),
   d(9, 6, 'AUTORIZACION_HABEAS_DATA', 'habeas-data-mateo-ejemplo.pdf', 'application/pdf', 140 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:40:00.000Z' }),
@@ -63,7 +68,14 @@ const simularRed = () => new Promise((resolve) => setTimeout(resolve, 250))
 const copiar = (x) => ({ ...x })
 
 function exigirAdministrador(actor) {
-  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para subir ni revisar documentos.')
+  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para revisar documentos.')
+}
+
+// Sube el administrador (cualquier deportista) o el acudiente (solo los suyos). Devuelve el texto de cargadoPor.
+function quienSube(actor, idDeportista) {
+  if (actor?.rol === 'administrador') return CARGADO_POR.administrador
+  if (actor?.rol === 'acudiente' && esAcudienteDe(actor.correo, idDeportista)) return CARGADO_POR.acudiente
+  throw error('SIN_PERMISO', 'No tienes permiso para subir documentos de este deportista.')
 }
 
 // Reglas de los datos al subir (las usan el formulario y el servicio). `archivo` es un File o { name, type, size }.
@@ -90,10 +102,10 @@ export async function listarDocumentos(idDeportista) {
     .map(copiar)
 }
 
-// Sube (en memoria) un documento PENDIENTE. Solo el administrador (por el acudiente cuando este no pueda).
+// Sube (en memoria) un documento PENDIENTE: el administrador o el acudiente del deportista, cualquiera de los 7 tipos.
 export async function subirDocumento(idDeportista, { tipo, archivo, fechaVencimiento } = {}, actor) {
   await simularRed()
-  exigirAdministrador(actor)
+  const cargadoPor = quienSube(actor, idDeportista)
   const errores = validarDatosDocumento({ tipo, archivo, fechaVencimiento })
   const campos = Object.keys(errores)
   if (campos.length === 1 && errores.archivo) throw Object.assign(error('ARCHIVO_INVALIDO', errores.archivo), { errores })
@@ -108,7 +120,8 @@ export async function subirDocumento(idDeportista, { tipo, archivo, fechaVencimi
     estado: 'PENDIENTE',
     comentario: null,
     fechaVencimiento: String(fechaVencimiento ?? '').trim() || null,
-    cargadoPor: actor.correo ?? null,
+    cargadoPor,
+    cargadoPorCorreo: actor.correo ?? null,
     cargadoEn: new Date().toISOString(),
     revisadoPor: null,
     revisadoEn: null,

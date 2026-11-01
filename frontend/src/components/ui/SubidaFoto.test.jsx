@@ -81,3 +81,17 @@ describe('Avatar con foto', () => {
     expect(html).not.toContain('>SR<')
   })
 })
+
+describe('SubidaFoto: guardarAlElegir', () => {
+  it('con la foto ya adjunta (guardarAlElegir) deja visible "Quitar foto" y no pide "Guardar foto"', () => {
+    const html = dibujar({ foto: 'blob:http://localhost/abc', guardarAlElegir: true })
+    expect(html).toContain('Quitar foto')
+    expect(html).not.toContain('Guardar foto')
+  })
+
+  it('el botón "Elegir foto" y el límite siguen igual', () => {
+    const html = dibujar({ guardarAlElegir: true })
+    expect(html).toContain('>Elegir foto</label>')
+    expect(html).toContain('JPG o PNG, máximo 5 MB.')
+  })
+})
