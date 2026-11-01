@@ -6,6 +6,7 @@ import Field from '../ui/Field.jsx'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import Icon from '../Icon.jsx'
 import FormularioDocumento from './FormularioDocumento.jsx'
+import ListaVerificacionDocumentos from './ListaVerificacionDocumentos.jsx'
 import {
   ETIQUETAS_ESTADO_DOCUMENTO, ETIQUETAS_TIPO_DOCUMENTO_JUGADOR, listarDocumentos, revisarDocumento, subirDocumento,
 } from '../../services/documentosService.js'
@@ -88,7 +89,7 @@ function TarjetaDocumento({ documento: d, onRevisar }) {
 }
 
 // Parte visual. documentos: lista, o null mientras carga. error: no se pudo cargar. exito: { texto } del último aviso.
-export function PanelDocumentos({ documentos, error = false, onReintentar, exito = null, onCerrarExito, onSubir, onRevisar, claveFormulario = 0 }) {
+export function PanelDocumentos({ documentos, tieneFoto = false, error = false, onReintentar, exito = null, onCerrarExito, onSubir, onRevisar, claveFormulario = 0 }) {
   let lista
   if (error) {
     lista = (
@@ -119,6 +120,8 @@ export function PanelDocumentos({ documentos, error = false, onReintentar, exito
     <Card aria-labelledby="documentos-titulo" className="flex w-full max-w-2xl flex-col gap-4">
       <h2 id="documentos-titulo" className="break-words text-h3">Documentos</h2>
       <AvisoEstado aviso={exito} onCerrar={onCerrarExito} />
+      {!error && documentos !== null && <ListaVerificacionDocumentos documentos={documentos} tieneFoto={tieneFoto} />}
+      <h3 className="break-words text-body-medium">Documentos cargados</h3>
       {lista}
       <section aria-labelledby="subir-documento-titulo" className="flex flex-col gap-3 border-t pt-4">
         <h3 id="subir-documento-titulo" className="break-words text-body-medium">Subir documento</h3>
@@ -128,7 +131,7 @@ export function PanelDocumentos({ documentos, error = false, onReintentar, exito
   )
 }
 
-export default function DocumentosDeportista({ idDeportista, actor }) {
+export default function DocumentosDeportista({ idDeportista, actor, tieneFoto = false }) {
   const [intento, setIntento] = useState(0)
   // Resultado con el intento que lo produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
   const [carga, setCarga] = useState({ intento: -1, items: null, error: false })
@@ -162,6 +165,7 @@ export default function DocumentosDeportista({ idDeportista, actor }) {
   return (
     <PanelDocumentos
       documentos={cargando ? null : carga.items}
+      tieneFoto={tieneFoto}
       error={!cargando && carga.error}
       onReintentar={() => setIntento((n) => n + 1)}
       exito={exito}

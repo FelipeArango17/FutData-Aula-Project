@@ -13,6 +13,10 @@
 //     creadoPor        correo de quien lo registró; creadoEn: fecha y hora ISO del registro (solo los creados con crearDeportista)
 //     activo           boolean
 //     acudiente        correo de la cuenta del acudiente, o null (lo usará el estado de cuenta)
+//     grupoEntrenamiento  'mañana' | 'tarde' | null. Solo Cachorros y Semillero lo tienen (y es obligatorio ahí); en las demás
+//                      categorías es null. El club decidió que el grupo no se guarda en la base de datos: vive SOLO en este servicio
+//                      de ejemplo en memoria, no está en ningún contrato de API ni en el modelo de datos.
+//     posicion         una de POSICIONES o null (opcional; las pantallas muestran "Sin definir")
 //
 // Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'CATEGORIA_NO_CORRESPONDE_EDAD' |
 //   'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED' | 'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }) |
@@ -41,7 +45,7 @@
 //   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
 // - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
-import { categoriaPorFecha } from '../utils/categorias.js'
+import { GRUPOS_ENTRENAMIENTO, categoriaPorFecha, categoriaRequiereGrupo, grupoSegunCategoria } from '../utils/categorias.js'
 import { hoyLocal } from '../utils/fechas.js'
 import {
   MENSAJES, enLista, validarCampos, validarAnioNacimientoDeportista, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
@@ -62,15 +66,28 @@ let categorias = [
   { id: CATEGORIAS.length + 1, nombre: 'Categoría no vigente (solo pruebas)', activa: false, oculta: true },
 ]
 
+// Posiciones del jugador (lista provisional del club: cámbiala aquí y el formulario, la tabla y la validación la siguen)
+export const POSICIONES = ['Portero', 'Defensor', 'Mediocampista', 'Delantero']
+export const TEXTO_SIN_POSICION = 'Sin definir'
+
 const TI = 'Tarjeta de identidad'
 // Teléfono y dirección ficticios: 3000000001, 3000000002... y calles inventadas
 // La categoría de cada deportista de ejemplo se calcula con la regla (utils/categorias.js) y el "hoy" de la demo
 const categoriaDeEjemplo = (fechaNacimiento) => categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, HOY_EJEMPLO)).id
+// Grupo de entrenamiento (solo Cachorros y Semillero; mezcla de mañana y tarde) y posición de cada deportista de ejemplo, por id.
+// El grupo no se guarda en la base de datos: es un dato solo del frontend de ejemplo.
+const GRUPO_Y_POSICION = {
+  1: ['mañana', 'Delantero'], 2: ['tarde', 'Mediocampista'], 3: ['tarde', 'Portero'], 4: [null, null], 5: ['mañana', 'Defensor'],
+  6: ['mañana', 'Portero'], 7: ['tarde', 'Delantero'], 8: [null, null], 9: [null, 'Mediocampista'], 10: ['tarde', 'Defensor'],
+  11: [null, 'Defensor'], 12: [null, 'Mediocampista'], 13: [null, 'Delantero'], 14: [null, 'Portero'], 15: [null, 'Mediocampista'],
+  16: [null, null], 17: [null, 'Defensor'], 18: [null, 'Delantero'], 19: [null, null], 20: [null, 'Mediocampista'], 21: [null, 'Portero'],
+}
 const d = (id, nombre, apellido, documento, fechaNacimiento, activo = true, acudiente = null) => ({
   id, nombre, apellido, tipoDocumento: TI, documento, fechaNacimiento,
   telefono: `300000${String(id).padStart(4, '0')}`,
   direccion: `Calle ${10 + id} # ${20 + id}-${10 + id}, Barrio Ejemplo`,
   idCategoria: categoriaDeEjemplo(fechaNacimiento), activo, acudiente,
+  grupoEntrenamiento: GRUPO_Y_POSICION[id][0], posicion: GRUPO_Y_POSICION[id][1],
 })
 
 // Cada deportista está en la categoría que da su año de nacimiento (utils/categorias.js, con el "hoy" 2026-10-22).
@@ -220,18 +237,25 @@ export async function asignarCategoria(idDeportista, idCategoria) {
 export function aplicarCambio(valores, campo, valor) {
   const nuevos = { ...valores, [campo]: valor }
   if (campo === 'fechaNacimiento' && valor && !valores.tipoDocumento) nuevos.tipoDocumento = TIPO_DOCUMENTO_SUGERIDO
+  // Si la fecha ya no da Cachorros ni Semillero, el grupo de entrenamiento se limpia
+  if (campo === 'fechaNacimiento') nuevos.grupoEntrenamiento = grupoSegunCategoria(valores.grupoEntrenamiento, categoriaPorFecha(valor))
   return nuevos
 }
 
 // Formulario en blanco (idCategoria '' = sin asignar)
 export const DEPORTISTA_VACIO = {
   nombre: '', apellido: '', tipoDocumento: '', documento: '', fechaNacimiento: '', telefono: '', direccion: '', idCategoria: '',
+  grupoEntrenamiento: '', posicion: '',
 }
 
 // Reglas de los datos personales (HU-008): las usan el formulario y crearDeportista, con los validadores compartidos.
 // La fecha de nacimiento se valida contra `hoy` (por defecto hoyLocal(), igual que el max del input de fecha). Devuelve { campo: mensaje } solo con los campos con error.
-export function validarDatosDeportista(datos, hoy = hoyLocal()) {
-  return validarCampos(datos, {
+// El grupo de entrenamiento es obligatorio solo si la categoría que da la fecha es Cachorros o Semillero; `grupo: false` lo omite
+// (la inscripción en línea no lo pide). La posición es opcional, pero si viene debe ser una de POSICIONES.
+export const MENSAJES_GRUPO = { obligatorio: 'Selecciona el grupo de entrenamiento: mañana o tarde.' }
+export const MENSAJE_POSICION = 'Selecciona una posición de la lista.'
+export function validarDatosDeportista(datos, hoy = hoyLocal(), { grupo = true } = {}) {
+  const errores = validarCampos(datos, {
     nombre: [(v) => validarNombre(v, { obligatorio: MENSAJES.nombresObligatorio, longitud: MENSAJES.nombresLongitud, caracteres: MENSAJES.nombresCaracteres })],
     apellido: [(v) => validarNombre(v, { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres })],
     tipoDocumento: [enLista(TIPOS_DOCUMENTO_DEPORTISTA, MENSAJES.tipoDocumento)],
@@ -240,6 +264,11 @@ export function validarDatosDeportista(datos, hoy = hoyLocal()) {
     telefono: [validarTelefono],
     direccion: [validarDireccion],
   })
+  if (grupo && !errores.fechaNacimiento && categoriaRequiereGrupo(categoriaPorFecha(String(datos.fechaNacimiento).trim(), hoy)) && !GRUPOS_ENTRENAMIENTO.includes(datos.grupoEntrenamiento)) {
+    errores.grupoEntrenamiento = MENSAJES_GRUPO.obligatorio
+  }
+  if (grupo && datos.posicion && !POSICIONES.includes(datos.posicion)) errores.posicion = MENSAJE_POSICION
+  return errores
 }
 
 // Mismo número de documento, ignorando espacios y puntos en ambos lados (por si un dato llega de otra fuente)
@@ -270,6 +299,8 @@ export async function crearDeportista(datos, actor) {
     telefono: datos.telefono.trim(),
     direccion: datos.direccion.trim(),
     idCategoria: categoria ? categoria.id : null,
+    grupoEntrenamiento: grupoGuardado(datos),
+    posicion: datos.posicion || null,
     activo: true,
     acudiente: null,
     creadoPor: actor.correo ?? null,
@@ -278,6 +309,9 @@ export async function crearDeportista(datos, actor) {
   deportistas = [...deportistas, nuevo]
   return copiar(nuevo)
 }
+
+// Grupo tal como se guarda: el elegido si la categoría que da la fecha lo exige, y null en las demás (se limpia)
+const grupoGuardado = ({ fechaNacimiento, grupoEntrenamiento }) => grupoSegunCategoria(grupoEntrenamiento, categoriaPorFecha(String(fechaNacimiento).trim())) || null
 
 export const ORIGEN_INSCRIPCION_EN_LINEA = 'Inscripción en línea'
 
@@ -301,6 +335,8 @@ export async function crearDeportistaDesdeInscripcion({ deportista, contactoAcud
       telefono: deportista.telefono.trim(),
       direccion: deportista.direccion.trim(),
       idCategoria: null,
+      grupoEntrenamiento: null,
+      posicion: null,
       activo: true,
       acudiente: null,
       origen: ORIGEN_INSCRIPCION_EN_LINEA,
@@ -313,7 +349,7 @@ export async function crearDeportistaDesdeInscripcion({ deportista, contactoAcud
 }
 
 // ---- Ficha del deportista (HU-010): solo el administrador ----
-export const CAMPOS_EDITABLES = ['nombre', 'apellido', 'tipoDocumento', 'documento', 'fechaNacimiento', 'telefono', 'direccion', 'idCategoria']
+export const CAMPOS_EDITABLES = ['nombre', 'apellido', 'tipoDocumento', 'documento', 'fechaNacimiento', 'telefono', 'direccion', 'idCategoria', 'grupoEntrenamiento', 'posicion']
 
 function exigirAdministrador(actor) {
   if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para ver ni editar fichas de deportistas.')
@@ -344,6 +380,7 @@ export async function obtenerHistorial(id, actor) {
 // Valor tal como se guarda: texto sin espacios en los bordes; la categoría, un número o null ('' y null son lo mismo)
 function valorLimpio(campo, valor) {
   if (campo === 'idCategoria') return valor === undefined || valor === null || valor === '' ? null : Number(valor)
+  if (campo === 'grupoEntrenamiento' || campo === 'posicion') return String(valor ?? '').trim() || null
   return String(valor ?? '').trim()
 }
 
@@ -364,6 +401,7 @@ export async function actualizarDeportista(id, cambios, actor) {
   }
 
   const nuevos = Object.fromEntries(CAMPOS_EDITABLES.map((campo) => [campo, valorLimpio(campo, propuesto[campo])]))
+  nuevos.grupoEntrenamiento = grupoGuardado({ fechaNacimiento: nuevos.fechaNacimiento, grupoEntrenamiento: nuevos.grupoEntrenamiento })
   const detalle = CAMPOS_EDITABLES
     .filter((campo) => nuevos[campo] !== valorLimpio(campo, actual[campo]))
     .map((campo) => ({ campo, antes: valorLimpio(campo, actual[campo]), despues: nuevos[campo] }))

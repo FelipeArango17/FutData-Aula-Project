@@ -18,7 +18,7 @@ afterEach(() => {
 })
 
 const deportista = (fechaNacimiento) => ({
-  nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento, telefono: '3001234567', direccion: 'Calle 50 # 10-20',
+  nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento, telefono: '3001234567', direccion: 'Calle 50 # 10-20', grupoEntrenamiento: 'mañana',
 })
 const texto = () => ({ value: '', error: undefined, onChange: () => {} })
 

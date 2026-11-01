@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import Page from '../../components/ui/Page.jsx'
-import Card from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
-import Avatar from '../../components/ui/Avatar.jsx'
 import Field from '../../components/ui/Field.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import Paginacion from '../../components/ui/Paginacion.jsx'
-import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
-import { SIN_CATEGORIA, calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { TablaDeportistas, TarjetasDeportistas } from '../../components/deportistas/ListaDeportistas.jsx'
+import { SIN_CATEGORIA, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
 import { paginar } from '../../utils/paginacion.js'
@@ -21,12 +19,6 @@ import { paginar } from '../../utils/paginacion.js'
 // Privacidad: la lista no muestra teléfono ni dirección; esos datos solo están en la ficha.
 const FILTROS = { Todos: 'todos', Activos: 'activos', Inactivos: 'inactivos' }
 const TODAS = '' // valor del selector de categoría para «Todas las categorías»
-const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
-const textoEdad = (d) => {
-  const edad = calcularEdad(d.fechaNacimiento)
-  return `${edad} ${edad === 1 ? 'año' : 'años'}`
-}
-
 function Mensaje({ icono = 'info', children }) {
   return (
     // flex-wrap: con letra muy grande el ícono queda encima del texto en vez de quitarle el ancho y partir las palabras
@@ -113,7 +105,6 @@ export default function Deportistas() {
   const filtros = `${estado}|${categoria}|${busqueda}`
   const vista = items ? paginar(items, elegida.filtros === filtros ? elegida.pagina : 1) : null
   const nombresCategoria = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]))
-  const categoriaDe = (d) => (d.idCategoria === null ? 'Sin asignar' : nombresCategoria[d.idCategoria] ?? 'No disponible')
   // «Sin asignar» o el nombre de la categoría elegida (vacío si el filtro es «Todas las categorías»)
   const nombreFiltro = categoria === SIN_CATEGORIA ? 'Sin asignar' : nombresCategoria[categoria] ?? ''
   const filtroActivo = Boolean(busqueda) || filtro !== 'Todos' || categoria !== TODAS
@@ -150,61 +141,9 @@ export default function Deportistas() {
       </Mensaje>
     )
   } else if (conTabla) {
-    contenido = (
-      <table aria-busy={actualizando} className="w-full table-fixed border-collapse rounded-lg border bg-surface text-left text-body">
-        <caption className="sr-only">Deportistas registrados</caption>
-        <thead>
-          <tr className="border-b bg-app">
-            <th scope="col" className="p-3 text-body-medium">Deportista</th>
-            <th scope="col" className="w-[5.5rem] p-3 text-body-medium">Edad</th>
-            <th scope="col" className="w-[8.5rem] p-3 text-body-medium">Documento</th>
-            <th scope="col" className="w-[6.5rem] p-3 text-body-medium">Categoría</th>
-            <th scope="col" className="w-[7.5rem] p-3 text-body-medium">Estado</th>
-            <th scope="col" className="w-[8rem] p-3 text-body-medium"><span className="sr-only">Acciones</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {vista.items.map((d) => (
-            <tr key={d.id} className="border-b last:border-b-0">
-              <th scope="row" className="p-3 font-normal">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
-                  <span className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</span>
-                </div>
-              </th>
-              <td className="p-3">{textoEdad(d)}</td>
-              <td className="break-words p-3">{d.documento}</td>
-              <td className="break-words p-3">{categoriaDe(d)}</td>
-              <td className="p-3"><EstadoDeportista activo={d.activo} /></td>
-              <td className="p-3">
-                <Button to={`/administrador/deportistas/${d.id}`} variant="secondary" aria-label={`Ver ficha de ${nombreCompleto(d)}`}>Ver ficha</Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    )
+    contenido = <TablaDeportistas deportistas={vista.items} fotos={fotos} nombresCategoria={nombresCategoria} actualizando={actualizando} />
   } else {
-    contenido = (
-      <ul aria-busy={actualizando} aria-label="Deportistas registrados" className="grid grid-cols-1 gap-4">
-        {vista.items.map((d) => (
-          <Card as="li" key={d.id} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start gap-3">
-              <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
-              <div className="flex min-w-0 grow basis-[12rem] flex-col gap-1">
-                <h2 className="break-words text-h3">{nombreCompleto(d)}</h2>
-                <p className="break-words text-small text-secondary">{textoEdad(d)} · Documento: {d.documento}</p>
-                <p className="break-words text-small text-secondary">Categoría: {categoriaDe(d)}</p>
-                <div className="flex flex-wrap pt-1"><EstadoDeportista activo={d.activo} /></div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Button to={`/administrador/deportistas/${d.id}`} variant="secondary" aria-label={`Ver ficha de ${nombreCompleto(d)}`}>Ver ficha</Button>
-            </div>
-          </Card>
-        ))}
-      </ul>
-    )
+    contenido = <TarjetasDeportistas deportistas={vista.items} fotos={fotos} nombresCategoria={nombresCategoria} actualizando={actualizando} />
   }
 
   return (

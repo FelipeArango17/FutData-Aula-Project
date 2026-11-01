@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as utilesCategorias from './categorias.js'
 import {
-  CATEGORIAS_POR_EDAD, NOMBRES_CATEGORIAS, NOTA_CATEGORIA_POR_ANIO, textoAniosCategoria, categoriaPorFecha, edadPorAnio, idCategoriaAlGuardar, rangoAniosNacimiento,
+  CATEGORIAS_CON_GRUPO, CATEGORIAS_POR_EDAD, GRUPOS_ENTRENAMIENTO, NOMBRES_CATEGORIAS, NOTA_CATEGORIA_POR_ANIO, categoriaRequiereGrupo, grupoSegunCategoria, textoCategoriaConGrupo, categoriaPorFecha, edadPorAnio, idCategoriaAlGuardar, rangoAniosNacimiento,
 } from './categorias.js'
 
 // El reloj queda en una fecha fija: la categoría se recalcula cada año con el año actual
@@ -146,23 +147,36 @@ describe('idCategoriaAlGuardar (formulario del deportista)', () => {
   })
 })
 
-describe('textoAniosCategoria (ficha del deportista)', () => {
-  it('una categoría de un año: "Sub-11 (nacidos en 2015)"', () => {
-    expect(textoAniosCategoria('Sub-11')).toBe('nacidos en 2015')
-    expect(textoAniosCategoria('Sub-12')).toBe('nacidos en 2014')
-    expect(textoAniosCategoria('Sub-16')).toBe('nacidos en 2010')
+describe('grupo de entrenamiento (solo Cachorros y Semillero)', () => {
+  it('¿requiere grupo esta categoría? Solo Cachorros y Semillero', () => {
+    expect(CATEGORIAS_CON_GRUPO).toEqual(['Cachorros', 'Semillero'])
+    for (const nombre of ['Cachorros', 'Semillero']) expect(categoriaRequiereGrupo(nombre), nombre).toBe(true)
+    for (const nombre of ['Párvulos', 'Sub-11', 'Sub-12', 'Sub-16', 'Sub-9', null, undefined, '']) expect(categoriaRequiereGrupo(nombre), String(nombre)).toBe(false)
+    expect(GRUPOS_ENTRENAMIENTO).toEqual(['mañana', 'tarde'])
   })
 
-  it('Cachorros y Semillero reúnen dos años y Párvulos tres', () => {
-    expect(textoAniosCategoria('Semillero')).toBe('nacidos en 2016 y 2017')
-    expect(textoAniosCategoria('Cachorros')).toBe('nacidos en 2018 y 2019')
-    expect(textoAniosCategoria('Párvulos')).toBe('nacidos de 2020 a 2022')
+  it('al cambiar de categoría el grupo se conserva si la nueva lo exige y se limpia si no', () => {
+    expect(grupoSegunCategoria('mañana', 'Semillero')).toBe('mañana')
+    expect(grupoSegunCategoria('tarde', 'Cachorros')).toBe('tarde')
+    expect(grupoSegunCategoria(undefined, 'Cachorros')).toBe('')
+    expect(grupoSegunCategoria('mañana', 'Sub-12')).toBe('')
+    expect(grupoSegunCategoria('tarde', 'Párvulos')).toBe('')
+    expect(grupoSegunCategoria('tarde', null)).toBe('')
   })
 
-  it('cambia con el año y devuelve null si la categoría no existe', () => {
-    expect(textoAniosCategoria('Sub-11', '2027-01-15')).toBe('nacidos en 2016')
-    expect(textoAniosCategoria('Semillero', '2027-01-15')).toBe('nacidos en 2017 y 2018')
-    for (const noExiste of ['Sub-18', 'Sub-8', 'Sub-9', 'Sub-10']) expect(textoAniosCategoria(noExiste), noExiste).toBeNull()
+  it('el texto de la categoría lleva el grupo solo en Cachorros y Semillero: "Semillero · mañana"', () => {
+    expect(textoCategoriaConGrupo('Semillero', 'mañana')).toBe('Semillero · mañana')
+    expect(textoCategoriaConGrupo('Cachorros', 'tarde')).toBe('Cachorros · tarde')
+    expect(textoCategoriaConGrupo('Cachorros', null)).toBe('Cachorros')
+    expect(textoCategoriaConGrupo('Sub-12', 'mañana')).toBe('Sub-12')
+    expect(textoCategoriaConGrupo(null, 'mañana')).toBe('Sin asignar')
+  })
+})
+
+describe('textos de categoría', () => {
+  it('el nombre de la categoría va solo, sin "(nacidos en …)"', () => {
+    expect(textoCategoriaConGrupo('Sub-12', null)).not.toMatch(/nacidos/)
+    expect('textoAniosCategoria' in utilesCategorias).toBe(false)
   })
 
   it('la nota de las listas explica que la categoría sale del año', () => {

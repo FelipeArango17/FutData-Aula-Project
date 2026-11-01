@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
-import { ETIQUETAS_TIPO_DOCUMENTO_JUGADOR, TIPOS_DOCUMENTO_JUGADOR, validarDatosDocumento } from '../../services/documentosService.js'
+import { validarDatosDocumento } from '../../services/documentosService.js'
+import { DESCRIPCIONES_TIPO_DOCUMENTO, TIPOS_DOCUMENTO_CLUB } from '../../utils/documentosClub.js'
 import { hoyLocal } from '../../utils/fechas.js'
 
 // Subir un documento del deportista (el administrador lo sube por el acudiente cuando este no puede). No guarda por sí mismo:
@@ -55,13 +56,18 @@ export default function FormularioDocumento({ onSubir }) {
   return (
     <form ref={formRef} noValidate onSubmit={enviar} aria-busy={enviando} className="flex flex-col gap-4">
       <p className="text-small text-secondary">* Campo obligatorio</p>
-      <Field
-        as="select" label="Tipo de documento" id="documento-tipo" requerido
-        value={valores.tipo} error={errores.tipo} onChange={(e) => cambiar('tipo', e.target.value)}
-      >
-        <option value="">Selecciona el tipo de documento</option>
-        {TIPOS_DOCUMENTO_JUGADOR.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO_DOCUMENTO_JUGADOR[t]}</option>)}
-      </Field>
+      <div className="flex flex-col gap-1">
+        <Field
+          as="select" label="Tipo de documento" id="documento-tipo" requerido describedBy="documento-tipo-ayuda"
+          value={valores.tipo} error={errores.tipo} onChange={(e) => cambiar('tipo', e.target.value)}
+        >
+          <option value="">Selecciona el tipo de documento</option>
+          {TIPOS_DOCUMENTO_CLUB.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+        </Field>
+        <p id="documento-tipo-ayuda" className="break-words text-small text-secondary">
+          {valores.tipo ? DESCRIPCIONES_TIPO_DOCUMENTO[valores.tipo] : 'Elige el tipo para ver qué documento se espera.'}
+        </p>
+      </div>
       <Field
         label="Archivo (PDF, JPG o PNG, máximo 5 MB)" id="documento-archivo" type="file" requerido
         accept=".pdf,application/pdf,image/jpeg,image/png"

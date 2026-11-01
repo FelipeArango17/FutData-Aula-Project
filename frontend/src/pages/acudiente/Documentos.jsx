@@ -5,12 +5,13 @@ import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
 
+// Tipos del club (utils/documentosClub.js), con el estado de ejemplo de cada jugador (mismos datos que documentosService).
 const documentos = [
-  { nombre: 'Registro civil', detalle: 'Santiago Ríos · Sin cargar', estado: 'Pendiente', tone: 'warning', accion: 'Subir documento', filtro: 'Pendientes' },
-  { nombre: 'Ficha médica', detalle: 'Santiago Ríos · Subido el 20 oct.', estado: 'En revisión', tone: 'warning', accion: 'Ver documento', filtro: 'Pendientes' },
-  { nombre: 'Autorización de padres', detalle: 'Santiago Ríos · Vigente hasta 12 oct. 2027', estado: 'Aprobado', tone: 'success', accion: 'Ver documento', filtro: '' },
-  { nombre: 'Ficha médica', detalle: 'Valeria Ríos · Vence el 05 nov.', estado: 'Por vencer', tone: 'warning', accion: 'Subir nueva', filtro: 'Por vencer' },
-  { nombre: 'Registro civil', detalle: 'Valeria Ríos · Espera una nueva carga', estado: 'Rechazado', tone: 'danger', accion: 'Subir de nuevo', filtro: 'Pendientes' },
+  { nombre: 'Documento de identidad', detalle: 'Santiago Ríos · Obligatorio', estado: 'Aprobado', tone: 'success', accion: 'Ver documento', filtro: '' },
+  { nombre: 'Certificado de estudio', detalle: 'Santiago Ríos · Obligatorio · Subido el 20 oct.', estado: 'En revisión', tone: 'warning', accion: 'Ver documento', filtro: 'Pendientes' },
+  { nombre: 'Habeas Data', detalle: 'Santiago Ríos · Obligatorio · Sin cargar', estado: 'Pendiente', tone: 'warning', accion: 'Subir documento', filtro: 'Pendientes' },
+  { nombre: 'Certificado de estudio', detalle: 'Valeria Ríos · Obligatorio · Vence el 05 nov.', estado: 'Por vencer', tone: 'warning', accion: 'Subir nuevo', filtro: 'Por vencer' },
+  { nombre: 'Documento de identidad', detalle: 'Valeria Ríos · Obligatorio · Espera una nueva carga', estado: 'Rechazado', tone: 'danger', accion: 'Subir de nuevo', filtro: 'Pendientes' },
 ]
 const filtros = ['Todos', 'Pendientes', 'Por vencer']
 

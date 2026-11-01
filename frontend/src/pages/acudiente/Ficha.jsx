@@ -7,15 +7,16 @@ import Button from '../../components/ui/Button.jsx'
 // Datos de ejemplo de la ficha (solo Santiago está en el diseño).
 const fichas = {
   santiago: {
-    nombre: 'Santiago Ríos', categoria: 'Semillero · Prado FC',
+    nombre: 'Santiago Ríos', categoria: 'Cachorros · Prado FC',
     datos: [
       ['Nombres', 'Santiago'], ['Apellidos', 'Ríos Zapata'], ['Documento de identidad', '1.023.456.789'],
-      ['Fecha de nacimiento', '14 mar. 2016'], ['Categoría', 'Semillero'], ['Posición preferida', 'Volante'],
+      ['Fecha de nacimiento', '14 mar. 2018'], ['Categoría', 'Cachorros'], ['Grupo de entrenamiento', 'Mañana'], ['Posición', 'Delantero'],
       ['EPS', 'Sura'], ['Talla de uniforme', 'M'],
     ],
     documentos: [
-      ['Registro civil o T.I.', 'warning', 'Pendiente'], ['Ficha médica', 'warning', 'En revisión'],
-      ['Autorización de padres', 'success', 'Aprobado'],
+      ['Documento de identidad', 'success', 'Aprobado'], ['Certificado de estudio', 'warning', 'Pendiente'],
+      ['Formulario de inscripción', 'success', 'Aprobado'],
+      ['Habeas Data', 'neutral', 'Sin cargar'],
     ],
   },
 }

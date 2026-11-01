@@ -38,7 +38,7 @@ export const INSCRIPCION_VACIA = {
 // acudiente y el consentimiento, de los validadores compartidos. Devuelve { campo: mensaje } solo con los campos con error.
 export function validarDatosInscripcion(datos) {
   return {
-    ...validarDatosDeportista(datos),
+    ...validarDatosDeportista(datos, undefined, { grupo: false }),
     ...validarCampos(datos, {
       acudienteNombre: [(v) => validarNombre(v, { obligatorio: MENSAJES.nombresObligatorio, longitud: MENSAJES.nombresLongitud, caracteres: MENSAJES.nombresCaracteres })],
       acudienteApellido: [(v) => validarNombre(v, { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres })],

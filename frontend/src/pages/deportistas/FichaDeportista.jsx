@@ -8,12 +8,12 @@ import HistorialCambios from '../../components/ui/HistorialCambios.jsx'
 import Icon from '../../components/Icon.jsx'
 import DocumentosDeportista from '../../components/deportistas/DocumentosDeportista.jsx'
 import SubidaFoto from '../../components/ui/SubidaFoto.jsx'
-import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
+import DatosDeportista from '../../components/deportistas/DatosDeportista.jsx'
 import FormularioDeportista from '../../components/deportistas/FormularioDeportista.jsx'
 import { useActor } from '../../context/useActor.js'
-import { actualizarDeportista, calcularEdad, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
+import { actualizarDeportista, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
 import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
-import { textoAniosCategoria } from '../../utils/categorias.js'
+import { ETIQUETA_GRUPO } from '../../utils/categorias.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
 
 // Ficha del deportista (HU-010, tarea 319): lectura y edición. Ruta /administrador/deportistas/:id. Solo el administrador.
@@ -26,6 +26,7 @@ const VOLVER = '/administrador/deportistas'
 const ETIQUETAS = {
   nombre: 'Nombres', apellido: 'Apellidos', tipoDocumento: 'Tipo de documento', documento: 'Número de documento',
   fechaNacimiento: 'Fecha de nacimiento', telefono: 'Teléfono de contacto', direccion: 'Dirección', idCategoria: 'Categoría',
+  grupoEntrenamiento: ETIQUETA_GRUPO, posicion: 'Posición',
 }
 
 function Mensaje({ icono = 'info', rol, children }) {
@@ -33,15 +34,6 @@ function Mensaje({ icono = 'info', rol, children }) {
     <div role={rol} className="flex items-start gap-3 rounded-lg border bg-surface p-4">
       <Icon name={icono} className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
       <div className="flex min-w-0 flex-1 flex-col gap-3 break-words text-body">{children}</div>
-    </div>
-  )
-}
-
-function Dato({ etiqueta, children }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-small text-secondary">{etiqueta}</dt>
-      <dd className="break-words text-body">{children}</dd>
     </div>
   )
 }
@@ -175,6 +167,7 @@ function Ficha({ id }) {
       nombre: deportista.nombre, apellido: deportista.apellido, tipoDocumento: deportista.tipoDocumento, documento: deportista.documento,
       fechaNacimiento: deportista.fechaNacimiento, telefono: deportista.telefono, direccion: deportista.direccion,
       idCategoria: deportista.idCategoria === null ? '' : String(deportista.idCategoria),
+      grupoEntrenamiento: deportista.grupoEntrenamiento ?? '', posicion: deportista.posicion ?? '',
     }
     contenido = (
       <Card className="w-full max-w-2xl">
@@ -182,7 +175,6 @@ function Ficha({ id }) {
       </Card>
     )
   } else {
-    const edad = calcularEdad(deportista.fechaNacimiento)
     const registro = deportista.creadoPor && deportista.creadoEn ? partesMomento(deportista.creadoEn) : null
     contenido = (
       <>
@@ -192,28 +184,7 @@ function Ficha({ id }) {
         </Card>
         <Card aria-labelledby="datos-personales" className="flex w-full max-w-2xl flex-col gap-4">
           <h2 id="datos-personales" className="break-words text-h3">Datos personales</h2>
-          <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
-            <Dato etiqueta="Tipo de documento">{deportista.tipoDocumento}</Dato>
-            <Dato etiqueta="Número de documento">{deportista.documento}</Dato>
-            <Dato etiqueta="Fecha de nacimiento">{fechaLargaConAnio(deportista.fechaNacimiento)}</Dato>
-            <Dato etiqueta="Edad">{edad} {edad === 1 ? 'año' : 'años'}</Dato>
-            <Dato etiqueta="Teléfono de contacto">{deportista.telefono}</Dato>
-            <Dato etiqueta="Dirección">{deportista.direccion}</Dato>
-            <Dato etiqueta="Categoría">
-              {nombreCategoria(deportista.idCategoria) ?? 'Sin asignar'}
-              {textoAniosCategoria(nombreCategoria(deportista.idCategoria)) && ` (${textoAniosCategoria(nombreCategoria(deportista.idCategoria))})`}
-            </Dato>
-            <Dato etiqueta="Estado"><EstadoDeportista activo={deportista.activo} /></Dato>
-            {/* Solo los inscritos en línea traen origen y contacto del acudiente (los registros del administrador no) */}
-            {deportista.origen && <Dato etiqueta="Origen">{deportista.origen}</Dato>}
-            {deportista.contactoAcudiente && (
-              <Dato etiqueta="Contacto del acudiente">
-                {deportista.contactoAcudiente.nombre} {deportista.contactoAcudiente.apellido}
-                <span className="block">{deportista.contactoAcudiente.correo}</span>
-                <span className="block">{deportista.contactoAcudiente.telefono}</span>
-              </Dato>
-            )}
-          </dl>
+          <DatosDeportista deportista={deportista} categoria={nombreCategoria(deportista.idCategoria)} />
           {registro && (
             <p className="break-words text-small text-secondary">
               Registrado por {deportista.creadoPor} el {fechaLargaConAnio(registro.fecha)} a las {formatHora(registro.hora)}
@@ -224,7 +195,7 @@ function Ficha({ id }) {
             <Button to={VOLVER} variant="secondary">Volver a deportistas</Button>
           </div>
         </Card>
-        <DocumentosDeportista idDeportista={deportista.id} actor={actor} />
+        <DocumentosDeportista idDeportista={deportista.id} actor={actor} tieneFoto={Boolean(foto)} />
         <div className="w-full max-w-2xl">
           <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
         </div>

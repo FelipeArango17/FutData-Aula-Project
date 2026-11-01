@@ -6,9 +6,9 @@ import Avatar from '../../components/ui/Avatar.jsx'
 
 const jugadores = [
   {
-    id: 'santiago', nombre: 'Santiago Ríos', categoria: 'Semillero · Prado FC', asistencia: 'Asistencia 90 %',
+    id: 'santiago', nombre: 'Santiago Ríos', categoria: 'Cachorros · Prado FC', asistencia: 'Asistencia 90 %',
     pago: { tone: 'warning', texto: 'Pago pendiente' }, docs: { tone: 'warning', texto: 'Faltan documentos' },
-    proximo: 'Sábado 8:30 a. m. · Horizontes', accion: { texto: 'Pagar ahora', to: '/acudiente/pagos' },
+    proximo: 'Sábado 9:00 a. m. · Horizontes', accion: { texto: 'Pagar ahora', to: '/acudiente/pagos' },
   },
   {
     id: 'valeria', nombre: 'Valeria Ríos', categoria: 'Semillero · Prado FC', asistencia: 'Asistencia 94 %',

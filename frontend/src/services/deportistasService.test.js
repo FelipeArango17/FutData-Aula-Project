@@ -112,7 +112,7 @@ describe('asignarCategoria', () => {
   // Nace en 2017: le corresponde Semillero (id 3). Se crea sin categoría para poder asignársela.
   const sinCategoria = () => resolver(servicio.crearDeportista({
     nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001',
-    fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '',
+    fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '', grupoEntrenamiento: 'mañana',
   }, admin))
 
   it('asigna la categoría que corresponde al año de nacimiento y queda guardada (ids como texto también sirven)', async () => {
@@ -218,6 +218,7 @@ describe('crearDeportista', () => {
     telefono: '3000000099',
     direccion: 'Calle 50 # 10-20, Barrio Ejemplo',
     idCategoria: '',
+    grupoEntrenamiento: 'mañana',
     ...extra,
   })
 
@@ -226,6 +227,7 @@ describe('crearDeportista', () => {
     expect(r).toMatchObject({
       id: 22, nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001',
       fechaNacimiento: '2017-05-10', telefono: '3000000099', idCategoria: null, activo: true, acudiente: null, creadoPor: 'administrador@pradofc.co',
+      grupoEntrenamiento: 'mañana', posicion: null,
     })
     expect(typeof r.creadoEn).toBe('string')
     expect(Number.isNaN(Date.parse(r.creadoEn))).toBe(false)
@@ -425,6 +427,7 @@ describe('actualizarDeportista', () => {
       { campo: 'telefono', antes: '3000000001', despues: '3000000555' },
       { campo: 'direccion', antes: 'Calle 11 # 21-11, Barrio Ejemplo', despues: 'Carrera 7 # 8-9, Barrio Ejemplo' },
       { campo: 'idCategoria', antes: 2, despues: 4 },
+      { campo: 'grupoEntrenamiento', antes: 'mañana', despues: null }, // Sub-11 no tiene grupo: se limpia
     ])
     expect((await guardado(1)).deportista.telefono).toBe('3000000555')
     // y ahora aparece en el grupo nuevo
@@ -538,7 +541,7 @@ describe('actualizarDeportista', () => {
   })
 
   it('un deportista recién creado también se puede editar y arranca con historial vacío', async () => {
-    const nuevo = await resolver(servicio.crearDeportista({ nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001', fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20', idCategoria: '' }, admin))
+    const nuevo = await resolver(servicio.crearDeportista({ nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001', fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20', idCategoria: '', grupoEntrenamiento: 'mañana' }, admin))
     expect((await guardado(nuevo.id)).historial).toEqual([])
     const r = await resolver(servicio.actualizarDeportista(nuevo.id, { idCategoria: 3 }, admin))
     expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: null, despues: 3 }])
@@ -549,7 +552,7 @@ describe('listarDeportistas: filtro por categoría y «Sin asignar» (HU-010)', 
   const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
   const nuevoSinCategoria = () => resolver(servicio.crearDeportista({
     nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001',
-    fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '',
+    fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '', grupoEntrenamiento: 'mañana',
   }, admin))
 
   it('sin deportistas sin grupo, «Sin asignar» devuelve una lista vacía', async () => {
@@ -590,5 +593,59 @@ describe('listarDeportistas: filtro por categoría y «Sin asignar» (HU-010)', 
 
   it('una categoría vacía («Todas») no filtra', async () => {
     expect(await resolver(servicio.listarDeportistas({ idCategoria: '' }))).toHaveLength(21)
+  })
+})
+
+describe('grupo de entrenamiento y posición (solo en el servicio de ejemplo)', () => {
+  const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
+  const nuevo = (extra = {}) => ({
+    nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001', fechaNacimiento: '2017-05-10',
+    telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '', grupoEntrenamiento: 'tarde', posicion: '', ...extra,
+  })
+
+  it('los de ejemplo de Cachorros y Semillero traen grupo (mezcla de mañana y tarde) y los demás no', async () => {
+    const todos = await resolver(servicio.listarDeportistas())
+    const categorias = Object.fromEntries((await resolver(servicio.listarCategorias())).map((c) => [c.id, c.nombre]))
+    const conGrupo = todos.filter((x) => ['Cachorros', 'Semillero'].includes(categorias[x.idCategoria]))
+    expect(conGrupo.length).toBeGreaterThan(0)
+    expect(conGrupo.every((x) => ['mañana', 'tarde'].includes(x.grupoEntrenamiento))).toBe(true)
+    expect(new Set(conGrupo.map((x) => x.grupoEntrenamiento))).toEqual(new Set(['mañana', 'tarde']))
+    expect(todos.filter((x) => !conGrupo.includes(x)).every((x) => x.grupoEntrenamiento === null)).toBe(true)
+  })
+
+  it('las posiciones de ejemplo son de la lista, y algunos deportistas quedan sin definir', async () => {
+    const todos = await resolver(servicio.listarDeportistas())
+    expect(servicio.POSICIONES).toEqual(['Portero', 'Defensor', 'Mediocampista', 'Delantero'])
+    for (const x of todos) expect(x.posicion === null || servicio.POSICIONES.includes(x.posicion), x.nombre).toBe(true)
+    expect(todos.some((x) => x.posicion === null)).toBe(true)
+    expect(new Set(todos.map((x) => x.posicion).filter(Boolean)).size).toBe(4)
+  })
+
+  it('crear en Semillero sin grupo falla con VALIDACION; con grupo lo guarda, y la posición vacía queda en null', async () => {
+    const falla = await resolver(servicio.crearDeportista(nuevo({ grupoEntrenamiento: '' }), admin)).catch((e) => e)
+    expect(falla).toMatchObject({ codigo: 'VALIDACION', errores: { grupoEntrenamiento: 'Selecciona el grupo de entrenamiento: mañana o tarde.' } })
+    const r = await resolver(servicio.crearDeportista(nuevo(), admin))
+    expect(r).toMatchObject({ grupoEntrenamiento: 'tarde', posicion: null })
+  })
+
+  it('en una categoría sin grupo el grupo no se guarda aunque llegue (se limpia)', async () => {
+    const r = await resolver(servicio.crearDeportista(nuevo({ fechaNacimiento: '2012-05-10', grupoEntrenamiento: 'mañana', posicion: 'Portero' }), admin))
+    expect(r).toMatchObject({ grupoEntrenamiento: null, posicion: 'Portero' })
+  })
+
+  it('editar: cambiar la fecha a una categoría sin grupo limpia el grupo y queda en el historial; cambiar de grupo también', async () => {
+    const a = await resolver(servicio.actualizarDeportista(2, { grupoEntrenamiento: 'mañana', posicion: 'Delantero' }, admin))
+    expect(a.deportista).toMatchObject({ grupoEntrenamiento: 'mañana', posicion: 'Delantero' })
+    expect(a.historial.at(-1).cambios).toEqual([
+      { campo: 'grupoEntrenamiento', antes: 'tarde', despues: 'mañana' },
+      { campo: 'posicion', antes: 'Mediocampista', despues: 'Delantero' },
+    ])
+    const b = await resolver(servicio.actualizarDeportista(2, { fechaNacimiento: '2012-03-01', idCategoria: '7' }, admin))
+    expect(b.deportista.grupoEntrenamiento).toBeNull()
+  })
+
+  it('editar un Cachorros/Semillero sin grupo falla; una posición fuera de la lista también', async () => {
+    await expect(resolver(servicio.actualizarDeportista(2, { grupoEntrenamiento: '' }, admin))).rejects.toMatchObject({ codigo: 'VALIDACION', errores: { grupoEntrenamiento: expect.any(String) } })
+    await expect(resolver(servicio.actualizarDeportista(2, { posicion: 'Árbitro' }, admin))).rejects.toMatchObject({ codigo: 'VALIDACION', errores: { posicion: expect.any(String) } })
   })
 })
