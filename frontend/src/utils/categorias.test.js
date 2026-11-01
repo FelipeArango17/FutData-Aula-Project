@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CATEGORIAS_POR_EDAD, categoriaPorFecha, edadPorAnio, rangoAniosNacimiento } from './categorias.js'
+import { CATEGORIAS_POR_EDAD, categoriaPorFecha, edadPorAnio, idCategoriaAlGuardar, rangoAniosNacimiento } from './categorias.js'
 
 // El reloj queda en una fecha fija: la categoría se recalcula cada año con el año actual
 beforeEach(() => {
@@ -68,5 +68,39 @@ describe('rangoAniosNacimiento', () => {
   it('con el reloj en 2027 pasa a 2011–2019', () => {
     vi.setSystemTime(new Date(2027, 0, 10, 12, 0))
     expect(rangoAniosNacimiento()).toEqual({ anioMinimo: 2011, anioMaximo: 2019 })
+  })
+})
+
+describe('idCategoriaAlGuardar (formulario del deportista)', () => {
+  const categorias = [{ id: 1, nombre: 'Sub-8' }, { id: 2, nombre: 'Sub-10' }, { id: 3, nombre: 'Sub-12' }]
+
+  it('deportista nuevo: sale de la categoría que da la fecha, como texto', () => {
+    const vacio = { fechaNacimiento: '', idCategoria: '' }
+    expect(idCategoriaAlGuardar('2016-05-10', vacio, categorias)).toBe('2')
+    expect(idCategoriaAlGuardar('2018-01-01', vacio, categorias)).toBe('1')
+  })
+
+  it('sin categoría para esa fecha, o categoría que no está en la lista, queda sin asignar', () => {
+    expect(idCategoriaAlGuardar('2019-01-01', { fechaNacimiento: '', idCategoria: '' }, categorias)).toBe('')
+    expect(idCategoriaAlGuardar('2012-01-01', { fechaNacimiento: '', idCategoria: '' }, categorias)).toBe('') // Sub-14 no está en la lista
+  })
+
+  it('al editar con la misma fecha conserva la categoría que ya tenía, aunque no sea la de la fecha', () => {
+    const inicial = { fechaNacimiento: '2017-10-25', idCategoria: '1' } // 2017 sería Sub-10, pero tenía Sub-8
+    expect(idCategoriaAlGuardar('2017-10-25', inicial, categorias)).toBe('1')
+    expect(idCategoriaAlGuardar('2017-10-25', { ...inicial, idCategoria: 1 }, categorias)).toBe('1')
+  })
+
+  it('al editar sin categoría y con la misma fecha sigue sin categoría', () => {
+    expect(idCategoriaAlGuardar('2017-10-25', { fechaNacimiento: '2017-10-25', idCategoria: '' }, categorias)).toBe('')
+    expect(idCategoriaAlGuardar('2017-10-25', { fechaNacimiento: '2017-10-25', idCategoria: null }, categorias)).toBe('')
+  })
+
+  it('al editar con otra fecha se recalcula, y cambia con el reloj', () => {
+    const inicial = { fechaNacimiento: '2018-03-14', idCategoria: '1' }
+    expect(idCategoriaAlGuardar('2015-03-14', inicial, categorias)).toBe('3')
+    expect(idCategoriaAlGuardar('2018-03-14', { ...inicial, fechaNacimiento: '2017-01-01' }, categorias)).toBe('1')
+    vi.setSystemTime(new Date(2027, 0, 10, 12, 0))
+    expect(idCategoriaAlGuardar('2018-03-14', { fechaNacimiento: '', idCategoria: '' }, categorias)).toBe('2')
   })
 })

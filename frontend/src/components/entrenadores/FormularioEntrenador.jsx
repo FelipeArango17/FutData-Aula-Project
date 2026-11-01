@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import Button from '../ui/Button.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
+import CampoFechaNacimiento from '../ui/CampoFechaNacimiento.jsx'
 import Field from '../ui/Field.jsx'
 import GrupoCasillas from '../ui/GrupoCasillas.jsx'
 import { CATEGORIAS, ESPECIALIDADES, ETIQUETAS_TIPO_DOCUMENTO, TIPOS_DOCUMENTO } from '../../services/entrenadoresService.js'
@@ -51,6 +52,7 @@ export default function FormularioEntrenador({
   const [reasignar, setReasignar] = useState(null) // { mensaje } mientras se pide confirmar la reasignación
   const formRef = useRef(null)
   const inactivo = inicial.activo === false
+  const hoy = hoyLocal()
 
   // Tras un envío con errores, el foco va al primer campo inválido
   useEffect(() => {
@@ -165,7 +167,16 @@ export default function FormularioEntrenador({
           {TIPOS_DOCUMENTO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO_DOCUMENTO[t]}</option>)}
         </Field>
         <Field label="Número de documento" id="documento" requerido inputMode={valores.tipoDocumento === 'PASAPORTE' ? 'text' : 'numeric'} autoComplete="off" {...texto('documento')} />
-        <Field label="Fecha de nacimiento (18 años o más)" id="fechaNacimiento" type="date" requerido max={restarAnios(hoyLocal(), 18)} {...texto('fechaNacimiento')} />
+        <CampoFechaNacimiento
+          label="Fecha de nacimiento (18 años o más)"
+          id="fechaNacimiento"
+          requerido
+          anioMinimo={Number(hoy.slice(0, 4)) - 100}
+          anioMaximo={Number(restarAnios(hoy, 18).slice(0, 4))}
+          value={valores.fechaNacimiento}
+          error={errores.fechaNacimiento}
+          onChange={(valor) => cambiar('fechaNacimiento', valor)}
+        />
         <Field label="Teléfono" id="telefono" requerido type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
         <Field label="Correo electrónico" id="correo" requerido type="email" autoComplete="off" {...texto('correo')} />
         <Field label="Especialidad" id="especialidad" requerido list="especialidades" autoComplete="off" {...texto('especialidad')} />

@@ -4,7 +4,7 @@ import CamposDeportista from './deportistas/CamposDeportista.jsx'
 import FormularioEntrenador from './entrenadores/FormularioEntrenador.jsx'
 import FormularioEntrenamiento from './entrenamientos/FormularioEntrenamiento.jsx'
 import FormularioUsuario from './usuarios/FormularioUsuario.jsx'
-import { hoyLocal } from '../utils/fechas.js'
+import { hoyLocal, restarAnios } from '../utils/fechas.js'
 
 const sin = async () => {}
 const texto = () => ({ value: '', error: undefined, onChange: () => {} })
@@ -17,8 +17,8 @@ describe('leyenda "* Campo obligatorio" y asteriscos', () => {
       <FormularioEntrenador inicial={vacio} detectarDuplicado={async () => null} onGuardar={sin} onAsignarCategorias={sin} onTerminar={() => {}} onCancelar={() => {}} />,
     )
     expect(html).toContain(LEYENDA)
-    // 8 obligatorios (nombre, apellido, tipo, documento, fecha, teléfono, correo, especialidad)
-    expect(html.match(/aria-required="true"/g)).toHaveLength(8)
+    // 10: nombre, apellido, tipo, documento, día, mes y año, teléfono, correo, especialidad
+    expect(html.match(/aria-required="true"/g)).toHaveLength(10)
     expect(html).toMatch(/Dirección \(opcional\)<\/label>/)
     expect(html).toMatch(/Horario de trabajo \(opcional\)<\/label>/)
   })
@@ -49,14 +49,16 @@ describe('leyenda "* Campo obligatorio" y asteriscos', () => {
 })
 
 describe('límites de las fechas en los formularios', () => {
-  it('entrenador: max de la fecha de nacimiento es hoy menos 18 años', () => {
+  it('entrenador: los años de la fecha de nacimiento van de hace 18 años a hace 100', () => {
     const vacio = { nombre: '', apellido: '', tipoDocumento: '', documento: '', fechaNacimiento: '', telefono: '', correo: '', especialidad: '', categorias: [], horarioTrabajo: '', direccion: '' }
     const html = renderToStaticMarkup(
       <FormularioEntrenador inicial={vacio} detectarDuplicado={async () => null} onGuardar={sin} onAsignarCategorias={sin} onTerminar={() => {}} onCancelar={() => {}} />,
     )
-    const [anio, resto] = [Number(hoyLocal().slice(0, 4)) - 18, hoyLocal().slice(4)]
-    const esperado = resto === '-02-29' ? `${anio}-02-28` : `${anio}${resto}`
-    expect(html).toMatch(new RegExp(`id="fechaNacimiento"[^>]*max="${esperado}"|max="${esperado}"[^>]*id="fechaNacimiento"`))
+    const anios = [...html.match(/<select id="fechaNacimiento-anio".*?<\/select>/s)[0].matchAll(/<option value="(\d{4})"/g)].map((m) => Number(m[1]))
+    const hoy = Number(hoyLocal().slice(0, 4))
+    expect(anios[0]).toBe(Number(restarAnios(hoyLocal(), 18).slice(0, 4)))
+    expect(anios.at(-1)).toBe(hoy - 100)
+    expect(anios).toHaveLength(83)
   })
 
   it('entrenamiento nuevo: min de la fecha es hoy; al editar uno pasado no hay min', () => {

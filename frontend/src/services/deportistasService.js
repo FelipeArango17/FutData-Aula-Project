@@ -14,8 +14,12 @@
 //     activo           boolean
 //     acudiente        correo de la cuenta del acudiente, o null (lo usará el estado de cuenta)
 //
-// Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED' |
-//   'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }) | 'SIN_CAMBIOS'.
+// Errores: Error con `codigo` -> 'CATEGORIA_NO_EXISTE' | 'CATEGORIA_NO_VIGENTE' | 'CATEGORIA_NO_CORRESPONDE_EDAD' |
+//   'DEPORTISTA_NO_EXISTE' | 'ERROR_DE_RED' | 'SIN_PERMISO' | 'DOCUMENTO_DUPLICADO' | 'VALIDACION' (con `errores`: { campo: mensaje }) |
+//   'SIN_CAMBIOS'.
+//   CATEGORIA_NO_CORRESPONDE_EDAD: la categoría existe y está vigente, pero no es la que da categoriaPorFecha(fechaNacimiento)
+//   (utils/categorias.js, regla provisional por año de nacimiento). Se comprueba DESPUÉS de CATEGORIA_NO_EXISTE / CATEGORIA_NO_VIGENTE.
+//   La regla la aplican asignarCategoria, crearDeportista y actualizarDeportista (en esta última solo si cambió la categoría o la fecha).
 //
 // PENDIENTE: confirmar con el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md):
 // - D3: el deportista guarda su categoría (`idCategoria`, no se calcula por edad). Falta definir edad_minima/edad_maxima
@@ -37,6 +41,7 @@
 //   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
 // - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
+import { categoriaPorFecha } from '../utils/categorias.js'
 import { hoyLocal } from '../utils/fechas.js'
 import {
   MENSAJES, enLista, validarCampos, validarAnioNacimientoDeportista, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
@@ -65,28 +70,28 @@ const d = (id, nombre, apellido, documento, fechaNacimiento, idCategoria, activo
   idCategoria, activo, acudiente,
 })
 
-// Sub-16 (id 5) queda sin deportistas a propósito para probar el estado vacío.
+// Cada deportista está en la categoría que da su año de nacimiento (utils/categorias.js, con el "hoy" 2026-10-22).
 let deportistas = [
   d(1, 'Santiago', 'Ríos Demo', '1100000001', '2018-03-14', 1, true, ACUDIENTE_DEMO),
-  d(2, 'Valeria', 'Ríos Demo', '1100000002', '2017-11-02', 1, true, ACUDIENTE_DEMO),
+  d(2, 'Valeria', 'Ríos Demo', '1100000002', '2017-11-02', 2, true, ACUDIENTE_DEMO),
   { ...d(3, 'Emilio', 'Pardo Ejemplo', '1100000003', '2018-07-21', 1), creadoPor: 'administrador@pradofc.co', creadoEn: '2026-09-14T15:20:00.000Z' },
   d(4, 'Isabella', 'Quintero Ejemplo', '1100000004', '2018-01-30', 1),
-  d(5, 'Thiago', 'Marín Ejemplo', '1100000005', '2017-10-25', 1, false),
+  d(5, 'Thiago', 'Marín Ejemplo', '1100000005', '2017-10-25', 2, false),
   d(6, 'Mateo', 'Vélez Demo', '1100000006', '2016-05-09', 2),
   d(7, 'Juan Pablo', 'Cano Demo', '1100000007', '2016-09-17', 2),
   d(8, 'Samuel', 'Londoño Demo', '1100000008', '2016-02-12', 2),
-  d(9, 'Sofía', 'Henao Ejemplo', '1100000009', '2015-12-04', 2),
+  d(9, 'Sofía', 'Henao Ejemplo', '1100000009', '2015-12-04', 3),
   d(10, 'Dylan', 'Restrepo Ejemplo', '1100000010', '2016-06-28', 2, false),
   d(11, 'Emmanuel', 'Arias Demo', '1100000011', '2014-08-19', 3),
   d(12, 'Tomás', 'Giraldo Demo', '1100000012', '2014-04-03', 3),
   d(13, 'Nicolás', 'Mejía Demo', '1100000013', '2014-10-11', 3),
   d(14, 'Mariana', 'Zapata Ejemplo', '1100000014', '2014-01-26', 3),
   d(15, 'Juan Sebastián Alejandro', 'Hernández de la Cruz Ejemplo', '1100000015', '2014-12-08', 3),
-  d(16, 'Luciana', 'Osorio Ejemplo', '1100000016', '2013-11-30', 3, false),
+  d(16, 'Luciana', 'Osorio Ejemplo', '1100000016', '2013-11-30', 4, false),
   d(17, 'Andrés', 'Cardona Ejemplo', '1100000017', '2012-06-15', 4),
   d(18, 'Camila', 'Betancur Ejemplo', '1100000018', '2012-09-22', 4),
   d(19, 'Daniel', 'Cifuentes Ejemplo', '1100000019', '2012-03-07', 4),
-  d(20, 'Gabriela', 'Montoya Ejemplo', '1100000020', '2011-12-19', 4),
+  d(20, 'Gabriela', 'Montoya Ejemplo', '1100000020', '2011-12-19', 5),
   d(21, 'Esteban', 'Ocampo Ejemplo', '1100000021', '2012-05-01', 4),
 ]
 let siguienteId = deportistas.length + 1
@@ -180,12 +185,20 @@ function categoriaVigente(idCategoria) {
   return categoria
 }
 
+// La categoría debe ser la que corresponde al año de nacimiento (se comprueba después de categoriaVigente)
+function exigirCategoriaDeLaFecha(categoria, fechaNacimiento) {
+  if (categoria.nombre !== categoriaPorFecha(fechaNacimiento)) {
+    throw error('CATEGORIA_NO_CORRESPONDE_EDAD', 'La categoría no corresponde al año de nacimiento del deportista.')
+  }
+}
+
 // Sin pantalla en esta tarea: queda para reutilizar (por ejemplo al inscribir o cambiar de grupo).
 export async function asignarCategoria(idDeportista, idCategoria) {
   await simularRed()
   const actual = deportistas.find((x) => x.id === Number(idDeportista))
   if (!actual) throw error('DEPORTISTA_NO_EXISTE', 'El deportista no existe.')
   const categoria = categoriaVigente(idCategoria)
+  exigirCategoriaDeLaFecha(categoria, actual.fechaNacimiento)
   const actualizado = { ...actual, idCategoria: categoria.id }
   deportistas = deportistas.map((x) => (x.id === actual.id ? actualizado : x))
   return copiar(actualizado)
@@ -234,6 +247,7 @@ export async function crearDeportista(datos, actor) {
   }
   const sinCategoria = datos.idCategoria === undefined || datos.idCategoria === null || datos.idCategoria === ''
   const categoria = sinCategoria ? null : categoriaVigente(datos.idCategoria)
+  if (categoria) exigirCategoriaDeLaFecha(categoria, datos.fechaNacimiento.trim())
 
   const nuevo = {
     id: siguienteId++,
@@ -342,7 +356,11 @@ export async function actualizarDeportista(id, cambios, actor) {
   const detalle = CAMPOS_EDITABLES
     .filter((campo) => nuevos[campo] !== valorLimpio(campo, actual[campo]))
     .map((campo) => ({ campo, antes: valorLimpio(campo, actual[campo]), despues: nuevos[campo] }))
-  if (detalle.some((c) => c.campo === 'idCategoria' && c.despues !== null)) categoriaVigente(nuevos.idCategoria)
+  // Con categoría asignada, si cambió ella o la fecha de nacimiento debe seguir siendo la de ese año (un registro viejo sin
+  // cambios en ninguno de los dos se puede seguir editando)
+  if (nuevos.idCategoria !== null && detalle.some((c) => c.campo === 'idCategoria' || c.campo === 'fechaNacimiento')) {
+    exigirCategoriaDeLaFecha(categoriaVigente(nuevos.idCategoria), nuevos.fechaNacimiento)
+  }
   if (detalle.length === 0) throw error('SIN_CAMBIOS', 'No hiciste ningún cambio.')
 
   const actualizado = { ...actual, ...nuevos }

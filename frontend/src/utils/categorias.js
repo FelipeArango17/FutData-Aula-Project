@@ -28,3 +28,12 @@ export function rangoAniosNacimiento(hoy = hoyLocal()) {
   const edades = CATEGORIAS_POR_EDAD.flatMap((c) => [c.edadMinima, c.edadMaxima])
   return { anioMinimo: anioDe(hoy) - Math.max(...edades), anioMaximo: anioDe(hoy) - Math.min(...edades) }
 }
+
+// idCategoria (texto, '' = sin asignar) con el que se guarda el formulario del deportista. Al editar, si la fecha de nacimiento
+// no cambió se conserva la categoría que ya tenía; si cambió (o es un deportista nuevo) se busca por nombre, entre
+// `categorias` ([{ id, nombre }]), la que da la fecha. Si no hay una, queda sin asignar.
+export function idCategoriaAlGuardar(fechaNacimiento, inicial, categorias, hoy = hoyLocal()) {
+  if (inicial?.fechaNacimiento && fechaNacimiento === inicial.fechaNacimiento) return String(inicial.idCategoria ?? '')
+  const categoria = categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, hoy))
+  return categoria ? String(categoria.id) : ''
+}

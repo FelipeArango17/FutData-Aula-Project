@@ -21,10 +21,11 @@ const dibujar = (props = {}) => renderToStaticMarkup(
 )
 
 describe('FormularioEntrenador (marcado)', () => {
-  it('la fecha de nacimiento es un input date nativo con etiqueta visible', () => {
+  it('la fecha de nacimiento es un selector día/mes/año con leyenda visible', () => {
     const html = dibujar()
-    expect(html).toMatch(/<label[^>]*for="fechaNacimiento"[^>]*>Fecha de nacimiento \(18 años o más\)<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/label>/)
-    expect(html).toMatch(/<input[^>]*id="fechaNacimiento"[^>]*type="date"|<input[^>]*type="date"[^>]*id="fechaNacimiento"/)
+    expect(html).toMatch(/<legend[^>]*>Fecha de nacimiento \(18 años o más\)<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/legend>/)
+    expect(html).not.toContain('type="date"')
+    for (const parte of ['dia', 'mes', 'anio']) expect(html).toContain(`id="fechaNacimiento-${parte}"`)
   })
 
   it('el tipo de documento ofrece los códigos de la API: CC, CE y PASAPORTE (sin TI)', () => {
