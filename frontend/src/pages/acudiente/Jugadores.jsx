@@ -11,7 +11,7 @@ const jugadores = [
     proximo: 'Hoy 4:00 p. m. · Cancha 1', accion: { texto: 'Pagar ahora', to: '/acudiente/pagos' },
   },
   {
-    id: 'valeria', nombre: 'Valeria Ríos', categoria: 'Sub-8 · Prado FC', asistencia: 'Asistencia 94 %',
+    id: 'valeria', nombre: 'Valeria Ríos', categoria: 'Sub-9 · Prado FC', asistencia: 'Asistencia 94 %',
     pago: { tone: 'success', texto: 'Al día' }, docs: { tone: 'success', texto: 'Documentos al día' },
     proximo: 'Mañana 4:00 p. m. · Cancha 1', accion: { texto: 'Ver pagos', to: '/acudiente/pagos' },
   },

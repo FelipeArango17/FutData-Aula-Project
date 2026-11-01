@@ -14,7 +14,7 @@ const entrenadorApi = (extra = {}) => ({
 })
 const formulario = (extra = {}) => ({
   nombre: ' Luis ', apellido: 'Pérez', tipoDocumento: 'CC', documento: '1098765432', fechaNacimiento: '1990-05-14',
-  telefono: '3001112233', correo: 'luis.perez@pradofc.co', especialidad: 'Porteros', categorias: ['Sub-12', 'Sub-8'],
+  telefono: '3001112233', correo: 'luis.perez@pradofc.co', especialidad: 'Porteros', categorias: ['Sub-12', 'Cachorros'],
   horarioTrabajo: '', direccion: '', ...extra,
 })
 
@@ -44,10 +44,10 @@ const rechazo = (promesa) => promesa.then(() => null, (error) => error)
 
 describe('lectura', () => {
   it('listar convierte los null de la API en texto vacío y siempre trae activo y categorías', async () => {
-    rutas['GET /entrenadores'] = () => respuesta(200, [entrenadorApi(), entrenadorApi({ id: 'otro', activo: false, categorias: ['Sub-8'] })])
+    rutas['GET /entrenadores'] = () => respuesta(200, [entrenadorApi(), entrenadorApi({ id: 'otro', activo: false, categorias: ['Cachorros'] })])
     const [a, b] = await servicio.listar()
     expect(a).toMatchObject({ id: ID, horarioTrabajo: '', direccion: '', categorias: [], activo: true })
-    expect(b).toMatchObject({ activo: false, categorias: ['Sub-8'] })
+    expect(b).toMatchObject({ activo: false, categorias: ['Cachorros'] })
     expect(llamadas()[0].headers.Authorization).toBe('Bearer token-de-prueba')
   })
 
@@ -65,7 +65,7 @@ describe('lectura', () => {
 
   it('listarCategorias conserva entrenador: null', async () => {
     rutas['GET /categorias'] = () => respuesta(200, [
-      { id: 'c1', nombre: 'Sub-8', edadMinima: 0, edadMaxima: 7, entrenador: null },
+      { id: 'c1', nombre: 'Cachorros', edadMinima: 0, edadMaxima: 7, entrenador: null },
       { id: 'c2', nombre: 'Sub-12', edadMinima: 10, edadMaxima: 11, entrenador: { id: ID, nombre: 'Andrés', apellido: 'Mora' } },
     ])
     const categorias = await servicio.listarCategorias()
@@ -100,11 +100,11 @@ describe('registrar y editar', () => {
 
   it('crear = POST y luego PUT /categorias en el orden oficial, sin reasignar', async () => {
     rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi())
-    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(200, entrenadorApi({ categorias: ['Sub-8', 'Sub-12'] }))
+    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(200, entrenadorApi({ categorias: ['Cachorros', 'Sub-12'] }))
     const creado = await servicio.crear(formulario())
     expect(llamadas().map((l) => `${l.metodo} ${l.ruta}`)).toEqual(['POST /entrenadores', `PUT /entrenadores/${ID}/categorias`])
-    expect(llamadas()[1].cuerpo).toEqual({ categorias: ['Sub-8', 'Sub-12'], reasignar: false })
-    expect(creado.categorias).toEqual(['Sub-8', 'Sub-12'])
+    expect(llamadas()[1].cuerpo).toEqual({ categorias: ['Cachorros', 'Sub-12'], reasignar: false })
+    expect(creado.categorias).toEqual(['Cachorros', 'Sub-12'])
   })
 
   it('crear sin categorías no llama a /categorias', async () => {
@@ -115,7 +115,7 @@ describe('registrar y editar', () => {
 
   it('si falla la asignación, el entrenador queda creado y el error trae `parcial`', async () => {
     rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi())
-    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(409, { mensaje: 'Sub-8 ya tiene otro entrenador.', campos: ['categorias'] })
+    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(409, { mensaje: 'Cachorros ya tiene otro entrenador.', campos: ['categorias'] })
     const error = await rechazo(servicio.crear(formulario()))
     expect(error).toMatchObject({ estado: 409, campos: ['categorias'] })
     expect(error.parcial.id).toBe(ID)
@@ -132,16 +132,16 @@ describe('registrar y editar', () => {
 
 describe('categorías y estado', () => {
   it('asignarCategorias envía la lista completa y reasignar', async () => {
-    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(200, entrenadorApi({ categorias: ['Sub-8'] }))
-    await servicio.asignarCategorias(ID, ['Sub-8'], true)
-    expect(llamadas()[0].cuerpo).toEqual({ categorias: ['Sub-8'], reasignar: true })
+    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(200, entrenadorApi({ categorias: ['Cachorros'] }))
+    await servicio.asignarCategorias(ID, ['Cachorros'], true)
+    expect(llamadas()[0].cuerpo).toEqual({ categorias: ['Cachorros'], reasignar: true })
     await servicio.asignarCategorias(ID, [])
     expect(llamadas()[1].cuerpo).toEqual({ categorias: [], reasignar: false })
   })
 
   it('una categoría de otro entrenador responde 409 con campos [categorias]', async () => {
-    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(409, { mensaje: 'Sub-8 ya tiene otro entrenador. Confirma la reasignación.', campos: ['categorias'] })
-    expect(await rechazo(servicio.asignarCategorias(ID, ['Sub-8']))).toMatchObject({ estado: 409, campos: ['categorias'] })
+    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(409, { mensaje: 'Cachorros ya tiene otro entrenador. Confirma la reasignación.', campos: ['categorias'] })
+    expect(await rechazo(servicio.asignarCategorias(ID, ['Cachorros']))).toMatchObject({ estado: 409, campos: ['categorias'] })
   })
 
   it('cambiarEstado hace PATCH /estado con { activo }', async () => {

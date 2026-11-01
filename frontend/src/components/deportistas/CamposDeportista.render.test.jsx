@@ -15,12 +15,12 @@ const dibujar = (valores = {}, props = {}) => renderToStaticMarkup(<CamposDeport
 const anios = (html) => [...html.match(/<select id="fechaNacimiento-anio".*?<\/select>/s)[0].matchAll(/<option value="(\d{4})"/g)].map((m) => Number(m[1]))
 
 describe('CamposDeportista: fecha de nacimiento y categoría', () => {
-  it('la fecha son tres listas día/mes/año (sin input date) y los años van de 2018 a 2010', () => {
+  it('la fecha son tres listas día/mes/año (sin input date) y los años van de 2022 a 2010', () => {
     const html = dibujar()
     expect(html).not.toContain('type="date"')
     expect(html).toMatch(/id="fechaNacimiento-dia"/)
     expect(html).toMatch(/id="fechaNacimiento-mes"/)
-    expect(anios(html)).toEqual([2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010])
+    expect(anios(html)).toEqual([2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010])
   })
 
   it('la categoría es de solo lectura: "—" sin fecha y "Sub-10" para 2016-05-10', () => {
@@ -39,7 +39,7 @@ describe('CamposDeportista: fecha de nacimiento y categoría', () => {
   it('la inscripción en línea (mostrarCategoria false) no muestra la categoría pero sí el rango de años', () => {
     const html = dibujar({ fechaNacimiento: '2016-05-10' }, { mostrarCategoria: false })
     expect(html).not.toContain('id="categoria"')
-    expect(anios(html)[0]).toBe(2018)
+    expect(anios(html)[0]).toBe(2022)
   })
 
   it('un año fuera del rango que ya venga en el valor se muestra (la validación lo rechaza)', () => {
@@ -49,20 +49,20 @@ describe('CamposDeportista: fecha de nacimiento y categoría', () => {
 
 describe('CampoFechaNacimiento', () => {
   it('con la fecha completa deja elegidos día, mes y año', () => {
-    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="2016-05-10" onChange={() => {}} anioMinimo={2010} anioMaximo={2018} />)
+    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="2016-05-10" onChange={() => {}} anioMinimo={2010} anioMaximo={2022} />)
     expect(html).toContain('<option value="10" selected="">10</option>')
     expect(html).toContain('<option value="5" selected="">Mayo</option>')
     expect(html).toContain('<option value="2016" selected="">2016</option>')
   })
 
   it('febrero de un año no bisiesto tiene 28 días', () => {
-    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="2017-02-10" onChange={() => {}} anioMinimo={2010} anioMaximo={2018} />)
+    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="2017-02-10" onChange={() => {}} anioMinimo={2010} anioMaximo={2022} />)
     expect(html).not.toContain('<option value="29"')
     expect(html).toContain('<option value="28"')
   })
 
   it('marca el error y el campo obligatorio', () => {
-    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="" onChange={() => {}} anioMinimo={2010} anioMaximo={2018} error="Falta" requerido />)
+    const html = renderToStaticMarkup(<CampoFechaNacimiento label="Fecha" id="f" value="" onChange={() => {}} anioMinimo={2010} anioMaximo={2022} error="Falta" requerido />)
     expect(html.match(/aria-invalid="true"/g)).toHaveLength(3)
     expect(html.match(/aria-required="true"/g)).toHaveLength(3)
     expect(html).toContain('id="f-error"')
@@ -95,18 +95,18 @@ describe('tipo de documento del deportista', () => {
 describe('validación del rango de años y del tipo de documento', () => {
   const base = { nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento: '2016-05-10', telefono: '3001234567', direccion: 'Calle 50 # 10-20' }
 
-  it('2010 y 2018 pasan; 2009 y 2019 se rechazan con los años calculados en el mensaje', () => {
+  it('2010 y 2022 pasan; 2009 y 2023 se rechazan con los años calculados en el mensaje', () => {
     expect(validarDatosDeportista({ ...base, fechaNacimiento: '2010-01-01' })).toEqual({})
-    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2018-12-31' })).toEqual({})
-    for (const f of ['2009-12-31', '2019-01-01']) {
-      expect(validarDatosDeportista({ ...base, fechaNacimiento: f })).toEqual({ fechaNacimiento: 'Solo se inscriben deportistas nacidos entre 2010 y 2018.' })
+    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2022-12-31' })).toEqual({})
+    for (const f of ['2009-12-31', '2023-01-01']) {
+      expect(validarDatosDeportista({ ...base, fechaNacimiento: f })).toEqual({ fechaNacimiento: 'Solo se inscriben deportistas nacidos entre 2010 y 2022.' })
     }
   })
 
-  it('con el reloj en 2027 el mensaje habla de 2011 y 2019', () => {
+  it('con el reloj en 2027 el mensaje habla de 2011 y 2023', () => {
     vi.setSystemTime(new Date(2027, 5, 1, 12, 0))
-    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2010-01-01' }).fechaNacimiento).toBe('Solo se inscriben deportistas nacidos entre 2011 y 2019.')
-    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2019-01-01' })).toEqual({})
+    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2010-01-01' }).fechaNacimiento).toBe('Solo se inscriben deportistas nacidos entre 2011 y 2023.')
+    expect(validarDatosDeportista({ ...base, fechaNacimiento: '2023-01-01' })).toEqual({})
   })
 
   it('la cédula de ciudadanía se rechaza con el mensaje de tipo de documento que ya existía', () => {

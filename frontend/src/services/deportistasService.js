@@ -55,49 +55,52 @@ export const TIPOS_DOCUMENTO_DEPORTISTA = [TIPO_DOCUMENTO_SUGERIDO, 'Registro ci
 export const ACUDIENTE_DEMO = 'acudiente@pradofc.co'
 
 // PENDIENTE: las categorías salen de la lista de entrenamientosService (CATEGORIAS) para no duplicarla.
-// Sub-18 existe solo para probar "categoría no vigente"; no está en CATEGORIAS ni tiene entrenador.
+// La última es un dato interno solo para poder probar CATEGORIA_NO_VIGENTE: está `oculta`, así que listarCategorias no la devuelve
+// y no aparece en ningún filtro ni selector (se puede pedir por id, pero la interfaz no la ofrece).
 let categorias = [
   ...CATEGORIAS.map((nombre, i) => ({ id: i + 1, nombre, activa: true })),
-  { id: CATEGORIAS.length + 1, nombre: 'Sub-18', activa: false },
+  { id: CATEGORIAS.length + 1, nombre: 'Categoría no vigente (solo pruebas)', activa: false, oculta: true },
 ]
 
 const TI = 'Tarjeta de identidad'
 // Teléfono y dirección ficticios: 3000000001, 3000000002... y calles inventadas
-const d = (id, nombre, apellido, documento, fechaNacimiento, idCategoria, activo = true, acudiente = null) => ({
+// La categoría de cada deportista de ejemplo se calcula con la regla (utils/categorias.js) y el "hoy" de la demo
+const categoriaDeEjemplo = (fechaNacimiento) => categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, HOY_EJEMPLO)).id
+const d = (id, nombre, apellido, documento, fechaNacimiento, activo = true, acudiente = null) => ({
   id, nombre, apellido, tipoDocumento: TI, documento, fechaNacimiento,
   telefono: `300000${String(id).padStart(4, '0')}`,
   direccion: `Calle ${10 + id} # ${20 + id}-${10 + id}, Barrio Ejemplo`,
-  idCategoria, activo, acudiente,
+  idCategoria: categoriaDeEjemplo(fechaNacimiento), activo, acudiente,
 })
 
 // Cada deportista está en la categoría que da su año de nacimiento (utils/categorias.js, con el "hoy" 2026-10-22).
 let deportistas = [
-  d(1, 'Santiago', 'Ríos Demo', '1100000001', '2018-03-14', 1, true, ACUDIENTE_DEMO),
-  d(2, 'Valeria', 'Ríos Demo', '1100000002', '2017-11-02', 2, true, ACUDIENTE_DEMO),
-  { ...d(3, 'Emilio', 'Pardo Ejemplo', '1100000003', '2018-07-21', 1), creadoPor: 'administrador@pradofc.co', creadoEn: '2026-09-14T15:20:00.000Z' },
-  d(4, 'Isabella', 'Quintero Ejemplo', '1100000004', '2018-01-30', 1),
-  d(5, 'Thiago', 'Marín Ejemplo', '1100000005', '2017-10-25', 2, false),
-  d(6, 'Mateo', 'Vélez Demo', '1100000006', '2016-05-09', 2),
-  d(7, 'Juan Pablo', 'Cano Demo', '1100000007', '2016-09-17', 2),
-  d(8, 'Samuel', 'Londoño Demo', '1100000008', '2016-02-12', 2),
-  d(9, 'Sofía', 'Henao Ejemplo', '1100000009', '2015-12-04', 3),
-  d(10, 'Dylan', 'Restrepo Ejemplo', '1100000010', '2016-06-28', 2, false),
-  d(11, 'Emmanuel', 'Arias Demo', '1100000011', '2014-08-19', 3),
-  d(12, 'Tomás', 'Giraldo Demo', '1100000012', '2014-04-03', 3),
-  d(13, 'Nicolás', 'Mejía Demo', '1100000013', '2014-10-11', 3),
-  d(14, 'Mariana', 'Zapata Ejemplo', '1100000014', '2014-01-26', 3),
-  d(15, 'Juan Sebastián Alejandro', 'Hernández de la Cruz Ejemplo', '1100000015', '2014-12-08', 3),
-  d(16, 'Luciana', 'Osorio Ejemplo', '1100000016', '2013-11-30', 4, false),
-  d(17, 'Andrés', 'Cardona Ejemplo', '1100000017', '2012-06-15', 4),
-  d(18, 'Camila', 'Betancur Ejemplo', '1100000018', '2012-09-22', 4),
-  d(19, 'Daniel', 'Cifuentes Ejemplo', '1100000019', '2012-03-07', 4),
-  d(20, 'Gabriela', 'Montoya Ejemplo', '1100000020', '2011-12-19', 5),
-  d(21, 'Esteban', 'Ocampo Ejemplo', '1100000021', '2012-05-01', 4),
+  d(1, 'Santiago', 'Ríos Demo', '1100000001', '2018-03-14', true, ACUDIENTE_DEMO),
+  d(2, 'Valeria', 'Ríos Demo', '1100000002', '2017-11-02', true, ACUDIENTE_DEMO),
+  { ...d(3, 'Emilio', 'Pardo Ejemplo', '1100000003', '2018-07-21'), creadoPor: 'administrador@pradofc.co', creadoEn: '2026-09-14T15:20:00.000Z' },
+  d(4, 'Isabella', 'Quintero Ejemplo', '1100000004', '2021-01-30'),
+  d(5, 'Thiago', 'Marín Ejemplo', '1100000005', '2017-10-25', false),
+  d(6, 'Mateo', 'Vélez Demo', '1100000006', '2016-05-09'),
+  d(7, 'Juan Pablo', 'Cano Demo', '1100000007', '2016-09-17'),
+  d(8, 'Samuel', 'Londoño Demo', '1100000008', '2022-02-12'),
+  d(9, 'Sofía', 'Henao Ejemplo', '1100000009', '2015-12-04'),
+  d(10, 'Dylan', 'Restrepo Ejemplo', '1100000010', '2016-06-28', false),
+  d(11, 'Emmanuel', 'Arias Demo', '1100000011', '2014-08-19'),
+  d(12, 'Tomás', 'Giraldo Demo', '1100000012', '2014-04-03'),
+  d(13, 'Nicolás', 'Mejía Demo', '1100000013', '2014-10-11'),
+  d(14, 'Mariana', 'Zapata Ejemplo', '1100000014', '2014-01-26'),
+  d(15, 'Juan Sebastián Alejandro', 'Hernández de la Cruz Ejemplo', '1100000015', '2014-12-08'),
+  d(16, 'Luciana', 'Osorio Ejemplo', '1100000016', '2013-11-30', false),
+  d(17, 'Andrés', 'Cardona Ejemplo', '1100000017', '2010-06-15'),
+  d(18, 'Camila', 'Betancur Ejemplo', '1100000018', '2011-09-22'),
+  d(19, 'Daniel', 'Cifuentes Ejemplo', '1100000019', '2012-03-07'),
+  d(20, 'Gabriela', 'Montoya Ejemplo', '1100000020', '2011-12-19'),
+  d(21, 'Esteban', 'Ocampo Ejemplo', '1100000021', '2010-05-01'),
 ]
 let siguienteId = deportistas.length + 1
 
 // Historial de ediciones por deportista (id -> lista, de la más antigua a la más reciente). Se siembra uno en Emilio (3)
-// para probar la ficha: cambió el teléfono y pasó de Sub-10 a Sub-8.
+// para probar la ficha: cambió el teléfono y pasó de Sub-10 a Cachorros.
 const historiales = new Map([
   [3, [
     {
@@ -105,7 +108,7 @@ const historiales = new Map([
       responsable: 'administrador@pradofc.co',
       cambios: [
         { campo: 'telefono', antes: '3000000999', despues: '3000000003' },
-        { campo: 'idCategoria', antes: 2, despues: 1 },
+        { campo: 'idCategoria', antes: 4, despues: 2 },
       ],
     },
   ]],
@@ -144,7 +147,7 @@ export function calcularEdad(fechaNacimiento, hoy = HOY_EJEMPLO) {
 
 export async function listarCategorias() {
   await simularRed()
-  return categorias.map(copiar)
+  return categorias.filter((c) => !c.oculta).map(copiar)
 }
 
 // Valor especial de idCategoria para listar solo a los deportistas sin grupo (idCategoria null).

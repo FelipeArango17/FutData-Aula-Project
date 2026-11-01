@@ -14,13 +14,15 @@
 // PENDIENTE: confirmar con el modelo de datos del backend. Entrenamiento, Categoría y Lugar
 // NO existen todavía en docs/info-sprints/sprint-1/diccionario-datos.md (solo Entrenador, con
 // `horario_trabajo`). Todo lo de este archivo es una propuesta y puede cambiar.
+import { NOMBRES_CATEGORIAS } from '../utils/categorias.js'
 import { sumarMinutos } from '../utils/fechas.js'
 
 // Día "de hoy" del mockup de Figma; con él los datos de ejemplo caen en la semana del 19 al 24 de octubre.
 export const HOY_EJEMPLO = '2026-10-22'
 
+// Las categorías son las del club (utils/categorias.js, regla provisional por año de nacimiento).
 // PENDIENTE: confirmar con el modelo de datos del backend (categorías y lugares aún no existen).
-export const CATEGORIAS = ['Sub-8', 'Sub-10', 'Sub-12', 'Sub-14', 'Sub-16']
+export const CATEGORIAS = NOMBRES_CATEGORIAS
 export const LUGARES = ['Cancha 1', 'Cancha 2']
 
 // Categorías que puede ver y editar cada rol (dato de ejemplo hasta que exista el login).
@@ -37,14 +39,16 @@ export const ENTRENADORES = [
 export const ID_ENTRENADOR_EJEMPLO = 1
 
 // Jugadores por categoría, solo para el mensaje simulado "Se notificará a N jugadores".
-const JUGADORES_POR_CATEGORIA = { 'Sub-8': 14, 'Sub-10': 15, 'Sub-12': 17, 'Sub-14': 16, 'Sub-16': 12 }
+const JUGADORES_POR_CATEGORIA = {
+  Párvulos: 10, Cachorros: 14, 'Sub-9': 13, 'Sub-10': 15, 'Sub-11': 16, 'Sub-12': 17, 'Sub-13': 15, 'Sub-14': 16, 'Sub-15': 14, 'Sub-16': 12,
+}
 
 let entrenamientos = [
-  { id: 1, categoria: 'Sub-8', fecha: '2026-10-19', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
+  { id: 1, categoria: 'Cachorros', fecha: '2026-10-19', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
   { id: 2, categoria: 'Sub-12', fecha: '2026-10-19', hora: '17:30', lugar: 'Cancha 2', idEntrenador: 1 },
   { id: 3, categoria: 'Sub-10', fecha: '2026-10-20', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
   { id: 4, categoria: 'Sub-14', fecha: '2026-10-20', hora: '17:30', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 5, categoria: 'Sub-8', fecha: '2026-10-21', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
+  { id: 5, categoria: 'Cachorros', fecha: '2026-10-21', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
   { id: 6, categoria: 'Sub-12', fecha: '2026-10-21', hora: '17:30', lugar: 'Cancha 2', idEntrenador: 1 },
   { id: 7, categoria: 'Sub-10', fecha: '2026-10-22', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
   { id: 8, categoria: 'Sub-14', fecha: '2026-10-22', hora: '17:30', lugar: 'Cancha 1', idEntrenador: 2 },

@@ -9,7 +9,7 @@
 //     documento       dígitos para CC/CE; letras y dígitos para PASAPORTE, 6 a 12
 //     telefono        10 dígitos
 //     especialidad    texto, por ejemplo "Porteros"
-//     categorias      lista de categorías, por ejemplo ['Sub-8', 'Sub-10']
+//     categorias      lista de categorías, por ejemplo ['Cachorros', 'Sub-10']
 //     horarioTrabajo  texto libre, opcional
 //
 // PENDIENTE: confirmar con el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md, sección 5):
@@ -21,6 +21,7 @@
 // - La base de datos también deberá exigir que documento y correo no se repitan (observación 2).
 import { apiRequest } from './apiClient.js'
 import { CATEGORIAS } from './entrenamientosService.js'
+import { CATEGORIAS_POR_EDAD } from '../utils/categorias.js'
 
 export { CATEGORIAS }
 export const TIPOS_DOCUMENTO = ['CC', 'CE', 'PASAPORTE']
@@ -53,7 +54,7 @@ let entrenadores = [
     telefono: '3156674410',
     correo: 'carlos.diaz@pradofc.co',
     especialidad: 'Preparación física',
-    categorias: ['Sub-8', 'Sub-10', 'Sub-14', 'Sub-16'],
+    categorias: ['Cachorros', 'Sub-10', 'Sub-14', 'Sub-16'],
     horarioTrabajo: 'Lunes a viernes, 3:30 p. m. a 7:30 p. m.',
     direccion: 'Carrera 10 # 20-30',
     activo: true,
@@ -179,11 +180,10 @@ async function cambiarEstadoMock(id, activo) {
   return copiar(nuevo)
 }
 
-const RANGOS_EDAD = { 'Sub-8': [0, 7], 'Sub-10': [8, 9], 'Sub-12': [10, 11], 'Sub-14': [12, 13], 'Sub-16': [14, 15] }
 async function listarCategoriasMock() {
   return CATEGORIAS.map((nombre) => {
     const dueno = entrenadores.find((e) => e.categorias.includes(nombre))
-    const [edadMinima, edadMaxima] = RANGOS_EDAD[nombre]
+    const { edadMinima, edadMaxima } = CATEGORIAS_POR_EDAD.find((c) => c.nombre === nombre)
     return { id: nombre, nombre, edadMinima, edadMaxima, entrenador: dueno ? { id: dueno.id, nombre: dueno.nombre, apellido: dueno.apellido } : null }
   })
 }

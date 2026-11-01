@@ -32,8 +32,8 @@ describe('erroresPorCampo', () => {
   })
 
   it('un campo sin su propia parte en el mensaje recibe el mensaje completo', () => {
-    const error = { estado: 409, mensaje: 'Sub-8 ya tiene otro entrenador. Confirma la reasignación.', campos: ['categorias'] }
-    expect(erroresPorCampo(error)).toEqual({ categorias: 'Sub-8 ya tiene otro entrenador. Confirma la reasignación.' })
+    const error = { estado: 409, mensaje: 'Cachorros ya tiene otro entrenador. Confirma la reasignación.', campos: ['categorias'] }
+    expect(erroresPorCampo(error)).toEqual({ categorias: 'Cachorros ya tiene otro entrenador. Confirma la reasignación.' })
   })
 
   it('un error general (sin campos: 403, red, 500) devuelve {}', () => {

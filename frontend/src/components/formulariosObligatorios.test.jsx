@@ -34,7 +34,7 @@ describe('leyenda "* Campo obligatorio" y asteriscos', () => {
   it('FormularioEntrenamiento: leyenda y los cinco campos obligatorios', () => {
     const inicial = { categoria: '', idEntrenador: '', fecha: '', hora: '', lugar: '' }
     const html = renderToStaticMarkup(
-      <FormularioEntrenamiento inicial={inicial} categorias={['Sub-8']} detectarConflicto={async () => ({ hayConflicto: false })} onGuardar={sin} onCancelar={() => {}} />,
+      <FormularioEntrenamiento inicial={inicial} categorias={['Cachorros']} detectarConflicto={async () => ({ hayConflicto: false })} onGuardar={sin} onCancelar={() => {}} />,
     )
     expect(html).toContain(LEYENDA)
     expect(html.match(/aria-required="true"/g)).toHaveLength(5)
@@ -62,8 +62,8 @@ describe('límites de las fechas en los formularios', () => {
   })
 
   it('entrenamiento nuevo: min de la fecha es hoy; al editar uno pasado no hay min', () => {
-    const props = { categorias: ['Sub-8'], detectarConflicto: async () => ({ hayConflicto: false }), onGuardar: sin, onCancelar: () => {} }
-    const base = { categoria: 'Sub-8', idEntrenador: '1', hora: '16:00', lugar: 'Cancha 1' }
+    const props = { categorias: ['Cachorros'], detectarConflicto: async () => ({ hayConflicto: false }), onGuardar: sin, onCancelar: () => {} }
+    const base = { categoria: 'Cachorros', idEntrenador: '1', hora: '16:00', lugar: 'Cancha 1' }
     const nuevo = renderToStaticMarkup(<FormularioEntrenamiento {...props} inicial={{ ...base, fecha: '' }} />)
     expect(nuevo).toContain(`min="${hoyLocal()}"`)
     const pasado = renderToStaticMarkup(<FormularioEntrenamiento {...props} ignorarId={1} inicial={{ ...base, fecha: '2020-01-01' }} />)

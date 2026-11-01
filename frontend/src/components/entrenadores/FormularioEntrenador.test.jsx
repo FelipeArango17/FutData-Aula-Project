@@ -38,13 +38,13 @@ describe('FormularioEntrenador (marcado)', () => {
     const html = dibujar({
       ignorarId: 'yo',
       categorias: [
-        { id: '1', nombre: 'Sub-8', entrenador: null },
+        { id: '1', nombre: 'Cachorros', entrenador: null },
         { id: '2', nombre: 'Sub-12', entrenador: { id: 'otro', nombre: 'Andrés', apellido: 'Mora' } },
         { id: '3', nombre: 'Sub-10', entrenador: { id: 'yo', nombre: 'Luis', apellido: 'Pérez' } },
       ],
     })
     expect(html).toContain('Categorías a cargo (opcional)')
-    expect(html).toContain('Sin entrenador: Sub-8.')
+    expect(html).toContain('Sin entrenador: Cachorros.')
     expect(html).toContain('Con otro entrenador: Sub-12 (Andrés Mora)')
     expect(html).not.toContain('Sub-10 (Luis')
   })

@@ -20,11 +20,11 @@ const resolver = async (promesa) => {
 }
 
 const andres = { rol: 'entrenador', idEntrenador: 1, nombre: 'Andrés Mora' } // Sub-12
-const carlos = { rol: 'entrenador', idEntrenador: 2, nombre: 'Carlos Díaz' } // Sub-8, 10, 14, 16
+const carlos = { rol: 'entrenador', idEntrenador: 2, nombre: 'Carlos Díaz' } // Cachorros, 10, 14, 16
 const admin = { rol: 'administrador', idEntrenador: null, nombre: 'Carlos Mendoza' }
 
-// Sub-12 activos: 9 y 11 a 15 (el 16, ahora Sub-14, está inactivo). El entrenamiento 2 es pasado y sin registrar.
-const completos = (estado = 'presente') => [9, 11, 12, 13, 14, 15].map((idDeportista) => ({ idDeportista, estado }))
+// Sub-12 activos: 11 a 15 (el 16, de Sub-13, está inactivo). El entrenamiento 2 es pasado y sin registrar.
+const completos = (estado = 'presente') => [11, 12, 13, 14, 15].map((idDeportista) => ({ idDeportista, estado }))
 
 describe('listarEntrenamientosParaAsistencia', () => {
   it('el entrenador solo ve los de sus categorías, ya ocurridos o de hoy', async () => {
@@ -55,7 +55,7 @@ describe('obtenerAsistencia', () => {
   it('sin registrar: registro null y solo deportistas activos del grupo', async () => {
     const r = await resolver(servicio.obtenerAsistencia('2', andres))
     expect(r.registro).toBeNull()
-    expect(r.deportistas.map((d) => d.id)).toEqual([9, 11, 12, 13, 14, 15])
+    expect(r.deportistas.map((d) => d.id)).toEqual([11, 12, 13, 14, 15])
     expect(r.entrenamiento).toMatchObject({ categoria: 'Sub-12', futuro: false, entrenador: 'Andrés Mora' })
   })
 
@@ -74,18 +74,18 @@ describe('obtenerAsistencia', () => {
 describe('registrarAsistencia', () => {
   it('registro correcto: guarda responsable, fecha y hora, y observación sin espacios', async () => {
     const items = completos()
-    items[3] = { idDeportista: 13, estado: 'ausente', observacion: '  Sin aviso ' }
+    items[2] = { idDeportista: 13, estado: 'ausente', observacion: '  Sin aviso ' }
     const r = await resolver(servicio.registrarAsistencia('2', items, andres))
     expect(r.registradoPor).toBe('Andrés Mora')
     expect(r.registradoEn).toBe('2026-10-22T17:40')
     expect(r.historial).toEqual([])
     expect(r.items.find((i) => i.idDeportista === 13)).toEqual({ idDeportista: 13, estado: 'ausente', observacion: 'Sin aviso' })
     const otra = await resolver(servicio.obtenerAsistencia(2, andres))
-    expect(otra.registro.items).toHaveLength(6)
+    expect(otra.registro.items).toHaveLength(5)
   })
 
   it('faltan estados: indica los ids que faltan y no guarda nada', async () => {
-    const items = completos().slice(0, 4)
+    const items = completos().slice(0, 3)
     items.push({ idDeportista: 14, estado: '' })
     await expect(resolver(servicio.registrarAsistencia(2, items, andres))).rejects.toMatchObject({ codigo: 'FALTAN_ESTADOS', faltan: [14, 15] })
     expect((await resolver(servicio.obtenerAsistencia(2, andres))).registro).toBeNull()
@@ -119,12 +119,12 @@ describe('registrarAsistencia', () => {
 
   it('estado inválido y observación de más de 200 caracteres se rechazan', async () => {
     const mal = completos()
-    mal[1] = { idDeportista: 11, estado: 'tarde' }
+    mal[0] = { idDeportista: 11, estado: 'tarde' }
     await expect(resolver(servicio.registrarAsistencia(2, mal, andres))).rejects.toMatchObject({ codigo: 'ESTADO_INVALIDO' })
     const larga = completos()
-    larga[1] = { idDeportista: 11, estado: 'presente', observacion: 'a'.repeat(201) }
+    larga[0] = { idDeportista: 11, estado: 'presente', observacion: 'a'.repeat(201) }
     await expect(resolver(servicio.registrarAsistencia(2, larga, andres))).rejects.toMatchObject({ codigo: 'OBSERVACION_LARGA' })
-    larga[1].observacion = 'a'.repeat(200)
+    larga[0].observacion = 'a'.repeat(200)
     await expect(resolver(servicio.registrarAsistencia(2, larga, andres))).resolves.toBeTruthy()
   })
 })

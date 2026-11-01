@@ -103,8 +103,8 @@ describe('crear', () => {
 
 describe('editar', () => {
   it('actualiza los datos conservando el id', async () => {
-    const { entrenamiento, notificados } = await servicio.editar(1, nuevo({ categoria: 'Sub-8', hora: '08:00' }))
-    expect(entrenamiento).toMatchObject({ id: 1, categoria: 'Sub-8', hora: '08:00', fecha: '2026-10-21' })
+    const { entrenamiento, notificados } = await servicio.editar(1, nuevo({ categoria: 'Cachorros', hora: '08:00' }))
+    expect(entrenamiento).toMatchObject({ id: 1, categoria: 'Cachorros', hora: '08:00', fecha: '2026-10-21' })
     expect(notificados).toBe(14)
     const lista = await servicio.listar()
     expect(lista).toHaveLength(11)

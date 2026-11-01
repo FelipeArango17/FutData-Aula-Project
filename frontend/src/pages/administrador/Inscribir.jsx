@@ -3,6 +3,7 @@ import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
+import { CATEGORIAS } from '../../services/entrenamientosService.js'
 
 const pasos = ['Jugador', 'Acudiente', 'Confirmar']
 
@@ -43,7 +44,7 @@ export default function Inscribir() {
           <Field label="Fecha de nacimiento" id="nacimiento" value={datos.nacimiento} onChange={cambiar('nacimiento')} />
           <Field label="Documento" id="documento" value={datos.documento} onChange={cambiar('documento')} />
           <Field label="Categoría (según edad)" id="categoria" as="select" value={datos.categoria} onChange={cambiar('categoria')}>
-            <option>Sub-8</option><option>Sub-10</option><option>Sub-12</option>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
           </Field>
           <Field label="Posición" id="posicion" value={datos.posicion} onChange={cambiar('posicion')} />
           <Field label="Entidad de salud (EPS)" id="eps" value={datos.eps} onChange={cambiar('eps')} />
