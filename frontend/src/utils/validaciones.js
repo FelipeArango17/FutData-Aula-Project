@@ -36,7 +36,10 @@ export const MENSAJES = {
   entrenamientoFechaDomingo: 'Los entrenamientos se programan de lunes a sábado.',
   entrenamientoHoraObligatoria: 'Indica la hora del entrenamiento.',
   entrenamientoHoraInvalida: 'La hora no es válida. Usa el formato HH:MM.',
-  entrenamientoLugar: 'Selecciona el lugar.',
+  entrenamientoHoraFinObligatoria: 'Indica la hora de fin del entrenamiento.',
+  entrenamientoHoraFinAnterior: 'La hora de fin debe ser posterior a la de inicio.',
+  entrenamientoSede: 'Selecciona la sede.',
+  entrenamientoEntrenadorOcupado: 'Ese entrenador ya tiene un entrenamiento que se cruza con este horario.',
   // Inscripción en línea
   consentimientoObligatorio: 'Debes aceptar el tratamiento de datos para enviar la inscripción.',
   // Registro manual de pagos
@@ -206,6 +209,13 @@ export function validarFechaEntrenamiento(valor, hoy = hoyLocal()) {
 export function validarHoraEntrenamiento(valor) {
   if (!valor) return MENSAJES.entrenamientoHoraObligatoria
   return esHoraValida(valor) ? null : MENSAJES.entrenamientoHoraInvalida
+}
+
+// `hora`: la hora de inicio ya escrita; el fin debe ser posterior
+export function validarHoraFinEntrenamiento(valor, hora) {
+  if (!valor) return MENSAJES.entrenamientoHoraFinObligatoria
+  if (!esHoraValida(valor)) return MENSAJES.entrenamientoHoraInvalida
+  return hora && esHoraValida(hora) && valor <= hora ? MENSAJES.entrenamientoHoraFinAnterior : null
 }
 
 // Reglas genéricas para armar validarCampos. Cada una devuelve (valor, todos) => mensaje | null.

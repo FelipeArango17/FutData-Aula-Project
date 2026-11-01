@@ -12,7 +12,7 @@ export const roleLabels = {
 // Datos de ejemplo hasta que exista el login
 export const sampleUsers = {
   acudiente: 'María Torres',
-  entrenador: 'Andrés Mora',
+  entrenador: 'Nicolás',
   tesorero: 'Laura Gómez',
   administrador: 'Carlos Mendoza',
 }
@@ -69,6 +69,7 @@ export const menus = {
       items: [
         { label: 'Asistencia', to: '/administrador/asistencia' },
         { label: 'Horarios', to: '/administrador/horarios' },
+        { label: 'Horario del club', to: '/administrador/horario-club' },
         { label: 'Torneos', to: '/administrador/torneos' },
       ],
     },

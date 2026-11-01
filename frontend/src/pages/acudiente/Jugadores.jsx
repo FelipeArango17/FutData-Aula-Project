@@ -8,12 +8,12 @@ const jugadores = [
   {
     id: 'santiago', nombre: 'Santiago Ríos', categoria: 'Sub-10 · Prado FC', asistencia: 'Asistencia 90 %',
     pago: { tone: 'warning', texto: 'Pago pendiente' }, docs: { tone: 'warning', texto: 'Faltan documentos' },
-    proximo: 'Hoy 4:00 p. m. · Cancha 1', accion: { texto: 'Pagar ahora', to: '/acudiente/pagos' },
+    proximo: 'Mañana 7:00 p. m. · UVA El Paraíso', accion: { texto: 'Pagar ahora', to: '/acudiente/pagos' },
   },
   {
     id: 'valeria', nombre: 'Valeria Ríos', categoria: 'Sub-9 · Prado FC', asistencia: 'Asistencia 94 %',
     pago: { tone: 'success', texto: 'Al día' }, docs: { tone: 'success', texto: 'Documentos al día' },
-    proximo: 'Mañana 4:00 p. m. · Cancha 1', accion: { texto: 'Ver pagos', to: '/acudiente/pagos' },
+    proximo: 'Sábado 8:30 a. m. · UVA El Paraíso', accion: { texto: 'Ver pagos', to: '/acudiente/pagos' },
   },
 ]
 

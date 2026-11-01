@@ -2,26 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
 import Icon from '../Icon.jsx'
-import { LUGARES, ENTRENADORES } from '../../services/entrenamientosService.js'
+import { ENTRENADORES, SEDES } from '../../services/entrenamientosService.js'
+import { entrenadorDeCategoria } from '../../services/horarioClubData.js'
+import { CATEGORIAS_CON_GRUPO } from '../../utils/horarioClub.js'
 import { diaLargo, formatHora, hoyLocal } from '../../utils/fechas.js'
-import { MENSAJES, enLista, validarCampos, validarFechaEntrenamiento, validarHoraEntrenamiento } from '../../utils/validaciones.js'
+import { MENSAJES, enLista, validarCampos, validarFechaEntrenamiento, validarHoraEntrenamiento, validarHoraFinEntrenamiento } from '../../utils/validaciones.js'
 
 // fechaOriginal: la fecha con la que se abrió el formulario al editar (null al crear). Conservarla no da error aunque ya
 // haya pasado; cambiarla a otra fecha pasada sí.
+const ENTRENADORES_ACTIVOS = ENTRENADORES.filter((e) => e.activo)
+const nombreEntrenador = (id) => ENTRENADORES.find((e) => String(e.id) === String(id))?.nombre ?? 'Todos los entrenadores'
+
 function validar(v, categorias, fechaOriginal = null) {
   return validarCampos(v, {
     categoria: [enLista(categorias, MENSAJES.entrenamientoCategoria)],
-    idEntrenador: [enLista(ENTRENADORES.map((e) => String(e.id)), MENSAJES.entrenamientoEntrenador)],
+    // '' = "Todos los entrenadores"; solo se ofrecen los activos
+    idEntrenador: [enLista(['', ...ENTRENADORES_ACTIVOS.map((e) => String(e.id))], MENSAJES.entrenamientoEntrenador)],
     fecha: [(valor) => validarFechaEntrenamiento(valor, valor === fechaOriginal ? valor : hoyLocal())],
     hora: [validarHoraEntrenamiento],
-    lugar: [enLista(LUGARES, MENSAJES.entrenamientoLugar)],
+    horaFin: [(valor, todos) => validarHoraFinEntrenamiento(valor, todos.hora)],
+    sede: [enLista(SEDES, MENSAJES.entrenamientoSede)],
   })
 }
 
-// Para buscar conflicto solo hacen falta fecha, hora y lugar válidos
+// Para buscar conflicto solo hacen falta fecha, hora y hora de fin válidas
 function tieneHorarioCompleto(v, fechaOriginal) {
   const errores = validar(v, [], fechaOriginal)
-  return !errores.fecha && !errores.hora && !errores.lugar
+  return !errores.fecha && !errores.hora && !errores.horaFin
 }
 
 // Formulario para crear y editar. No guarda por sí mismo: llama a onGuardar(valores).
@@ -54,6 +61,11 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
 
   function cambiar(campo, valor) {
     const nuevos = { ...valores, [campo]: valor }
+    if (campo === 'categoria') {
+      // Al elegir categoría se propone su entrenador responsable (o "Todos los entrenadores") y se limpia un grupo que no aplica
+      nuevos.idEntrenador = String(entrenadorDeCategoria(valor) ?? '')
+      if (!CATEGORIAS_CON_GRUPO.includes(valor)) nuevos.grupo = ''
+    }
     setValores(nuevos)
     if (errores[campo]) setErrores({ ...errores, [campo]: undefined })
     comprobarConflicto(nuevos)
@@ -82,6 +94,14 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
     }
   }
 
+  // Una alternativa cambia el inicio y el fin a la vez (misma duración)
+  function usarAlternativa(alt) {
+    const nuevos = { ...valores, hora: alt.hora, horaFin: alt.horaFin }
+    setValores(nuevos)
+    setErrores({ ...errores, hora: undefined, horaFin: undefined })
+    comprobarConflicto(nuevos)
+  }
+
   const describe = conflicto ? 'conflicto' : undefined
 
   return (
@@ -91,36 +111,44 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
         <option value="">Selecciona una categoría</option>
         {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
       </Field>
-      <Field label="Entrenador" requerido id="idEntrenador" as="select" value={valores.idEntrenador} error={errores.idEntrenador} onChange={(e) => cambiar('idEntrenador', e.target.value)}>
-        <option value="">Selecciona un entrenador</option>
-        {ENTRENADORES.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
+      <Field label="Entrenador" id="idEntrenador" as="select" value={valores.idEntrenador} error={errores.idEntrenador} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('idEntrenador', e.target.value)}>
+        <option value="">Todos los entrenadores</option>
+        {ENTRENADORES_ACTIVOS.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
       </Field>
       <Field label="Fecha" requerido id="fecha" type="date" min={fechaMinima} value={valores.fecha} error={errores.fecha} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('fecha', e.target.value)} />
-      <Field label="Hora" requerido id="hora" type="time" value={valores.hora} error={errores.hora} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('hora', e.target.value)} />
-      <Field label="Lugar" requerido id="lugar" as="select" value={valores.lugar} error={errores.lugar} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('lugar', e.target.value)}>
-        <option value="">Selecciona el lugar</option>
-        {LUGARES.map((l) => <option key={l} value={l}>{l}</option>)}
+      <Field label="Hora de inicio" requerido id="hora" type="time" value={valores.hora} error={errores.hora} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('hora', e.target.value)} />
+      <Field label="Hora de fin" requerido id="horaFin" type="time" value={valores.horaFin} error={errores.horaFin} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('horaFin', e.target.value)} />
+      <Field label="Sede" requerido id="sede" as="select" value={valores.sede} error={errores.sede} onChange={(e) => cambiar('sede', e.target.value)}>
+        <option value="">Selecciona la sede</option>
+        {SEDES.map((l) => <option key={l} value={l}>{l}</option>)}
       </Field>
+      {CATEGORIAS_CON_GRUPO.includes(valores.categoria) && (
+        <Field label="Grupo (opcional)" id="grupo" as="select" value={valores.grupo} onChange={(e) => cambiar('grupo', e.target.value)}>
+          <option value="">Sin grupo</option>
+          <option value="mañana">Mañana</option>
+          <option value="tarde">Tarde</option>
+        </Field>
+      )}
 
       {conflicto && (
         <div id="conflicto" role="alert" className="flex flex-col gap-3 rounded-lg border border-warning bg-warning p-3 text-warning">
           <p className="flex flex-wrap items-start gap-2 text-body-medium">
             <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0" />
             <span className="min-w-0 flex-1 basis-40 break-words">
-              Conflicto: {valores.lugar} ocupada el {diaLargo(valores.fecha).toLowerCase()} a las {formatHora(valores.hora)}
+              Conflicto: {nombreEntrenador(valores.idEntrenador)} ya tiene un entrenamiento el {diaLargo(valores.fecha).toLowerCase()} que se cruza con {formatHora(valores.hora)} – {formatHora(valores.horaFin)}.
               {conflicto.alternativas.length > 0 ? ' Horarios disponibles:' : ' No hay horarios alternativos ese día.'}
             </span>
           </p>
           {conflicto.alternativas.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {conflicto.alternativas.map((alt) => {
-                const etiqueta = alt.tipo === 'hora' ? formatHora(alt.hora) : `${alt.lugar} · ${formatHora(valores.hora)}`
+                const etiqueta = `${formatHora(alt.hora)} – ${formatHora(alt.horaFin)}`
                 return (
                   <button
-                    key={alt.tipo}
+                    key={alt.hora}
                     type="button"
-                    aria-label={alt.tipo === 'hora' ? `Cambiar la hora a ${etiqueta}` : `Cambiar el lugar: ${etiqueta}`}
-                    onClick={() => cambiar(alt.tipo === 'hora' ? 'hora' : 'lugar', alt.tipo === 'hora' ? alt.hora : alt.lugar)}
+                    aria-label={`Cambiar el horario a ${etiqueta}`}
+                    onClick={() => usarAlternativa(alt)}
                     className="min-h-11 rounded-full border bg-surface px-4 text-body-medium text-primary hover:bg-app focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                   >
                     {etiqueta}

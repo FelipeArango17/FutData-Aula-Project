@@ -47,9 +47,9 @@ const u = (id, nombre, apellido, correo, rol, activo = true) => ({ id, nombre, a
 let usuarios = [
   u(1, 'Carlos', 'Mendoza', 'administrador@pradofc.co', 'administrador'),
   u(2, 'Laura', 'Gómez', 'tesorero@pradofc.co', 'tesorero'),
-  u(3, 'Andrés', 'Mora', 'entrenador@pradofc.co', 'entrenador'),
+  u(3, 'Nicolás', 'Ejemplo', 'entrenador@pradofc.co', 'entrenador'),
   u(4, 'María', 'Torres', 'acudiente@pradofc.co', 'acudiente'),
-  u(5, 'Carlos', 'Díaz', 'carlos.diaz@pradofc.co', 'entrenador'),
+  u(5, 'Dairo', 'Ejemplo', 'dairo.ejemplo@pradofc.co', 'entrenador'),
   u(6, 'Pedro', 'Londoño', 'inactivo@pradofc.co', 'acudiente', false),
   u(7, 'Sofía', 'Henao', 'sofia.henao@pradofc.co', 'acudiente'),
   u(8, 'Diana', 'Restrepo', 'diana.restrepo@pradofc.co', 'administrador'),

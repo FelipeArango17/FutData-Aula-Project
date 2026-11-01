@@ -4,7 +4,7 @@ import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
 
 const torneos = [
-  { nombre: 'Copa Prado 2026 · Medellín', detalle: '8 nov. · Sub-10', estado: 'Convocatoria', tone: 'warning' },
+  { nombre: 'Copa Prado 2026 · Medellín', detalle: '8 nov. · Sub-12', estado: 'Convocatoria', tone: 'warning' },
   { nombre: 'Liga Antioquia · Envigado', detalle: '15 nov. · Sub-12', estado: 'Confirmado', tone: 'success' },
 ]
 const convocados = [
@@ -33,7 +33,7 @@ export default function Torneos() {
       <Card aria-labelledby="conv-titulo" className="flex flex-col gap-3">
         <div>
           <h2 id="conv-titulo" className="text-h3">Convocatoria · Copa Prado</h2>
-          <p className="text-body text-secondary">Sub-10 · 8 nov. · 14 de 18 convocados</p>
+          <p className="text-body text-secondary">Sub-12 · 8 nov. · 14 de 18 convocados</p>
         </div>
         <ul className="flex flex-col gap-3">
           {convocados.map(([nombre, estado, tone]) => (

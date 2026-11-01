@@ -63,7 +63,7 @@ describe('límites de las fechas en los formularios', () => {
 
   it('entrenamiento nuevo: min de la fecha es hoy; al editar uno pasado no hay min', () => {
     const props = { categorias: ['Cachorros'], detectarConflicto: async () => ({ hayConflicto: false }), onGuardar: sin, onCancelar: () => {} }
-    const base = { categoria: 'Cachorros', idEntrenador: '1', hora: '16:00', lugar: 'Cancha 1' }
+    const base = { categoria: 'Cachorros', idEntrenador: '1', hora: '16:00', horaFin: '17:00', sede: 'Horizontes' }
     const nuevo = renderToStaticMarkup(<FormularioEntrenamiento {...props} inicial={{ ...base, fecha: '' }} />)
     expect(nuevo).toContain(`min="${hoyLocal()}"`)
     const pasado = renderToStaticMarkup(<FormularioEntrenamiento {...props} ignorarId={1} inicial={{ ...base, fecha: '2020-01-01' }} />)

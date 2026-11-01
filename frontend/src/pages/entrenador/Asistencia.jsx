@@ -280,7 +280,7 @@ export default function Asistencia() {
   else if (faltan.length > 0) avisoError = { texto: `Falta marcar la asistencia de ${plural(faltan.length, 'deportista', 'deportistas')}. Revisa las filas señaladas.` }
 
   const etiquetaOpcion = (e) =>
-    `${diaLargo(e.fecha)} · ${formatHora(e.hora)} · ${e.categoria} · ${e.lugar}${e.registrada ? ' · Registrada' : ''}`
+    `${diaLargo(e.fecha)} · ${formatHora(e.hora)} · ${e.categoria}${e.grupo ? ` (${e.grupo})` : ''} · ${e.sede}${e.registrada ? ' · Registrada' : ''}`
   const entrenamiento = data?.entrenamiento
 
   let contenido
@@ -332,7 +332,7 @@ export default function Asistencia() {
         <section aria-labelledby="titulo-lista-asistencia" className="flex min-w-0 grow basis-[24rem] flex-col gap-4">
           <div className="flex flex-col gap-1">
             <h2 id="titulo-lista-asistencia" tabIndex={-1} className="break-words text-h3 outline-none">
-              {entrenamiento.categoria} · {entrenamiento.lugar} · {formatHora(entrenamiento.hora)}
+              {entrenamiento.categoria}{entrenamiento.grupo ? ` (${entrenamiento.grupo})` : ''} · {entrenamiento.sede} · {formatHora(entrenamiento.hora)}
               {modo === 'edicion' && ' · Editando'}
             </h2>
             <p className="break-words text-body text-secondary">

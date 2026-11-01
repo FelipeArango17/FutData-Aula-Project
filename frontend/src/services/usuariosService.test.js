@@ -63,7 +63,7 @@ describe('listarUsuarios: búsqueda y filtros', () => {
   it('busca por nombre, apellido o correo, sin mayúsculas ni tildes', async () => {
     expect((await listar({ texto: 'GOMEZ' })).map((x) => x.correo)).toEqual(['tesorero@pradofc.co'])
     expect((await listar({ texto: 'sofia.henao' })).map((x) => x.correo)).toEqual(['sofia.henao@pradofc.co'])
-    expect(await listar({ texto: 'carlos' })).toHaveLength(2)
+    expect(await listar({ texto: 'ejemplo' })).toHaveLength(2)
     expect(await listar({ texto: 'nadie' })).toEqual([])
   })
 

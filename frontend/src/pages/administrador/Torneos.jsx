@@ -4,8 +4,8 @@ import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
 
 const torneos = [
-  { nombre: 'Copa Prado 2026 · Medellín', fecha: '8 nov. 2026', estado: 'Convocatoria', tone: 'warning', delegadas: ['Sub-10 → Carlos Díaz', 'Sub-12 → Andrés Mora'] },
-  { nombre: 'Liga Antioquia · Envigado', fecha: '15 nov. 2026', estado: 'Confirmado', tone: 'success', delegadas: ['Sub-12 → Andrés Mora'] },
+  { nombre: 'Copa Prado 2026 · Medellín', fecha: '8 nov. 2026', estado: 'Convocatoria', tone: 'warning', delegadas: ['Sub-10 → Dairo', 'Sub-12 → Nicolás'] },
+  { nombre: 'Liga Antioquia · Envigado', fecha: '15 nov. 2026', estado: 'Confirmado', tone: 'success', delegadas: ['Sub-12 → Nicolás'] },
 ]
 
 export default function Torneos() {

@@ -3,94 +3,93 @@
 // Axios (GET/POST/PUT/DELETE /entrenamientos) sin tocar las pantallas.
 //
 // Forma de datos propuesta para el frontend:
-//   Entrenamiento = { id, categoria, fecha, hora, lugar, idEntrenador }
+//   Entrenamiento = { id, categoria, fecha, hora, horaFin, sede, idEntrenador, grupo }
 //     id           número
 //     categoria    texto, por ejemplo "Sub-12"
 //     fecha        "AAAA-MM-DD"
-//     hora         "HH:MM" (24 h)
-//     lugar        texto, por ejemplo "Cancha 2"
-//     idEntrenador número (Entrenador.id_entrenador del diccionario de datos)
+//     hora         "HH:MM" (24 h) de inicio; horaFin "HH:MM" de fin
+//     sede         "Horizontes" o "UVA El Paraíso"
+//     idEntrenador número, o null = "Todos los entrenadores" (Párvulos, Cachorros y Semillero no tienen entrenador fijo)
+//     grupo        "mañana" | "tarde" | null (solo Sub-9 y Sub-10, que tienen dos grupos)
+//   Los entrenamientos de ejemplo de la semana de HOY_EJEMPLO salen de la plantilla semanal del club
+//   (horarioClubData.js + utils/horarioClub.js).
 //
-// PENDIENTE: confirmar con el modelo de datos del backend. Entrenamiento, Categoría y Lugar
+// Conflicto: un entrenador no puede tener dos entrenamientos que se cruzan en la misma fecha. Varias categorías sí pueden
+// coincidir en hora y sede (el club lo hace), y "Todos los entrenadores" no choca con nadie.
+//
+// PENDIENTE: confirmar con el modelo de datos del backend. Entrenamiento, Categoría y Sede
 // NO existen todavía en docs/info-sprints/sprint-1/diccionario-datos.md (solo Entrenador, con
 // `horario_trabajo`). Todo lo de este archivo es una propuesta y puede cambiar.
 import { NOMBRES_CATEGORIAS } from '../utils/categorias.js'
-import { sumarMinutos } from '../utils/fechas.js'
+import { chocaEntrenador, entrenamientosDeSemana } from '../utils/horarioClub.js'
+import { lunesDe, sumarMinutos } from '../utils/fechas.js'
+import { ENTRENADORES_CLUB, FRANJAS_EJEMPLO, SEDES } from './horarioClubData.js'
 
 // Día "de hoy" del mockup de Figma; con él los datos de ejemplo caen en la semana del 19 al 24 de octubre.
 export const HOY_EJEMPLO = '2026-10-22'
 
 // Las categorías son las del club (utils/categorias.js, regla provisional por año de nacimiento).
-// PENDIENTE: confirmar con el modelo de datos del backend (categorías y lugares aún no existen).
+// PENDIENTE: confirmar con el modelo de datos del backend (categorías y sedes aún no existen).
 export const CATEGORIAS = NOMBRES_CATEGORIAS
-export const LUGARES = ['Cancha 1', 'Cancha 2']
+export { SEDES }
+
+// Entrenadores de ejemplo (horarioClubData.js); el rol "entrenador" de la sesión de ejemplo es Nicolás.
+// Todos activos: este servicio no gestiona altas ni bajas (eso lo hace entrenadoresService).
+export const ENTRENADORES = ENTRENADORES_CLUB.map(({ id, nombre }) => ({ id, nombre, activo: true }))
+export const ID_ENTRENADOR_EJEMPLO = 1
 
 // Categorías que puede ver y editar cada rol (dato de ejemplo hasta que exista el login).
 export const categoriasPorRol = {
-  entrenador: ['Sub-10', 'Sub-12'],
+  entrenador: ENTRENADORES_CLUB.find((e) => e.id === ID_ENTRENADOR_EJEMPLO).categorias,
   administrador: CATEGORIAS,
 }
-
-// Entrenadores de ejemplo; el rol "entrenador" de la sesión de ejemplo es Andrés Mora.
-export const ENTRENADORES = [
-  { id: 1, nombre: 'Andrés Mora' },
-  { id: 2, nombre: 'Carlos Díaz' },
-]
-export const ID_ENTRENADOR_EJEMPLO = 1
 
 // Jugadores por categoría, solo para el mensaje simulado "Se notificará a N jugadores".
 const JUGADORES_POR_CATEGORIA = {
   Párvulos: 10, Cachorros: 14, 'Sub-9': 13, 'Sub-10': 15, 'Sub-11': 16, 'Sub-12': 17, 'Sub-13': 15, 'Sub-14': 16, 'Sub-15': 14, 'Sub-16': 12,
 }
 
-let entrenamientos = [
-  { id: 1, categoria: 'Cachorros', fecha: '2026-10-19', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 2, categoria: 'Sub-12', fecha: '2026-10-19', hora: '17:30', lugar: 'Cancha 2', idEntrenador: 1 },
-  { id: 3, categoria: 'Sub-10', fecha: '2026-10-20', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 4, categoria: 'Sub-14', fecha: '2026-10-20', hora: '17:30', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 5, categoria: 'Cachorros', fecha: '2026-10-21', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 6, categoria: 'Sub-12', fecha: '2026-10-21', hora: '17:30', lugar: 'Cancha 2', idEntrenador: 1 },
-  { id: 7, categoria: 'Sub-10', fecha: '2026-10-22', hora: '16:00', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 8, categoria: 'Sub-14', fecha: '2026-10-22', hora: '17:30', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 9, categoria: 'Sub-16', fecha: '2026-10-23', hora: '17:30', lugar: 'Cancha 1', idEntrenador: 2 },
-  { id: 10, categoria: 'Sub-12', fecha: '2026-10-24', hora: '09:00', lugar: 'Cancha 2', idEntrenador: 1 },
-  { id: 11, categoria: 'Sub-12', fecha: '2026-10-24', hora: '10:00', lugar: 'Cancha 2', idEntrenador: 1 },
-]
-let siguienteId = 12
+// Entrenamientos de la semana de HOY_EJEMPLO, sacados de la plantilla semanal. Se calculan una vez para poder compartir ids
+// (la asistencia de ejemplo se apoya en ellos).
+export const entrenamientosDeEjemplo = () => entrenamientosDeSemana(lunesDe(HOY_EJEMPLO), FRANJAS_EJEMPLO)
+
+let entrenamientos = entrenamientosDeEjemplo()
+let siguienteId = entrenamientos.length + 1
 
 const copiar = (e) => ({ ...e })
-const mismoHorario = (a, b) => a.fecha === b.fecha && a.hora === b.hora && a.lugar === b.lugar
 
-const datosLimpios = ({ categoria, fecha, hora, lugar, idEntrenador }) => ({
+const datosLimpios = ({ categoria, fecha, hora, horaFin, sede, idEntrenador, grupo }) => ({
   categoria,
   fecha,
   hora,
-  lugar,
-  idEntrenador: Number(idEntrenador),
+  horaFin,
+  sede,
+  idEntrenador: idEntrenador === '' || idEntrenador === null || idEntrenador === undefined ? null : Number(idEntrenador),
+  grupo: grupo || null,
 })
 
 export async function listar() {
   return entrenamientos.map(copiar)
 }
 
-// Conflicto = otro entrenamiento en el mismo lugar, fecha y hora.
-// Devuelve { hayConflicto, alternativas: [{ tipo: 'hora', hora } | { tipo: 'lugar', lugar }] }.
+// Conflicto = el mismo entrenador ya tiene otro entrenamiento que se cruza ese día. Sin entrenador ("Todos") no hay conflicto.
+// Devuelve { hayConflicto, alternativas: [{ tipo: 'hora', hora, horaFin }] } con el siguiente horario libre del entrenador
+// (pasos de 1 h 30 min, con la misma duración).
 export async function detectarConflicto(datos, ignorarId = null) {
-  const otros = entrenamientos.filter((e) => e.id !== ignorarId)
-  if (!otros.some((e) => mismoHorario(e, datos))) return { hayConflicto: false, alternativas: [] }
+  const propuesto = datosLimpios(datos)
+  if (!chocaEntrenador(propuesto, entrenamientos, ignorarId)) return { hayConflicto: false, alternativas: [] }
 
   const alternativas = []
-  // Misma fecha y lugar, más tarde (pasos de 1 h 30 min, como el 11:30 del diseño)
-  for (let hora = sumarMinutos(datos.hora, 90); hora; hora = sumarMinutos(hora, 90)) {
-    if (!otros.some((e) => mismoHorario(e, { ...datos, hora }))) {
-      alternativas.push({ tipo: 'hora', hora })
+  const minutos = (hora) => Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3))
+  const duracion = minutos(propuesto.horaFin) - minutos(propuesto.hora)
+  for (let hora = sumarMinutos(propuesto.hora, 90); hora; hora = sumarMinutos(hora, 90)) {
+    const horaFin = sumarMinutos(hora, duracion)
+    if (!horaFin) break
+    if (!chocaEntrenador({ ...propuesto, hora, horaFin }, entrenamientos, ignorarId)) {
+      alternativas.push({ tipo: 'hora', hora, horaFin })
       break
     }
   }
-  // Misma fecha y hora, en otro lugar libre
-  const lugarLibre = LUGARES.find((lugar) => lugar !== datos.lugar && !otros.some((e) => mismoHorario(e, { ...datos, lugar })))
-  if (lugarLibre) alternativas.push({ tipo: 'lugar', lugar: lugarLibre })
-
   return { hayConflicto: true, alternativas }
 }
 

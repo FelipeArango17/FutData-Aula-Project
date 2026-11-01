@@ -66,11 +66,11 @@ describe('lectura', () => {
   it('listarCategorias conserva entrenador: null', async () => {
     rutas['GET /categorias'] = () => respuesta(200, [
       { id: 'c1', nombre: 'Cachorros', edadMinima: 0, edadMaxima: 7, entrenador: null },
-      { id: 'c2', nombre: 'Sub-12', edadMinima: 10, edadMaxima: 11, entrenador: { id: ID, nombre: 'Andrés', apellido: 'Mora' } },
+      { id: 'c2', nombre: 'Sub-12', edadMinima: 10, edadMaxima: 11, entrenador: { id: ID, nombre: 'Nicolás', apellido: 'Ejemplo' } },
     ])
     const categorias = await servicio.listarCategorias()
     expect(categorias[0].entrenador).toBeNull()
-    expect(categorias[1].entrenador).toEqual({ id: ID, nombre: 'Andrés', apellido: 'Mora' })
+    expect(categorias[1].entrenador).toEqual({ id: ID, nombre: 'Nicolás', apellido: 'Ejemplo' })
   })
 
   it('el duplicado lo decide el backend: detectarDuplicado no consulta nada', async () => {

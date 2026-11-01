@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MENSAJES, casillaMarcada, enLista, esCorreoValido, maximoCaracteres, requeridoSi, validarFechaPago, validarMes, noVacia, requerido, validarCampos, validarCorreo, validarDireccion, validarDocumento,
-  validarFechaEntrenamiento, validarFechaNacimiento, validarFechaNacimientoEntrenador, validarHoraEntrenamiento, validarMonto, validarNombre, validarTelefono,
+  validarFechaEntrenamiento, validarFechaNacimiento, validarFechaNacimientoEntrenador, validarHoraEntrenamiento, validarHoraFinEntrenamiento, validarMonto, validarNombre, validarTelefono,
 } from './validaciones.js'
 
 const HOY = '2026-10-22'
@@ -9,7 +9,7 @@ const HOY = '2026-10-22'
 describe('esCorreoValido', () => {
   it('acepta correos con formato válido', () => {
     expect(esCorreoValido('nombre@correo.com')).toBe(true)
-    expect(esCorreoValido('carlos.diaz@pradofc.co')).toBe(true)
+    expect(esCorreoValido('dairo.ejemplo@pradofc.co')).toBe(true)
     expect(esCorreoValido('a+b@sub.dominio.org')).toBe(true)
     expect(esCorreoValido('  nombre@correo.com  ')).toBe(true)
   })
@@ -331,6 +331,17 @@ describe('validaciones del formulario de entrenamientos', () => {
     expect(validarHoraEntrenamiento('')).toBe('Indica la hora del entrenamiento.')
     expect(validarHoraEntrenamiento('25:00')).toBe('La hora no es válida. Usa el formato HH:MM.')
     expect(validarHoraEntrenamiento('16:30')).toBeNull()
+  })
+})
+
+describe('validarHoraFinEntrenamiento', () => {
+  it('obligatoria, con formato válido y posterior a la de inicio', () => {
+    expect(validarHoraFinEntrenamiento('', '19:00')).toBe('Indica la hora de fin del entrenamiento.')
+    expect(validarHoraFinEntrenamiento('25:00', '19:00')).toBe('La hora no es válida. Usa el formato HH:MM.')
+    expect(validarHoraFinEntrenamiento('19:00', '19:00')).toBe('La hora de fin debe ser posterior a la de inicio.')
+    expect(validarHoraFinEntrenamiento('18:30', '19:00')).toBe('La hora de fin debe ser posterior a la de inicio.')
+    expect(validarHoraFinEntrenamiento('20:00', '19:00')).toBeNull()
+    expect(validarHoraFinEntrenamiento('20:00', '')).toBeNull()
   })
 })
 
