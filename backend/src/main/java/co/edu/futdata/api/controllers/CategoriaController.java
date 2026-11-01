@@ -25,7 +25,7 @@ public class CategoriaController {
     }
 
     @GetMapping
-    @Operation(summary = "Listar las categorías", description = "En el orden oficial (Párvulos, Cachorros y de Sub-9 a Sub-16), con su entrenador")
+    @Operation(summary = "Listar las categorías", description = "En el orden oficial (Párvulos, Cachorros, Semillero y de Sub-11 a Sub-16), con su entrenador")
     @ApiResponse(responseCode = "200", description = "Lista; vacía mientras no se creen las categorías en la base de datos")
     public List<CategoriaResponseDTO> listar() {
         return entrenadores.listarCategorias();

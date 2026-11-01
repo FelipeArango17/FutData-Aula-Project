@@ -305,7 +305,7 @@ Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion
   "telefono": "3001112233",
   "correo": "luis.perez@pradofc.co",
   "especialidad": "Porteros",
-  "categorias": ["Sub-9", "Sub-12"],
+  "categorias": ["Semillero", "Sub-12"],
   "horarioTrabajo": "Lunes a viernes, 3:30 p. m. a 7:30 p. m.",
   "direccion": null,
   "activo": true
@@ -318,7 +318,7 @@ Los mismos nombres de campo que el frontend, más `fechaNacimiento` y `direccion
 | `tipoDocumento` | `tipo_documento` | **Código** de la base: `CC`, `CE` o `PASAPORTE` (ver la tabla de abajo). La tabla también permite `TI`, pero no se acepta para entrenadores |
 | `documento` | `documento_identidad` | Texto: conserva los ceros iniciales. El pasaporte puede tener letras y se guarda en mayúsculas |
 | `fechaNacimiento` | `fecha_nacimiento` | `AAAA-MM-DD` |
-| `categorias` | `categoria.id_entrenador` | Nombres, en el orden oficial: `Párvulos`, `Cachorros` y de `Sub-9` a `Sub-16`. Solo en las respuestas |
+| `categorias` | `categoria.id_entrenador` | Nombres, en el orden oficial: `Párvulos`, `Cachorros`, `Semillero` y de `Sub-11` a `Sub-16`. Solo en las respuestas |
 | `horarioTrabajo`, `direccion` | `horario_trabajo`, `direccion` | Opcionales. Vacíos se guardan y se devuelven como `null` (el frontend usaba `''`) |
 | `activo` | `activo` | Solo en las respuestas; se cambia con `PATCH /api/entrenadores/{id}/estado`. Un inactivo conserva sus datos, pero no dirige categorías |
 
@@ -364,17 +364,17 @@ Todos los errores salen juntos en un `400`. Los mensajes nunca repiten el valor 
 
 ### Categorías
 
-Según las decisiones **D1** y **D7**, cada categoría tiene **como máximo un entrenador**, y las migraciones 004 y 007 crean las categorías del club (Párvulos, Cachorros y Sub-9 a Sub-16) sin entrenador. `PUT /api/entrenadores/{id}/categorias` recibe la lista **completa**:
+Según las decisiones **D1** y **D7**, cada categoría tiene **como máximo un entrenador**, y las migraciones 004 y 007 crean las 9 categorías del club (Párvulos, Cachorros, Semillero y Sub-11 a Sub-16) sin entrenador. `PUT /api/entrenadores/{id}/categorias` recibe la lista **completa**:
 
 ```json
-{ "categorias": ["Sub-9", "Sub-12"], "reasignar": true }
+{ "categorias": ["Semillero", "Sub-12"], "reasignar": true }
 ```
 
 - **Tomar una categoría sin entrenador** la asigna directamente.
-- **Tomar una categoría de otro entrenador** la pasa de ese entrenador a este. Exige `"reasignar": true`. Sin él, la respuesta es `409` y dice cuáles tienen otro entrenador, por ejemplo `Sub-9 ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.` La pantalla puede pedir la confirmación y reenviar con `"reasignar": true`.
+- **Tomar una categoría de otro entrenador** la pasa de ese entrenador a este. Exige `"reasignar": true`. Sin él, la respuesta es `409` y dice cuáles tienen otro entrenador, por ejemplo `Semillero ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.` La pantalla puede pedir la confirmación y reenviar con `"reasignar": true`.
 - **Quitar una categoría** (no enviarla) la deja **sin entrenador**. Una lista vacía le quita todas.
 - Un **entrenador inactivo** no puede recibir categorías: `409` con `El entrenador está inactivo. Actívalo antes de asignarle categorías.` y `campos: ["activo"]`.
-- Un nombre que no es categoría del club (`Sub-99`, `sub-9`) responde `400`. Un nombre oficial que no está en la tabla responde `400` con `Sub-14 todavía no está creada en la base de datos` (no debería pasar después de la migración 004).
+- Un nombre que no es categoría del club (`Sub-99`, `sub-12`, `Sub-9`) responde `400`. Un nombre oficial que no está en la tabla responde `400` con `Sub-14 todavía no está creada en la base de datos` (no debería pasar después de la migración 004).
 - El orden y los repetidos de la lista no importan.
 - Todo pasa en **una transacción**: las categorías se bloquean (`SELECT ... FOR UPDATE`) mientras se decide, así que dos asignaciones al mismo tiempo no se pisan, y un `409` no deja cambios a medias.
 

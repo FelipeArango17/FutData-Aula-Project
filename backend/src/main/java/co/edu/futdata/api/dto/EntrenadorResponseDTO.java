@@ -9,7 +9,7 @@ import java.util.UUID;
  * Un entrenador como lo recibe el frontend (misma forma que {@code entrenadoresService.js}, más
  * {@code fechaNacimiento} y {@code direccion}). Los opcionales vacíos llegan como {@code null}.
  *
- * @param categorias nombres de las categorías que dirige, en el orden oficial (Párvulos, Cachorros, Sub-9 a Sub-16)
+ * @param categorias nombres de las categorías que dirige, en el orden oficial (Párvulos, Cachorros, Semillero, Sub-11 a Sub-16)
  * @param activo     {@code false} si fue desactivado: conserva su historial, pero no dirige categorías
  */
 public record EntrenadorResponseDTO(
@@ -22,7 +22,7 @@ public record EntrenadorResponseDTO(
         @Schema(example = "3001112233") String telefono,
         @Schema(example = "luis.perez@pradofc.co") String correo,
         @Schema(example = "Porteros") String especialidad,
-        @Schema(example = "[\"Sub-9\", \"Sub-12\"]") List<String> categorias,
+        @Schema(example = "[\"Semillero\", \"Sub-12\"]") List<String> categorias,
         @Schema(example = "Lunes a viernes, 3:30 p. m. a 7:30 p. m.") String horarioTrabajo,
         @Schema(example = "Calle 40 Sur 75b-81") String direccion,
         @Schema(example = "true") boolean activo) {

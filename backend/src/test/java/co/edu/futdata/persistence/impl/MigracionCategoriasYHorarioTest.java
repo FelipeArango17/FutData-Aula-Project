@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,14 +17,19 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 /**
- * Las reglas que deja la migración 007 (categorías del club, registro civil, sedes y horario fijo) contra un
- * PostgreSQL real. Cada rechazo se comprueba por el nombre de la restricción, que es lo que usará el backend para
+ * Las reglas que deja la migración 007 (las 9 categorías del club, registro civil, tipos de documento del club,
+ * sedes y horario fijo) y el seed {@code supabase/seeds/franjas_club.sql}, contra un PostgreSQL real. Cada rechazo
+ * se comprueba por el nombre de la restricción, que es lo que usará el backend para
  * traducirlo a un mensaje.
  */
 @ExtendWith(DockerDisponible.class)
 class MigracionCategoriasYHorarioTest {
 
     private static final LocalDate FECHA = LocalDate.of(2026, 11, 10);
+
+    /** Los 7 tipos de documento que pide el club (v4 de la entrega de backend). */
+    private static final List<String> TIPOS_DE_DOCUMENTO = List.of("DOCUMENTO_IDENTIDAD", "CERTIFICADO_ESTUDIO",
+            "FORMULARIO_INSCRIPCION", "AUTORIZACION_HABEAS_DATA", "PAZ_Y_SALVO", "CARTA_RENUNCIA", "TRASPASO_NACIONAL");
 
     private NamedParameterJdbcTemplate jdbc;
     private UUID diaz;
@@ -42,6 +48,7 @@ class MigracionCategoriasYHorarioTest {
     void limpiarTodo() {
         jdbc.getJdbcOperations().update("DELETE FROM entrenamiento");
         jdbc.getJdbcOperations().update("DELETE FROM franja_horario");
+        jdbc.getJdbcOperations().update("DELETE FROM documento");
         jdbc.getJdbcOperations().update("DELETE FROM deportista");
         PostgresDePrueba.limpiar();
     }
@@ -52,13 +59,36 @@ class MigracionCategoriasYHorarioTest {
     void soloExistenLasCategoriasDelClubPorAnioDeNacimiento() {
         assertThatCode(() -> PostgresDePrueba.categoria("Párvulos", diaz)).doesNotThrowAnyException();
         assertThatCode(() -> PostgresDePrueba.categoria("Cachorros", diaz)).doesNotThrowAnyException();
-        assertThatCode(() -> PostgresDePrueba.categoria("Sub-9", diaz)).doesNotThrowAnyException();
+        assertThatCode(() -> PostgresDePrueba.categoria("Semillero", diaz)).doesNotThrowAnyException();
+        assertThatCode(() -> PostgresDePrueba.categoria("Sub-11", diaz)).doesNotThrowAnyException();
         assertThatCode(() -> PostgresDePrueba.categoria("Sub-16", diaz)).doesNotThrowAnyException();
     }
 
     @Test
+    void semilleroEsDe9A10Anios() {
+        assertThatCode(() -> insertarCategoria("Semillero", 9, 10)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void semilleroConOtroRangoSeRechaza() {
+        assertThatThrownBy(() -> insertarCategoria("Semillero", 9, 9))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("categoria_nombre_rango_ck");
+    }
+
+    @Test
+    void sub9YSub10YaNoSonCategoriasNiConSuRangoDeUnAnio() {
+        // Antes de la v4 eran válidas con un solo año; ahora esas edades son de Semillero
+        for (Object[] c : new Object[][] {{"Sub-9", 9, 9}, {"Sub-10", 10, 10}, {"Sub-9", 9, 10}, {"Sub-10", 9, 10}}) {
+            assertThatThrownBy(() -> insertarCategoria((String) c[0], (int) c[1], (int) c[2]))
+                    .isInstanceOf(DataAccessException.class)
+                    .hasMessageContaining("categoria_nombre_rango_ck");
+        }
+    }
+
+    @Test
     void sub8YSub17YaNoSonCategorias() {
-        for (String nombre : new String[] {"Sub-8", "Sub-17", "Semillero"}) {
+        for (String nombre : new String[] {"Sub-8", "Sub-17"}) {
             assertThatThrownBy(() -> insertarCategoria(nombre, 0, 7))
                     .isInstanceOf(DataAccessException.class)
                     .hasMessageContaining("categoria_nombre_rango_ck");
@@ -92,17 +122,42 @@ class MigracionCategoriasYHorarioTest {
                 "SELECT count(*) FROM entrenador WHERE tipo_documento = 'CC'", Integer.class)).isEqualTo(2);
     }
 
+    // --- Documentos que se cargan ---------------------------------------------------------------------------
+
+    @Test
+    void unDocumentoAceptaLosSieteTiposDelClub() {
+        UUID deportista = insertarDeportista("TI", "1098765432");
+
+        for (String tipo : TIPOS_DE_DOCUMENTO) {
+            assertThatCode(() -> insertarDocumento(deportista, tipo)).as(tipo).doesNotThrowAnyException();
+        }
+        assertThat(jdbc.getJdbcOperations().queryForObject("SELECT count(*) FROM documento", Integer.class))
+                .isEqualTo(7);
+    }
+
+    @Test
+    void laFichaMedicaYLosTiposViejosYaNoSonDocumentos() {
+        UUID deportista = insertarDeportista("TI", "1098765432");
+
+        for (String tipo : new String[] {"FICHA_MEDICA", "PERMISO", "CONTRATO", "OTRO"}) {
+            assertThatThrownBy(() -> insertarDocumento(deportista, tipo))
+                    .as(tipo)
+                    .isInstanceOf(DataAccessException.class)
+                    .hasMessageContaining("documento_tipo_ck");
+        }
+    }
+
     // --- Sedes y entrenamientos -----------------------------------------------------------------------------
 
     @Test
     void unEntrenamientoSoloPuedeSerEnUnaDeLasDosSedes() {
-        UUID sub10 = PostgresDePrueba.categoria("Sub-10", diaz);
+        UUID semillero = PostgresDePrueba.categoria("Semillero", diaz);
 
-        assertThatCode(() -> insertarEntrenamiento(sub10, diaz, "Horizontes", "18:00", "19:00"))
+        assertThatCode(() -> insertarEntrenamiento(semillero, diaz, "Horizontes", "18:00", "19:00"))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> insertarEntrenamiento(sub10, diaz, "UVA El Paraíso", "20:00", "21:00"))
+        assertThatCode(() -> insertarEntrenamiento(semillero, diaz, "UVA El Paraíso", "20:00", "21:00"))
                 .doesNotThrowAnyException();
-        assertThatThrownBy(() -> insertarEntrenamiento(sub10, diaz, "Cancha 1", "16:00", "17:00"))
+        assertThatThrownBy(() -> insertarEntrenamiento(semillero, diaz, "Cancha 1", "16:00", "17:00"))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("entrenamiento_sede_ck");
     }
@@ -156,15 +211,15 @@ class MigracionCategoriasYHorarioTest {
 
     @Test
     void unaFranjaTieneSedeHorasYGrupoValidos() {
-        UUID sub9 = PostgresDePrueba.categoria("Sub-9", diaz);
+        UUID cachorros = PostgresDePrueba.categoria("Cachorros", diaz);
 
-        assertThatThrownBy(() -> insertarFranja(sub9, 3, "10:00", "11:00", "Cancha 1", null))
+        assertThatThrownBy(() -> insertarFranja(cachorros, 3, "10:00", "11:00", "Cancha 1", null))
                 .hasMessageContaining("franja_sede_ck");
-        assertThatThrownBy(() -> insertarFranja(sub9, 3, "11:00", "10:00", "Horizontes", null))
+        assertThatThrownBy(() -> insertarFranja(cachorros, 3, "11:00", "10:00", "Horizontes", null))
                 .hasMessageContaining("franja_horas_ck");
-        assertThatThrownBy(() -> insertarFranja(sub9, 3, "10:00", "11:00", "Horizontes", null, "noche"))
+        assertThatThrownBy(() -> insertarFranja(cachorros, 3, "10:00", "11:00", "Horizontes", null, "noche"))
                 .hasMessageContaining("franja_grupo_ck");
-        assertThatCode(() -> insertarFranja(sub9, 3, "07:00", "08:00", "UVA El Paraíso", null, "mañana"))
+        assertThatCode(() -> insertarFranja(cachorros, 2, "07:30", "09:00", "UVA El Paraíso", null, "mañana"))
                 .doesNotThrowAnyException();
     }
 
@@ -193,6 +248,34 @@ class MigracionCategoriasYHorarioTest {
         assertThatCode(() -> insertarFranja(sub13, 2, "19:30", "20:30", "Horizontes", diaz)).doesNotThrowAnyException();
     }
 
+    // --- Seed del horario del club --------------------------------------------------------------------------
+
+    @Test
+    void elSeedDelClubCargaLas30FranjasConGrupoSoloEnCachorrosYSemilleroMartesYJueves() {
+        // limpiar() borra las categorías de la migración: se recrean las 9, sin entrenador, como en una base nueva
+        PostgresDePrueba.RANGOS.forEach((nombre, rango) -> insertarCategoria(nombre, rango[0], rango[1]));
+
+        PostgresDePrueba.ejecutarScript(PostgresDePrueba.SEEDS.resolve("franjas_club.sql"));
+
+        var sql = jdbc.getJdbcOperations();
+        assertThat(sql.queryForObject("SELECT count(*) FROM franja_horario", Integer.class)).isEqualTo(30);
+        assertThat(sql.queryForObject("SELECT count(*) FROM franja_horario WHERE id_entrenador IS NULL", Integer.class))
+                .isEqualTo(30);
+        assertThat(sql.queryForList("""
+                SELECT f.grupo || ' ' || count(*) FROM franja_horario f
+                 WHERE f.grupo IS NOT NULL GROUP BY f.grupo ORDER BY f.grupo""", String.class))
+                .containsExactly("mañana 4", "tarde 4");
+        assertThat(sql.queryForObject("""
+                SELECT count(*) FROM franja_horario f JOIN categoria c ON c.id_categoria = f.id_categoria
+                 WHERE f.grupo IS NOT NULL AND c.nombre IN ('Cachorros', 'Semillero') AND f.dia IN (2, 4)""",
+                Integer.class)).isEqualTo(8);
+        assertThat(sql.queryForList("""
+                SELECT c.nombre || ' ' || count(*) FROM franja_horario f JOIN categoria c ON c.id_categoria = f.id_categoria
+                 GROUP BY c.nombre, c.edad_minima ORDER BY c.edad_minima""", String.class))
+                .containsExactly("Párvulos 2", "Cachorros 5", "Semillero 5", "Sub-11 3", "Sub-12 3", "Sub-13 3",
+                        "Sub-14 3", "Sub-15 3", "Sub-16 3");
+    }
+
     // --- Ayudas ---------------------------------------------------------------------------------------------
 
     private void insertarCategoria(String nombre, int minima, int maxima) {
@@ -200,12 +283,21 @@ class MigracionCategoriasYHorarioTest {
                 new MapSqlParameterSource("n", nombre).addValue("min", minima).addValue("max", maxima));
     }
 
-    private void insertarDeportista(String tipo, String documento) {
-        jdbc.update("""
+    private UUID insertarDeportista(String tipo, String documento) {
+        return jdbc.queryForObject("""
                 INSERT INTO deportista (nombre, apellido, tipo_documento, documento_identidad, fecha_nacimiento)
-                VALUES ('Pedro', 'Gómez', :tipo, :documento, :nacimiento)""",
+                VALUES ('Pedro', 'Gómez', :tipo, :documento, :nacimiento)
+                RETURNING id_deportista""",
                 new MapSqlParameterSource("tipo", tipo).addValue("documento", documento)
-                        .addValue("nacimiento", LocalDate.of(2016, 3, 3)));
+                        .addValue("nacimiento", LocalDate.of(2016, 3, 3)), UUID.class);
+    }
+
+    private void insertarDocumento(UUID deportista, String tipo) {
+        jdbc.update("""
+                INSERT INTO documento (id_deportista, tipo, ruta, nombre_original, tipo_contenido, tamano_bytes)
+                VALUES (:deportista, :tipo, :ruta, 'archivo.pdf', 'application/pdf', 1024)""",
+                new MapSqlParameterSource("deportista", deportista).addValue("tipo", tipo)
+                        .addValue("ruta", "documentos/" + deportista + "/" + tipo + ".pdf"));
     }
 
     private void insertarEntrenamiento(UUID categoria, UUID entrenador, String lugar, String inicio, String fin) {

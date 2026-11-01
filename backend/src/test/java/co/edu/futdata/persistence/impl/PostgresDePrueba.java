@@ -30,7 +30,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>Las migraciones referencian {@code auth.users}, que en Supabase ya existe. Aquí se crea antes un esquema
  * {@code auth} mínimo con {@code auth.users(id uuid primary key)}, solo para que se puedan aplicar.
  *
- * <p>Las migraciones 004 y 007 dejan las diez categorías del club ({@link #CATEGORIAS_DE_LA_MIGRACION} las registra antes de la
+ * <p>Las migraciones 004 y 007 dejan las 9 categorías del club ({@link #CATEGORIAS_DE_LA_MIGRACION} las registra antes de la
  * primera prueba). Para que cada prueba controle sus datos, {@link #limpiar()} borra categorías y entrenadores, y
  * cada prueba inserta los suyos con {@link #categoria} y {@link #entrenador}.
  */
@@ -43,6 +43,14 @@ public final class PostgresDePrueba {
     static final Path MIGRACIONES = Files.exists(Path.of("..", "supabase"))
             ? Path.of("..", "supabase", "migrations")
             : Path.of("supabase", "migrations");
+
+    /** Los seeds de {@code supabase/seeds/} (no se aplican solos: cada prueba carga el que necesita). */
+    static final Path SEEDS = MIGRACIONES.resolveSibling("seeds");
+
+    /** Ejecuta un archivo SQL del repositorio (por ejemplo un seed) contra la base de prueba. */
+    static void ejecutarScript(Path archivo) {
+        new JdbcTemplate(dataSource()).execute(leerMigracion(archivo));
+    }
 
     /** Las migraciones del directorio, en orden de nombre: una migración nueva entra sola en las pruebas. */
     static List<Path> migraciones() {
@@ -58,9 +66,10 @@ public final class PostgresDePrueba {
         }
     }
 
-    private static final Map<String, int[]> RANGOS = Map.of(
-            "Párvulos", new int[] {4, 6}, "Cachorros", new int[] {7, 8}, "Sub-9", new int[] {9, 9},
-            "Sub-10", new int[] {10, 10}, "Sub-11", new int[] {11, 11}, "Sub-12", new int[] {12, 12},
+    /** Rango (edad por año de nacimiento) de cada una de las 9 categorías oficiales, como en la migración 007. */
+    static final Map<String, int[]> RANGOS = Map.of(
+            "Párvulos", new int[] {4, 6}, "Cachorros", new int[] {7, 8}, "Semillero", new int[] {9, 10},
+            "Sub-11", new int[] {11, 11}, "Sub-12", new int[] {12, 12},
             "Sub-13", new int[] {13, 13}, "Sub-14", new int[] {14, 14}, "Sub-15", new int[] {15, 15},
             "Sub-16", new int[] {16, 16});
 
@@ -151,6 +160,9 @@ public final class PostgresDePrueba {
     /** Inserta la categoría oficial {@code nombre} (con su rango de edades) dirigida por {@code idEntrenador}. */
     public static UUID categoria(String nombre, UUID idEntrenador) {
         int[] rango = RANGOS.get(nombre);
+        if (rango == null) {
+            throw new IllegalArgumentException(nombre + " no es una de las 9 categorías oficiales: " + RANGOS.keySet());
+        }
         return jdbc().queryForObject("""
                 INSERT INTO categoria (nombre, edad_minima, edad_maxima, id_entrenador)
                 VALUES (:nombre, :minima, :maxima, :entrenador)

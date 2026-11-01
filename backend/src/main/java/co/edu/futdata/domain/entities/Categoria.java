@@ -33,7 +33,7 @@ public class Categoria {
         this.id = id;
     }
 
-    /** {@code Párvulos}, {@code Cachorros} o de {@code Sub-9} a {@code Sub-16}. */
+    /** {@code Párvulos}, {@code Cachorros}, {@code Semillero} o de {@code Sub-11} a {@code Sub-16}. */
     public String getNombre() {
         return nombre;
     }

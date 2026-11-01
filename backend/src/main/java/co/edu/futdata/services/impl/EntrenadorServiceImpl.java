@@ -227,12 +227,12 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
         return pedidas;
     }
 
-    /** Los nombres oficiales para el mensaje de error: "Párvulos, Cachorros, Sub-9, ... o Sub-16". */
+    /** Los nombres oficiales para el mensaje de error: "Párvulos, Cachorros, Semillero, Sub-11, ... o Sub-16". */
     private static final String CATEGORIAS_OFICIALES = String.join(", ",
             ReglasEntrenador.CATEGORIAS.subList(0, ReglasEntrenador.CATEGORIAS.size() - 1))
             + " o " + ReglasEntrenador.CATEGORIAS.getLast();
 
-    /** {@code Sub-9}, {@code Sub-9 y Sub-10}, {@code Sub-9, Sub-10 y Sub-12}, en el orden oficial. */
+    /** {@code Semillero}, {@code Semillero y Sub-11}, {@code Semillero, Sub-11 y Sub-12}, en el orden oficial. */
     private static String enumerar(List<String> nombres) {
         List<String> ordenados = ReglasEntrenador.enOrdenOficial(nombres);
         if (ordenados.size() == 1) {

@@ -227,12 +227,23 @@ class ReglasEntrenadorTest {
 
     @Test
     void categoriasEnElOrdenOficial() {
-        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-16", "Sub-9", "Sub-12")))
-                .containsExactly("Sub-9", "Sub-12", "Sub-16");
-        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-99", "Sub-10")))
-                .containsExactly("Sub-10", "Sub-99");
+        assertThat(ReglasEntrenador.CATEGORIAS).containsExactly("Párvulos", "Cachorros", "Semillero", "Sub-11", "Sub-12",
+                "Sub-13", "Sub-14", "Sub-15", "Sub-16");
+        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-16", "Cachorros", "Sub-12")))
+                .containsExactly("Cachorros", "Sub-12", "Sub-16");
+        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-99", "Semillero")))
+                .containsExactly("Semillero", "Sub-99");
         assertThat(ReglasEntrenador.esCategoria("Sub-12")).isTrue();
         assertThat(ReglasEntrenador.esCategoria("sub-12")).isFalse();
         assertThat(ReglasEntrenador.esCategoria("Sub-18")).isFalse();
+    }
+
+    @Test
+    void semilleroEsCategoriaYSub9YSub10YaNo() {
+        assertThat(ReglasEntrenador.esCategoria("Semillero")).isTrue();
+        assertThat(ReglasEntrenador.esCategoria("Sub-9")).isFalse();
+        assertThat(ReglasEntrenador.esCategoria("Sub-10")).isFalse();
+        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-11", "Sub-10", "Semillero", "Sub-9")))
+                .startsWith("Semillero", "Sub-11");
     }
 }
