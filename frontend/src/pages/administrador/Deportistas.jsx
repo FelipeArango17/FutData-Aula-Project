@@ -11,6 +11,7 @@ import Paginacion from '../../components/ui/Paginacion.jsx'
 import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
 import { SIN_CATEGORIA, calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
+import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
 import { paginar } from '../../utils/paginacion.js'
 
 // Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
@@ -226,6 +227,7 @@ export default function Deportistas() {
         </div>
         <FilterChips label="Estado" options={Object.keys(FILTROS)} value={filtro} onChange={setFiltro} />
         <p role="status" className="min-h-[1.125rem] text-small text-secondary">{cuenta}</p>
+        <p className="break-words text-small text-secondary">{NOTA_CATEGORIA_POR_ANIO}</p>
       </div>
       <div ref={zonaLista} className="min-w-0">{contenido}</div>
       {vista && !error && items.length > 0 && (

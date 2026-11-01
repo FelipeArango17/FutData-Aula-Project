@@ -5,7 +5,7 @@ import Entrenadores from './Entrenadores.jsx'
 import { EntrenadoresContext } from '../../context/EntrenadoresContext.js'
 
 // Render estático de la lista en cada estado: cargando, error (con y sin reintento), vacío y con activos e inactivos.
-const luis = { id: 'u1', nombre: 'Luis', apellido: 'Pérez', especialidad: 'Porteros', telefono: '3001112233', categorias: ['Sub-8', 'Sub-10'], activo: true }
+const luis = { id: 'u1', nombre: 'Luis', apellido: 'Pérez', especialidad: 'Porteros', telefono: '3001112233', categorias: ['Cachorros', 'Sub-10'], activo: true }
 const ana = { id: 'u2', nombre: 'Ana', apellido: 'Ríos', especialidad: 'Táctica', telefono: '3005556677', categorias: [], activo: false }
 
 const dibujar = (contexto) => renderToStaticMarkup(
@@ -49,7 +49,7 @@ describe('lista de entrenadores', () => {
     const html = dibujar({ entrenadores: [luis, ana] })
     expect(html).toContain('Activos (1)')
     expect(html).toContain('Inactivos (1)')
-    expect(html).toContain('Categorías: Sub-8, Sub-10')
+    expect(html).toContain('Categorías: Cachorros, Sub-10')
     expect(html).toContain('>Activo<')
     expect(html).toContain('>Inactivo<')
   })

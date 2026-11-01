@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { NOMBRES_CATEGORIAS, categoriaPorFecha, rangoAniosNacimiento } from '../utils/categorias.js'
 
 // El servicio guarda los datos en memoria a nivel de módulo: cada prueba carga una copia nueva.
 let servicio
@@ -21,10 +22,12 @@ const resolver = async (promesa) => {
 }
 
 describe('listarCategorias', () => {
-  it('devuelve las categorías oficiales y una no vigente', async () => {
+  it('devuelve solo las categorías oficiales del club, todas vigentes: ninguna no vigente aparece en la interfaz', async () => {
     const lista = await resolver(servicio.listarCategorias())
-    expect(lista.filter((c) => c.activa).map((c) => c.nombre)).toEqual(['Sub-8', 'Sub-10', 'Sub-12', 'Sub-14', 'Sub-16'])
-    expect(lista.find((c) => c.nombre === 'Sub-18').activa).toBe(false)
+    expect(lista.map((c) => c.nombre)).toEqual(['Párvulos', 'Cachorros', 'Sub-9', 'Sub-10', 'Sub-11', 'Sub-12', 'Sub-13', 'Sub-14', 'Sub-15', 'Sub-16'])
+    expect(lista.every((c) => c.activa)).toBe(true)
+    expect(lista.map((c) => c.id)).not.toContain(11)
+    expect(lista.some((c) => 'oculta' in c)).toBe(false)
   })
 
   it('espera el retardo simulado antes de responder', async () => {
@@ -43,15 +46,15 @@ describe('listarDeportistas', () => {
   })
 
   it('filtra por categoría (el id puede ser número o texto)', async () => {
-    const a = await resolver(servicio.listarDeportistas({ idCategoria: 3 }))
-    const b = await resolver(servicio.listarDeportistas({ idCategoria: '3' }))
-    expect(a).toHaveLength(6)
+    const a = await resolver(servicio.listarDeportistas({ idCategoria: 6 }))
+    const b = await resolver(servicio.listarDeportistas({ idCategoria: '6' }))
+    expect(a).toHaveLength(5)
     expect(b).toEqual(a)
-    expect(a.every((x) => x.idCategoria === 3)).toBe(true)
+    expect(a.every((x) => x.idCategoria === 6)).toBe(true)
   })
 
   it('una categoría sin deportistas devuelve lista vacía', async () => {
-    expect(await resolver(servicio.listarDeportistas({ idCategoria: 6 }))).toEqual([]) // Sub-18, no vigente
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: 11 }))).toEqual([]) // categoría interna no vigente, sin deportistas
   })
 
   it('busca por nombre sin distinguir mayúsculas ni tildes', async () => {
@@ -75,9 +78,9 @@ describe('listarDeportistas', () => {
   })
 
   it('devuelve copias: modificar el resultado no cambia los datos', async () => {
-    const [primero] = await resolver(servicio.listarDeportistas({ idCategoria: 1 }))
+    const [primero] = await resolver(servicio.listarDeportistas({ idCategoria: 2 }))
     primero.nombre = 'X'
-    const [otra] = await resolver(servicio.listarDeportistas({ idCategoria: 1 }))
+    const [otra] = await resolver(servicio.listarDeportistas({ idCategoria: 2 }))
     expect(otra.nombre).toBe('Santiago')
   })
 
@@ -106,7 +109,7 @@ describe('obtenerDeportista', () => {
 
 describe('asignarCategoria', () => {
   const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
-  // Nace en 2017: le corresponde Sub-10 (id 2). Se crea sin categoría para poder asignársela.
+  // Nace en 2017: le corresponde Sub-9 (id 3). Se crea sin categoría para poder asignársela.
   const sinCategoria = () => resolver(servicio.crearDeportista({
     nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001',
     fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20, Barrio Ejemplo', idCategoria: '',
@@ -114,39 +117,70 @@ describe('asignarCategoria', () => {
 
   it('asigna la categoría que corresponde al año de nacimiento y queda guardada (ids como texto también sirven)', async () => {
     const nuevo = await sinCategoria()
-    const r = await resolver(servicio.asignarCategoria(String(nuevo.id), '2'))
-    expect(r.idCategoria).toBe(2)
-    expect(await resolver(servicio.listarDeportistas({ idCategoria: 2 }))).toHaveLength(7)
-    expect(await resolver(servicio.listarDeportistas({ idCategoria: 1 }))).toHaveLength(3)
+    const r = await resolver(servicio.asignarCategoria(String(nuevo.id), '3'))
+    expect(r.idCategoria).toBe(3)
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: 3 }))).toHaveLength(3)
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: 1 }))).toHaveLength(2)
   })
 
   it('una categoría vigente que no corresponde al año de nacimiento lanza CATEGORIA_NO_CORRESPONDE_EDAD y no cambia nada', async () => {
     const nuevo = await sinCategoria()
-    const falla = await resolver(servicio.asignarCategoria(nuevo.id, 5)).catch((e) => e)
+    const falla = await resolver(servicio.asignarCategoria(nuevo.id, 10)).catch((e) => e)
     expect(falla).toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD', message: 'La categoría no corresponde al año de nacimiento del deportista.' })
     expect((await resolver(servicio.obtenerDeportista(nuevo.id))).idCategoria).toBeNull()
-    await expect(resolver(servicio.asignarCategoria(1, 5))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
-    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(1)
+    await expect(resolver(servicio.asignarCategoria(1, 10))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
+    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(2)
   })
 
-  it('al cambiar el año del reloj la categoría se recalcula: en 2027 Santiago (2018) pasa de Sub-8 a Sub-10', async () => {
+  it('al cambiar el año del reloj la categoría se recalcula: en 2027 Santiago (2018) pasa de Cachorros a Sub-9', async () => {
     vi.setSystemTime(new Date(2027, 0, 10, 12, 0))
-    await expect(resolver(servicio.asignarCategoria(1, 1))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
-    expect((await resolver(servicio.asignarCategoria(1, 2))).idCategoria).toBe(2)
+    await expect(resolver(servicio.asignarCategoria(1, 2))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
+    expect((await resolver(servicio.asignarCategoria(1, 3))).idCategoria).toBe(3)
   })
 
   it('una categoría inexistente lanza CATEGORIA_NO_EXISTE y no cambia nada', async () => {
     await expect(resolver(servicio.asignarCategoria(1, 99))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_EXISTE' })
-    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(1)
+    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(2)
   })
 
   it('una categoría no vigente lanza CATEGORIA_NO_VIGENTE', async () => {
-    await expect(resolver(servicio.asignarCategoria(1, 6))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
-    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(1)
+    await expect(resolver(servicio.asignarCategoria(1, 11))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
+    expect((await resolver(servicio.obtenerDeportista(1))).idCategoria).toBe(2)
   })
 
   it('un deportista inexistente lanza DEPORTISTA_NO_EXISTE', async () => {
     await expect(resolver(servicio.asignarCategoria(999, 1))).rejects.toMatchObject({ codigo: 'DEPORTISTA_NO_EXISTE' })
+  })
+})
+
+describe('datos de demo: categorías según la regla del club', () => {
+  const cargar = async () => {
+    const [todos, categorias] = await Promise.all([resolver(servicio.listarDeportistas()), resolver(servicio.listarCategorias())])
+    return { todos, nombre: Object.fromEntries(categorias.map((c) => [c.id, c.nombre])), categorias }
+  }
+
+  it('la categoría de cada deportista de ejemplo es la que da su año de nacimiento con el "hoy" de la demo (2026-10-22)', async () => {
+    const { todos, nombre } = await cargar()
+    expect(todos).toHaveLength(21)
+    for (const d of todos) {
+      expect(nombre[d.idCategoria], `${d.id} ${d.nombre} (${d.fechaNacimiento})`).toBe(categoriaPorFecha(d.fechaNacimiento, servicio.HOY_EJEMPLO))
+    }
+  })
+
+  it('todos los de ejemplo caben en el rango de inscripción (2010 a 2022) y cada categoría tiene al menos uno', async () => {
+    const { todos, nombre, categorias } = await cargar()
+    const { anioMinimo, anioMaximo } = rangoAniosNacimiento(servicio.HOY_EJEMPLO)
+    for (const d of todos) expect(Number(d.fechaNacimiento.slice(0, 4))).toBeGreaterThanOrEqual(anioMinimo)
+    for (const d of todos) expect(Number(d.fechaNacimiento.slice(0, 4))).toBeLessThanOrEqual(anioMaximo)
+    for (const c of categorias.filter((x) => x.activa)) expect(todos.some((d) => nombre[d.idCategoria] === c.nombre), c.nombre).toBe(true)
+  })
+
+  it('las categorías vigentes son las 10 del club y no queda ninguna de las eliminadas', async () => {
+    const { categorias } = await cargar()
+    expect(categorias.filter((c) => c.activa).map((c) => c.nombre)).toEqual(NOMBRES_CATEGORIAS)
+    for (const eliminada of ['Sub-8', 'Semillero', 'Sub 13 y 14 Formación', 'Femenino', 'Arqueros']) {
+      expect(categorias.map((c) => c.nombre)).not.toContain(eliminada)
+    }
   })
 })
 
@@ -208,19 +242,19 @@ describe('crearDeportista', () => {
   })
 
   it('recorta espacios de los textos y con categoría vigente la asigna', async () => {
-    const r = await resolver(servicio.crearDeportista(datos({ nombre: '  Lucas ', direccion: '  Calle 50 # 10-20  ', fechaNacimiento: '2015-05-10', idCategoria: '3' }), admin))
+    const r = await resolver(servicio.crearDeportista(datos({ nombre: '  Lucas ', direccion: '  Calle 50 # 10-20  ', fechaNacimiento: '2015-05-10', idCategoria: '5' }), admin))
     expect(r.nombre).toBe('Lucas')
     expect(r.direccion).toBe('Calle 50 # 10-20')
-    expect(r.idCategoria).toBe(3)
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3 }))).map((x) => x.id)).toContain(r.id)
+    expect(r.idCategoria).toBe(5)
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 5 }))).map((x) => x.id)).toContain(r.id)
   })
 
   it('con una categoría que no corresponde al año de nacimiento: CATEGORIA_NO_CORRESPONDE_EDAD y no crea nada; inexistente y no vigente conservan su error', async () => {
-    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '3' }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
+    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '6' }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
     await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '99' }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_EXISTE' })
-    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '6' }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
+    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '11' }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
     expect(await resolver(servicio.listarDeportistas())).toHaveLength(21)
-    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '2' }), admin))).resolves.toMatchObject({ idCategoria: 2 })
+    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: '3' }), admin))).resolves.toMatchObject({ idCategoria: 3 })
   })
 
   it.each([
@@ -291,8 +325,8 @@ describe('crearDeportista', () => {
     expect(await resolver(servicio.listarDeportistas())).toHaveLength(21)
   })
 
-  it('categoría no vigente (Sub-18): CATEGORIA_NO_VIGENTE y no crea nada; inexistente: CATEGORIA_NO_EXISTE', async () => {
-    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: 6 }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
+  it('categoría no vigente (id 11, fuera de la lista): CATEGORIA_NO_VIGENTE y no crea nada; inexistente: CATEGORIA_NO_EXISTE', async () => {
+    await expect(resolver(servicio.crearDeportista(datos({ idCategoria: 11 }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
     await expect(resolver(servicio.crearDeportista(datos({ idCategoria: 99 }), admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_EXISTE' })
     expect(await resolver(servicio.listarDeportistas())).toHaveLength(21)
   })
@@ -308,7 +342,7 @@ describe('listarDeportistas: filtro por estado y búsqueda (HU-010)', () => {
   it('sin el parámetro estado conserva el comportamiento de siempre: activos e inactivos', async () => {
     expect(await resolver(servicio.listarDeportistas())).toHaveLength(21)
     expect(await resolver(servicio.listarDeportistas({ estado: 'todos' }))).toHaveLength(21)
-    expect(await resolver(servicio.listarDeportistas({ idCategoria: 1 }))).toHaveLength(3)
+    expect(await resolver(servicio.listarDeportistas({ idCategoria: 1 }))).toHaveLength(2)
   })
 
   it('activos e inactivos: hay 3 inactivos para probar el filtro', async () => {
@@ -322,7 +356,7 @@ describe('listarDeportistas: filtro por estado y búsqueda (HU-010)', () => {
   it('el estado se combina con la búsqueda y con la categoría', async () => {
     expect((await resolver(servicio.listarDeportistas({ texto: 'osorio', estado: 'inactivos' }))).map((x) => x.nombre)).toEqual(['Luciana'])
     expect(await resolver(servicio.listarDeportistas({ texto: 'osorio', estado: 'activos' }))).toEqual([])
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 4, estado: 'inactivos' }))).map((x) => x.id)).toEqual([16])
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 7, estado: 'inactivos' }))).map((x) => x.id)).toEqual([16])
   })
 
   it('busca por nombre, apellido o documento sin distinguir tildes ni mayúsculas', async () => {
@@ -343,7 +377,7 @@ describe('obtenerFichaDeportista y obtenerHistorial', () => {
     expect(historial).toHaveLength(1)
     expect(historial[0].cambios).toEqual([
       { campo: 'telefono', antes: '3000000999', despues: '3000000003' },
-      { campo: 'idCategoria', antes: 2, despues: 1 },
+      { campo: 'idCategoria', antes: 4, despues: 2 },
     ])
   })
 
@@ -379,9 +413,9 @@ describe('actualizarDeportista', () => {
   const guardado = async (id) => (await resolver(servicio.obtenerFichaDeportista(id, admin)))
 
   it('edición con historial: guarda antes y después de cada campo cambiado y quién la hizo', async () => {
-    // La categoría solo cambia junto con el año de nacimiento: 2015 es Sub-12 (id 3)
-    const r = await resolver(servicio.actualizarDeportista(1, { fechaNacimiento: '2015-03-14', telefono: '3000000555', direccion: 'Carrera 7 # 8-9, Barrio Ejemplo', idCategoria: '3' }, admin))
-    expect(r.deportista).toMatchObject({ id: 1, telefono: '3000000555', idCategoria: 3, nombre: 'Santiago' })
+    // La categoría solo cambia junto con el año de nacimiento: 2015 es Sub-11 (id 5)
+    const r = await resolver(servicio.actualizarDeportista(1, { fechaNacimiento: '2015-03-14', telefono: '3000000555', direccion: 'Carrera 7 # 8-9, Barrio Ejemplo', idCategoria: '5' }, admin))
+    expect(r.deportista).toMatchObject({ id: 1, telefono: '3000000555', idCategoria: 5, nombre: 'Santiago' })
     expect(r.historial).toHaveLength(1)
     expect(typeof r.historial[0].fechaHora).toBe('string')
     expect(Number.isNaN(Date.parse(r.historial[0].fechaHora))).toBe(false)
@@ -390,11 +424,11 @@ describe('actualizarDeportista', () => {
       { campo: 'fechaNacimiento', antes: '2018-03-14', despues: '2015-03-14' },
       { campo: 'telefono', antes: '3000000001', despues: '3000000555' },
       { campo: 'direccion', antes: 'Calle 11 # 21-11, Barrio Ejemplo', despues: 'Carrera 7 # 8-9, Barrio Ejemplo' },
-      { campo: 'idCategoria', antes: 1, despues: 3 },
+      { campo: 'idCategoria', antes: 2, despues: 5 },
     ])
     expect((await guardado(1)).deportista.telefono).toBe('3000000555')
     // y ahora aparece en el grupo nuevo
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3 }))).map((x) => x.id)).toContain(1)
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 5 }))).map((x) => x.id)).toContain(1)
   })
 
   it('el historial se acumula y nunca se borra, también el sembrado', async () => {
@@ -426,7 +460,7 @@ describe('actualizarDeportista', () => {
   it('"" y null en la categoría son lo mismo: quitar la categoría y volver a dejarla vacía no es un cambio', async () => {
     const r = await resolver(servicio.actualizarDeportista(1, { idCategoria: '' }, admin))
     expect(r.deportista.idCategoria).toBeNull()
-    expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: 1, despues: null }])
+    expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: 2, despues: null }])
     await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: null }, admin))).rejects.toMatchObject({ codigo: 'SIN_CAMBIOS' })
     await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: '' }, admin))).rejects.toMatchObject({ codigo: 'SIN_CAMBIOS' })
   })
@@ -463,11 +497,11 @@ describe('actualizarDeportista', () => {
     expect(servicio.calcularEdad('2026-10-22')).toBe(0)
   })
 
-  it('categoría no vigente (Sub-18) o inexistente: no guarda nada', async () => {
-    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 6 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
+  it('categoría no vigente (id 11, fuera de la lista) o inexistente: no guarda nada', async () => {
+    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 11 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
     await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 99 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_EXISTE' })
     const { deportista, historial } = await guardado(1)
-    expect(deportista.idCategoria).toBe(1)
+    expect(deportista.idCategoria).toBe(2)
     expect(historial).toEqual([])
   })
 
@@ -484,13 +518,13 @@ describe('actualizarDeportista', () => {
   })
 
   it('la categoría debe corresponder al año de nacimiento: incorrecta falla, y si cambia la fecha la categoría vieja también', async () => {
-    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 3 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
-    // cambia el año a 2015 pero conserva Sub-8
+    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 6 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
+    // cambia el año a 2015 pero conserva Cachorros
     await expect(resolver(servicio.actualizarDeportista(1, { fechaNacimiento: '2015-03-14' }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_CORRESPONDE_EDAD' })
     // inexistente y no vigente conservan su error
     await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 99 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_EXISTE' })
-    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 6 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
-    expect(await guardado(1)).toMatchObject({ deportista: { fechaNacimiento: '2018-03-14', idCategoria: 1 }, historial: [] })
+    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 11 }, admin))).rejects.toMatchObject({ codigo: 'CATEGORIA_NO_VIGENTE' })
+    expect(await guardado(1)).toMatchObject({ deportista: { fechaNacimiento: '2018-03-14', idCategoria: 2 }, historial: [] })
   })
 
   it('sin tocar la categoría ni la fecha se puede editar otro dato; sin categoría (null) también se permite', async () => {
@@ -498,16 +532,16 @@ describe('actualizarDeportista', () => {
     await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: '' }, admin))).resolves.toBeTruthy()
   })
 
-  it('la fecha cambia de año y se recalcula con el reloj: en 2027 la categoría de Santiago es Sub-10', async () => {
+  it('la fecha cambia de año y se recalcula con el reloj: en 2027 la categoría de Santiago es Sub-9', async () => {
     vi.setSystemTime(new Date(2027, 0, 10, 12, 0))
-    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 2 }, admin))).resolves.toBeTruthy()
+    await expect(resolver(servicio.actualizarDeportista(1, { idCategoria: 3 }, admin))).resolves.toBeTruthy()
   })
 
   it('un deportista recién creado también se puede editar y arranca con historial vacío', async () => {
     const nuevo = await resolver(servicio.crearDeportista({ nombre: 'Lucas', apellido: 'Prueba Ejemplo', tipoDocumento: 'Registro civil', documento: '1200000001', fechaNacimiento: '2017-05-10', telefono: '3000000099', direccion: 'Calle 50 # 10-20', idCategoria: '' }, admin))
     expect((await guardado(nuevo.id)).historial).toEqual([])
-    const r = await resolver(servicio.actualizarDeportista(nuevo.id, { idCategoria: 2 }, admin))
-    expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: null, despues: 2 }])
+    const r = await resolver(servicio.actualizarDeportista(nuevo.id, { idCategoria: 3 }, admin))
+    expect(r.historial[0].cambios).toEqual([{ campo: 'idCategoria', antes: null, despues: 3 }])
   })
 })
 
@@ -531,19 +565,19 @@ describe('listarDeportistas: filtro por categoría y «Sin asignar» (HU-010)', 
 
   it('una categoría concreta no incluye a los sin asignar', async () => {
     await nuevoSinCategoria()
-    const r = await resolver(servicio.listarDeportistas({ idCategoria: 1 }))
-    expect(r).toHaveLength(3)
-    expect(r.every((x) => x.idCategoria === 1)).toBe(true)
+    const r = await resolver(servicio.listarDeportistas({ idCategoria: 2 }))
+    expect(r).toHaveLength(2)
+    expect(r.every((x) => x.idCategoria === 2)).toBe(true)
   })
 
   it('la categoría se combina (AND) con el texto', async () => {
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 3, texto: 'sebastian' }))).map((x) => x.id)).toEqual([15])
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 6, texto: 'sebastian' }))).map((x) => x.id)).toEqual([15])
     expect(await resolver(servicio.listarDeportistas({ idCategoria: 1, texto: 'sebastian' }))).toEqual([])
   })
 
   it('la categoría se combina (AND) con el estado', async () => {
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 4, estado: 'inactivos' }))).map((x) => x.id)).toEqual([16])
-    expect((await resolver(servicio.listarDeportistas({ idCategoria: 4, estado: 'activos' }))).some((x) => x.id === 16)).toBe(false)
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 7, estado: 'inactivos' }))).map((x) => x.id)).toEqual([16])
+    expect((await resolver(servicio.listarDeportistas({ idCategoria: 7, estado: 'activos' }))).some((x) => x.id === 16)).toBe(false)
   })
 
   it('«Sin asignar» se combina con texto y estado', async () => {

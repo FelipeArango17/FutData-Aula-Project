@@ -16,7 +16,7 @@ const datos = (extra = {}) => ({
   telefono: '3001112233',
   correo: 'luis.perez@pradofc.co',
   especialidad: 'Porteros',
-  categorias: ['Sub-8'],
+  categorias: ['Cachorros'],
   horarioTrabajo: '',
   direccion: 'Calle 40 Sur 75b-81',
   ...extra,
@@ -36,7 +36,7 @@ describe('listar y obtener', () => {
   it('las categorías de ejemplo coinciden con las del servicio de entrenamientos', async () => {
     const [andres, carlos] = await servicio.listar()
     expect(andres.categorias).toEqual(['Sub-12'])
-    expect(carlos.categorias).toEqual(['Sub-8', 'Sub-10', 'Sub-14', 'Sub-16'])
+    expect(carlos.categorias).toEqual(['Cachorros', 'Sub-10', 'Sub-14', 'Sub-16'])
   })
 
   it('obtener acepta el id como número o como texto y devuelve null si no existe', async () => {
@@ -88,7 +88,7 @@ describe('crear', () => {
       telefono: ' 3001112233 ',
       correo: ' luis.perez@pradofc.co ',
       especialidad: ' Porteros ',
-      categorias: ['Sub-16', 'Sub-8', 'Sub-12'],
+      categorias: ['Sub-16', 'Cachorros', 'Sub-12'],
       horarioTrabajo: undefined,
     }))
     expect(creado).toEqual(expect.objectContaining({
@@ -100,7 +100,7 @@ describe('crear', () => {
       telefono: '3001112233',
       correo: 'luis.perez@pradofc.co',
       especialidad: 'Porteros',
-      categorias: ['Sub-8', 'Sub-12', 'Sub-16'],
+      categorias: ['Cachorros', 'Sub-12', 'Sub-16'],
       horarioTrabajo: '',
       direccion: 'Calle 40 Sur 75b-81',
     }))

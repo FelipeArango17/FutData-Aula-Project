@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
+import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
@@ -228,6 +229,7 @@ export default function ListaPorGrupo() {
         </div>
       )}
       {grupo && !error && <h2 className="break-words text-h3">{grupo.nombre} · {plural(carga.conteos[grupo.id])}</h2>}
+      {grupo && !error && <p className="break-words text-small text-secondary">{NOTA_CATEGORIA_POR_ANIO}</p>}
       <div ref={zonaLista} className="min-w-0">{contenido}</div>
     </Page>
   )

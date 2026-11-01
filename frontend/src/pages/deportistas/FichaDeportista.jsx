@@ -13,6 +13,7 @@ import FormularioDeportista from '../../components/deportistas/FormularioDeporti
 import { useActor } from '../../context/useActor.js'
 import { actualizarDeportista, calcularEdad, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
 import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
+import { textoAniosCategoria } from '../../utils/categorias.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
 
 // Ficha del deportista (HU-010, tarea 319): lectura y edición. Ruta /administrador/deportistas/:id. Solo el administrador.
@@ -198,7 +199,10 @@ function Ficha({ id }) {
             <Dato etiqueta="Edad">{edad} {edad === 1 ? 'año' : 'años'}</Dato>
             <Dato etiqueta="Teléfono de contacto">{deportista.telefono}</Dato>
             <Dato etiqueta="Dirección">{deportista.direccion}</Dato>
-            <Dato etiqueta="Categoría">{nombreCategoria(deportista.idCategoria) ?? 'Sin asignar'}</Dato>
+            <Dato etiqueta="Categoría">
+              {nombreCategoria(deportista.idCategoria) ?? 'Sin asignar'}
+              {textoAniosCategoria(nombreCategoria(deportista.idCategoria)) && ` (${textoAniosCategoria(nombreCategoria(deportista.idCategoria))})`}
+            </Dato>
             <Dato etiqueta="Estado"><EstadoDeportista activo={deportista.activo} /></Dato>
             {/* Solo los inscritos en línea traen origen y contacto del acudiente (los registros del administrador no) */}
             {deportista.origen && <Dato etiqueta="Origen">{deportista.origen}</Dato>}

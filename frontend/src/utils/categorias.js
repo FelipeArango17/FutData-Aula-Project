@@ -1,15 +1,16 @@
-// Categoría de un deportista según su AÑO de nacimiento (no la edad exacta).
-// PROVISIONAL: regla del club por confirmar. edad = año de hoy − año de nacimiento.
-// No se crean categorías nuevas: quien nazca fuera del rango no se puede inscribir. Se recalcula cada año con el año actual.
+// Categoría de un deportista según su AÑO de nacimiento (no la edad exacta): categorías reales del club, horario 2026.
+// edad = año de hoy − año de nacimiento. Párvulos 4 a 6, Cachorros 7 a 8 y Sub-N (N = 9 a 16) cuando la edad es N.
+// Solo se inscriben nacidos entre año(hoy) − 16 y año(hoy) − 4; no hay más categorías. Se recalcula cada año con el año actual.
 import { hoyLocal } from './fechas.js'
 
 export const CATEGORIAS_POR_EDAD = [
-  { nombre: 'Sub-8', edadMinima: 8, edadMaxima: 8 },
-  { nombre: 'Sub-10', edadMinima: 9, edadMaxima: 10 },
-  { nombre: 'Sub-12', edadMinima: 11, edadMaxima: 12 },
-  { nombre: 'Sub-14', edadMinima: 13, edadMaxima: 14 },
-  { nombre: 'Sub-16', edadMinima: 15, edadMaxima: 16 },
+  { nombre: 'Párvulos', edadMinima: 4, edadMaxima: 6 },
+  { nombre: 'Cachorros', edadMinima: 7, edadMaxima: 8 },
+  ...Array.from({ length: 8 }, (_, i) => ({ nombre: `Sub-${9 + i}`, edadMinima: 9 + i, edadMaxima: 9 + i })),
 ]
+
+// Nombres en el orden oficial (de menor a mayor). Todas las listas, filtros y selectores de categorías salen de aquí.
+export const NOMBRES_CATEGORIAS = CATEGORIAS_POR_EDAD.map((c) => c.nombre)
 
 const anioDe = (fecha) => Number(String(fecha).slice(0, 4))
 
@@ -36,4 +37,16 @@ export function idCategoriaAlGuardar(fechaNacimiento, inicial, categorias, hoy =
   if (inicial?.fechaNacimiento && fechaNacimiento === inicial.fechaNacimiento) return String(inicial.idCategoria ?? '')
   const categoria = categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, hoy))
   return categoria ? String(categoria.id) : ''
+}
+
+// Aviso corto para las listas: la edad que se ve es la cumplida, la categoría sale del año
+export const NOTA_CATEGORIA_POR_ANIO = 'La categoría se define por año de nacimiento, no por edad cumplida.'
+
+// Años de nacimiento de una categoría: "nacidos en 2016", "nacidos en 2018 y 2019" o "nacidos de 2020 a 2022". null si no existe.
+export function textoAniosCategoria(nombre, hoy = hoyLocal()) {
+  const categoria = CATEGORIAS_POR_EDAD.find((c) => c.nombre === nombre)
+  if (!categoria) return null
+  const [desde, hasta] = [anioDe(hoy) - categoria.edadMaxima, anioDe(hoy) - categoria.edadMinima]
+  if (desde === hasta) return `nacidos en ${desde}`
+  return hasta - desde === 1 ? `nacidos en ${desde} y ${hasta}` : `nacidos de ${desde} a ${hasta}`
 }
