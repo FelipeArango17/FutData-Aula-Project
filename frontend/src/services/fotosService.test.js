@@ -67,3 +67,42 @@ describe('fotosService', () => {
     await expect(resolver(servicio.quitarFoto(1, admin))).resolves.toBeUndefined()
   })
 })
+
+describe('obtenerFotos (varios deportistas de una vez)', () => {
+  it('sin fotos devuelve un mapa vacío', async () => {
+    expect(await resolver(servicio.obtenerFotos())).toEqual({})
+    expect(await resolver(servicio.obtenerFotos([1, 2]))).toEqual({})
+  })
+
+  it('con fotos devuelve idDeportista -> url solo de los que tienen foto', async () => {
+    const uno = await resolver(servicio.guardarFoto(1, foto(), admin))
+    const tres = await resolver(servicio.guardarFoto(3, foto('image/jpeg'), admin))
+    expect(await resolver(servicio.obtenerFotos())).toEqual({ 1: uno, 3: tres })
+    expect(await resolver(servicio.obtenerFotos([1, 2]))).toEqual({ 1: uno })
+    expect(await resolver(servicio.obtenerFotos(['3']))).toEqual({ 3: tres })
+  })
+
+  it('tras quitar una foto ya no aparece, y una foto reemplazada trae la URL nueva', async () => {
+    await resolver(servicio.guardarFoto(1, foto(), admin))
+    const nueva = await resolver(servicio.guardarFoto(1, foto('image/jpeg'), admin))
+    await resolver(servicio.guardarFoto(2, foto(), admin))
+    expect((await resolver(servicio.obtenerFotos()))[1]).toBe(nueva)
+    await resolver(servicio.quitarFoto(1, admin))
+    expect(Object.keys(await resolver(servicio.obtenerFotos()))).toEqual(['2'])
+  })
+
+  it('una sola llamada resuelve todas las fotos, y la URL de una foto guardada no se revoca al pedir las demás', async () => {
+    const revocar = vi.spyOn(URL, 'revokeObjectURL')
+    await resolver(servicio.guardarFoto(1, foto(), admin))
+    await resolver(servicio.obtenerFotos())
+    await resolver(servicio.obtenerFotos([1]))
+    expect(revocar).not.toHaveBeenCalled()
+    revocar.mockRestore()
+  })
+
+  it('los datos viven en el módulo: otra consulta (otra pantalla) ve la misma foto', async () => {
+    const url = await resolver(servicio.guardarFoto(5, foto(), admin))
+    expect((await resolver(servicio.obtenerFotos()))[5]).toBe(url)
+    expect(await resolver(servicio.obtenerFoto(5))).toBe(url)
+  })
+})

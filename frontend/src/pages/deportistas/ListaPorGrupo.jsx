@@ -7,6 +7,7 @@ import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
+import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
 import { obtener as obtenerEntrenador } from '../../services/entrenadoresService.js'
@@ -36,6 +37,7 @@ function Mensaje({ icono, children }) {
 
 export default function ListaPorGrupo() {
   const { role } = useRole()
+  const fotos = useFotosDeportistas()
   const tituloRef = useRef(null)
   const zonaLista = useRef(null)
   const [conTabla, setConTabla] = useState(false)
@@ -171,7 +173,7 @@ export default function ListaPorGrupo() {
                 <tr key={d.id} className="border-b last:border-b-0">
                   <th scope="row" className="p-3 font-normal">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Avatar name={nombreCompleto(d)} />
+                      <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
                       <span className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</span>
                     </div>
                   </th>
@@ -187,7 +189,7 @@ export default function ListaPorGrupo() {
           {items.map((d) => (
             <Card as="li" key={d.id} className="flex flex-col gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <Avatar name={nombreCompleto(d)} />
+                <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
                 <p className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</p>
               </div>
               <p className="break-words text-small text-secondary">{textoEdad(d)} · Documento: {d.documento}</p>
