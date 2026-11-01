@@ -11,9 +11,9 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers())
 
 describe('CATEGORIAS_POR_EDAD', () => {
-  it('son las 10 categorías del club, en orden, sin las eliminadas', () => {
-    expect(NOMBRES_CATEGORIAS).toEqual(['Párvulos', 'Cachorros', 'Sub-9', 'Sub-10', 'Sub-11', 'Sub-12', 'Sub-13', 'Sub-14', 'Sub-15', 'Sub-16'])
-    for (const eliminada of ['Sub-8', 'Semillero', 'Sub 13 y 14 Formación', 'Femenino', 'Arqueros']) expect(NOMBRES_CATEGORIAS).not.toContain(eliminada)
+  it('son las 9 categorías del club, en orden, sin las eliminadas', () => {
+    expect(NOMBRES_CATEGORIAS).toEqual(['Párvulos', 'Cachorros', 'Semillero', 'Sub-11', 'Sub-12', 'Sub-13', 'Sub-14', 'Sub-15', 'Sub-16'])
+    for (const eliminada of ['Sub-8', 'Sub-9', 'Sub-10', 'Sub 13 y 14 Formación', 'Femenino', 'Arqueros']) expect(NOMBRES_CATEGORIAS).not.toContain(eliminada)
   })
 
   it('cubren las edades 4 a 16 sin huecos ni cruces', () => {
@@ -21,6 +21,7 @@ describe('CATEGORIAS_POR_EDAD', () => {
     expect(edades).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
     expect(CATEGORIAS_POR_EDAD[0]).toMatchObject({ nombre: 'Párvulos', edadMinima: 4, edadMaxima: 6 })
     expect(CATEGORIAS_POR_EDAD[1]).toMatchObject({ nombre: 'Cachorros', edadMinima: 7, edadMaxima: 8 })
+    expect(CATEGORIAS_POR_EDAD[2]).toMatchObject({ nombre: 'Semillero', edadMinima: 9, edadMaxima: 10 })
   })
 })
 
@@ -38,9 +39,11 @@ describe('categoriaPorFecha (reloj en 2026)', () => {
     ['2021-06-15', 'Párvulos'],
     ['2020-01-01', 'Párvulos'], // límite de arriba de Párvulos
     ['2019-12-31', 'Cachorros'],
-    ['2018-01-01', 'Cachorros'],
-    ['2017-05-05', 'Sub-9'],
-    ['2016-05-10', 'Sub-10'],
+    ['2018-01-01', 'Cachorros'], // límite de abajo de Cachorros
+    ['2017-12-31', 'Semillero'], // límite más joven de Semillero
+    ['2017-05-05', 'Semillero'],
+    ['2016-01-01', 'Semillero'], // límite más viejo de Semillero
+    ['2015-12-31', 'Sub-11'],
     ['2015-01-01', 'Sub-11'],
     ['2014-12-31', 'Sub-12'],
     ['2013-06-06', 'Sub-13'],
@@ -57,9 +60,9 @@ describe('categoriaPorFecha (reloj en 2026)', () => {
     expect(categoriaPorFecha('2026-10-22')).toBeNull()
   })
 
-  it('el 29 de febrero cuenta por el año: 2020-02-29 es Párvulos y 2016-02-29 es Sub-10', () => {
+  it('el 29 de febrero cuenta por el año: 2020-02-29 es Párvulos y 2016-02-29 es Semillero', () => {
     expect(categoriaPorFecha('2020-02-29')).toBe('Párvulos')
-    expect(categoriaPorFecha('2016-02-29')).toBe('Sub-10')
+    expect(categoriaPorFecha('2016-02-29')).toBe('Semillero')
     expect(categoriaPorFecha('2012-02-29')).toBe('Sub-14')
   })
 
@@ -71,7 +74,8 @@ describe('categoriaPorFecha (reloj en 2026)', () => {
     vi.setSystemTime(new Date(2027, 0, 15, 12, 0))
     expect(categoriaPorFecha('2023-01-01')).toBe('Párvulos')
     expect(categoriaPorFecha('2020-01-01')).toBe('Cachorros')
-    expect(categoriaPorFecha('2018-05-05')).toBe('Sub-9')
+    expect(categoriaPorFecha('2018-05-05')).toBe('Semillero')
+    expect(categoriaPorFecha('2016-05-05')).toBe('Sub-11')
     expect(categoriaPorFecha('2011-05-05')).toBe('Sub-16')
     expect(categoriaPorFecha('2010-05-05')).toBeNull()
     expect(categoriaPorFecha('2024-01-01')).toBeNull()
@@ -80,7 +84,7 @@ describe('categoriaPorFecha (reloj en 2026)', () => {
   it('acepta un `hoy` explícito', () => {
     expect(categoriaPorFecha('2019-05-05', '2027-06-01')).toBe('Cachorros')
     expect(categoriaPorFecha('2019-05-05', '2026-06-01')).toBe('Cachorros')
-    expect(categoriaPorFecha('2019-05-05', '2028-06-01')).toBe('Sub-9')
+    expect(categoriaPorFecha('2019-05-05', '2028-06-01')).toBe('Semillero')
   })
 })
 
@@ -108,22 +112,22 @@ describe('rangoAniosNacimiento', () => {
 })
 
 describe('idCategoriaAlGuardar (formulario del deportista)', () => {
-  const categorias = [{ id: 1, nombre: 'Párvulos' }, { id: 2, nombre: 'Cachorros' }, { id: 4, nombre: 'Sub-10' }]
+  const categorias = [{ id: 1, nombre: 'Párvulos' }, { id: 2, nombre: 'Cachorros' }, { id: 3, nombre: 'Semillero' }]
   const vacio = { fechaNacimiento: '', idCategoria: '' }
 
   it('deportista nuevo: sale de la categoría que da la fecha, como texto', () => {
-    expect(idCategoriaAlGuardar('2016-05-10', vacio, categorias)).toBe('4')
+    expect(idCategoriaAlGuardar('2016-05-10', vacio, categorias)).toBe('3')
     expect(idCategoriaAlGuardar('2018-01-01', vacio, categorias)).toBe('2')
     expect(idCategoriaAlGuardar('2022-01-01', vacio, categorias)).toBe('1')
   })
 
   it('sin categoría para esa fecha, o categoría que no está en la lista, queda sin asignar', () => {
     expect(idCategoriaAlGuardar('2023-01-01', vacio, categorias)).toBe('')
-    expect(idCategoriaAlGuardar('2012-01-01', vacio, categorias)).toBe('') // Sub-14 no está en la lista
+    expect(idCategoriaAlGuardar('2012-01-01', vacio, categorias)).toBe('') // Sub-14 no está en la lista de ejemplo
   })
 
   it('al editar con la misma fecha conserva la categoría que ya tenía, aunque no sea la de la fecha', () => {
-    const inicial = { fechaNacimiento: '2017-10-25', idCategoria: '2' } // 2017 sería Sub-9, pero tenía Cachorros
+    const inicial = { fechaNacimiento: '2017-10-25', idCategoria: '2' } // 2017 sería Semillero, pero tenía Cachorros
     expect(idCategoriaAlGuardar('2017-10-25', inicial, categorias)).toBe('2')
     expect(idCategoriaAlGuardar('2017-10-25', { ...inicial, idCategoria: 2 }, categorias)).toBe('2')
   })
@@ -135,7 +139,7 @@ describe('idCategoriaAlGuardar (formulario del deportista)', () => {
 
   it('al editar con otra fecha se recalcula, y cambia con el reloj', () => {
     const inicial = { fechaNacimiento: '2018-03-14', idCategoria: '2' }
-    expect(idCategoriaAlGuardar('2016-03-14', inicial, categorias)).toBe('4')
+    expect(idCategoriaAlGuardar('2016-03-14', inicial, categorias)).toBe('3')
     expect(idCategoriaAlGuardar('2018-03-14', { ...inicial, fechaNacimiento: '2017-01-01' }, categorias)).toBe('2')
     vi.setSystemTime(new Date(2027, 0, 15, 12, 0))
     expect(idCategoriaAlGuardar('2020-03-14', vacio, categorias)).toBe('2')
@@ -143,21 +147,22 @@ describe('idCategoriaAlGuardar (formulario del deportista)', () => {
 })
 
 describe('textoAniosCategoria (ficha del deportista)', () => {
-  it('una categoría de un año: "Sub-10 (nacidos en 2016)"', () => {
-    expect(textoAniosCategoria('Sub-10')).toBe('nacidos en 2016')
-    expect(textoAniosCategoria('Sub-9')).toBe('nacidos en 2017')
+  it('una categoría de un año: "Sub-11 (nacidos en 2015)"', () => {
+    expect(textoAniosCategoria('Sub-11')).toBe('nacidos en 2015')
+    expect(textoAniosCategoria('Sub-12')).toBe('nacidos en 2014')
     expect(textoAniosCategoria('Sub-16')).toBe('nacidos en 2010')
   })
 
-  it('Cachorros reúne dos años y Párvulos tres', () => {
+  it('Cachorros y Semillero reúnen dos años y Párvulos tres', () => {
+    expect(textoAniosCategoria('Semillero')).toBe('nacidos en 2016 y 2017')
     expect(textoAniosCategoria('Cachorros')).toBe('nacidos en 2018 y 2019')
     expect(textoAniosCategoria('Párvulos')).toBe('nacidos de 2020 a 2022')
   })
 
   it('cambia con el año y devuelve null si la categoría no existe', () => {
-    expect(textoAniosCategoria('Sub-10', '2027-01-15')).toBe('nacidos en 2017')
-    expect(textoAniosCategoria('Sub-18')).toBeNull()
-    expect(textoAniosCategoria('Sub-8')).toBeNull()
+    expect(textoAniosCategoria('Sub-11', '2027-01-15')).toBe('nacidos en 2016')
+    expect(textoAniosCategoria('Semillero', '2027-01-15')).toBe('nacidos en 2017 y 2018')
+    for (const noExiste of ['Sub-18', 'Sub-8', 'Sub-9', 'Sub-10']) expect(textoAniosCategoria(noExiste), noExiste).toBeNull()
   })
 
   it('la nota de las listas explica que la categoría sale del año', () => {

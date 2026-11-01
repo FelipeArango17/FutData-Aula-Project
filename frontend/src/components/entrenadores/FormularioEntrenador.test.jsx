@@ -40,13 +40,13 @@ describe('FormularioEntrenador (marcado)', () => {
       categorias: [
         { id: '1', nombre: 'Cachorros', entrenador: null },
         { id: '2', nombre: 'Sub-12', entrenador: { id: 'otro', nombre: 'Nicolás', apellido: 'Ejemplo' } },
-        { id: '3', nombre: 'Sub-10', entrenador: { id: 'yo', nombre: 'Luis', apellido: 'Pérez' } },
+        { id: '3', nombre: 'Semillero', entrenador: { id: 'yo', nombre: 'Luis', apellido: 'Pérez' } },
       ],
     })
     expect(html).toContain('Categorías a cargo (opcional)')
     expect(html).toContain('Sin entrenador: Cachorros.')
     expect(html).toContain('Con otro entrenador: Sub-12 (Nicolás Ejemplo)')
-    expect(html).not.toContain('Sub-10 (Luis')
+    expect(html).not.toContain('Semillero (Luis')
   })
 
   it('un entrenador inactivo no ofrece categorías', () => {

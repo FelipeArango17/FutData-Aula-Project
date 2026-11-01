@@ -7,10 +7,10 @@ import Button from '../../components/ui/Button.jsx'
 // Datos de ejemplo de la ficha (solo Santiago está en el diseño).
 const fichas = {
   santiago: {
-    nombre: 'Santiago Ríos', categoria: 'Sub-10 · Prado FC',
+    nombre: 'Santiago Ríos', categoria: 'Semillero · Prado FC',
     datos: [
       ['Nombres', 'Santiago'], ['Apellidos', 'Ríos Zapata'], ['Documento de identidad', '1.023.456.789'],
-      ['Fecha de nacimiento', '14 mar. 2016'], ['Categoría', 'Sub-10'], ['Posición preferida', 'Volante'],
+      ['Fecha de nacimiento', '14 mar. 2016'], ['Categoría', 'Semillero'], ['Posición preferida', 'Volante'],
       ['EPS', 'Sura'], ['Talla de uniforme', 'M'],
     ],
     documentos: [

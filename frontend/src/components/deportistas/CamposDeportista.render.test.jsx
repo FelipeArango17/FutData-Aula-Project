@@ -23,11 +23,11 @@ describe('CamposDeportista: fecha de nacimiento y categoría', () => {
     expect(anios(html)).toEqual([2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010])
   })
 
-  it('la categoría es de solo lectura: "—" sin fecha y "Sub-10" para 2016-05-10', () => {
+  it('la categoría es de solo lectura: "—" sin fecha y "Semillero" para 2016-05-10', () => {
     const vacia = dibujar()
     expect(vacia).toMatch(/<input id="categoria"[^>]*readOnly=""[^>]*value="—"/)
     const html = dibujar({ fechaNacimiento: '2016-05-10' })
-    expect(html).toMatch(/<input id="categoria"[^>]*readOnly=""[^>]*value="Sub-10"/)
+    expect(html).toMatch(/<input id="categoria"[^>]*readOnly=""[^>]*value="Semillero"/)
     expect(html).not.toMatch(/<select id="idCategoria"/)
     expect(html).toContain('Se asigna automáticamente según el año de nacimiento.')
   })

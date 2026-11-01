@@ -7,7 +7,7 @@ import FilterChips from '../../components/ui/FilterChips.jsx'
 
 const avisos = [
   { titulo: 'Pago vencido: Uniforme (2.º pago)', detalle: 'Santiago · $ 90.000 · venció el 10 oct.', cuando: 'Hace 2 h', nueva: true, tipo: 'Pagos' },
-  { titulo: 'Cambio de horario Sub-9', detalle: 'Vie 23 oct pasa de 7:00 a 7:30 p. m.', cuando: 'Ayer', nueva: true, tipo: 'Horarios' },
+  { titulo: 'Cambio de horario Semillero', detalle: 'Sáb 24 oct pasa de 8:30 a 9:00 a. m.', cuando: 'Ayer', nueva: true, tipo: 'Horarios' },
   { titulo: 'Ficha médica por vencer', detalle: 'Valeria · vence el 05 nov. Sube una nueva.', cuando: 'Hace 2 días', nueva: false, tipo: 'Documentos' },
   { titulo: 'Pago confirmado: Mensualidad septiembre', detalle: 'Comprobante #0482 disponible', cuando: '15 sep.', nueva: false, tipo: 'Pagos' },
   { titulo: 'Santiago fue convocado a la Copa Prado', detalle: 'Sábado 8 nov. · Medellín', cuando: '12 sep.', nueva: false, tipo: 'Horarios' },

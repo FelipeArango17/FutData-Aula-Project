@@ -14,8 +14,8 @@ beforeEach(async () => {
   ID = {
     registrado: idDe((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-20'), // ya registrado, con historial
     pendiente: idDe((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-19'), // pasado y sin registrar
-    ajeno: idDe((e) => e.categoria === 'Sub-10' && e.fecha === '2026-10-19'), // de Dairo: Nicolás no lo gestiona
-    futuro: idDe((e) => e.categoria === 'Sub-9' && e.fecha === '2026-10-23'), // viernes, después de hoy
+    ajeno: idDe((e) => e.categoria === 'Sub-11' && e.fecha === '2026-10-20'), // de David Mesa: Nicolás no lo gestiona
+    futuro: idDe((e) => e.categoria === 'Sub-13' && e.fecha === '2026-10-23'), // viernes, después de hoy (de Jhon Cardona)
   }
   servicio.configurarSimulacion({ ahora: () => new Date(2026, 9, 22, 17, 40, 0) })
 })
@@ -30,8 +30,9 @@ const resolver = async (promesa) => {
   return v
 }
 
-const nicolas = { rol: 'entrenador', idEntrenador: 1, nombre: 'Nicolás' } // Sub-9 y Sub-12
-const dairo = { rol: 'entrenador', idEntrenador: 2, nombre: 'Dairo' } // Sub-10
+const nicolas = { rol: 'entrenador', idEntrenador: 1, nombre: 'Nicolás' } // Sub-12
+const david = { rol: 'entrenador', idEntrenador: 2, nombre: 'David Mesa' } // Sub-11
+const cardona = { rol: 'entrenador', idEntrenador: 3, nombre: 'Jhon Cardona' } // Sub-13 y Sub-14
 const admin = { rol: 'administrador', idEntrenador: null, nombre: 'Carlos Mendoza' }
 
 // Sub-12 activos: 11 a 15 (el 16, de Sub-13, está inactivo). El entrenamiento del lunes 19 es pasado y sin registrar.
@@ -39,7 +40,8 @@ const completos = (estado = 'presente') => [11, 12, 13, 14, 15].map((idDeportist
 
 describe('listarEntrenamientosParaAsistencia', () => {
   const HOY = '2026-10-22'
-  const deNicolas = (e) => ['Sub-9', 'Sub-12'].includes(e.categoria)
+  const deNicolas = (e) => e.categoria === 'Sub-12'
+  const deCardona = (e) => ['Sub-13', 'Sub-14'].includes(e.categoria)
 
   it('el entrenador solo ve los de sus categorías, ya ocurridos o de hoy', async () => {
     const lista = await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: nicolas }))
@@ -47,7 +49,7 @@ describe('listarEntrenamientosParaAsistencia', () => {
     expect(lista.every((e) => deNicolas(e) && !e.futuro)).toBe(true)
     expect(lista.find((e) => e.id === ID.registrado).registrada).toBe(true)
     expect(lista.find((e) => e.id === ID.pendiente).registrada).toBe(false)
-    expect(lista.some((e) => e.categoria === 'Sub-10')).toBe(false)
+    expect(lista.some((e) => e.categoria === 'Sub-11')).toBe(false)
   })
 
   it('el administrador ve los de todas las categorías', async () => {
@@ -57,18 +59,22 @@ describe('listarEntrenamientosParaAsistencia', () => {
   })
 
   it('con incluirFuturos agrega los próximos y fecha filtra por día', async () => {
-    const todos = await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: nicolas, incluirFuturos: true }))
-    expect(todos.filter((e) => e.futuro).map((e) => e.id)).toEqual(ejemplo.filter((e) => deNicolas(e) && e.fecha > HOY).map((e) => e.id))
+    // Nicolás (Sub-12) ya no tiene entrenamientos después de hoy esta semana: Jhon Cardona (Sub-13 y Sub-14) sí, el viernes 23
+    expect(await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: nicolas, incluirFuturos: true }))).toHaveLength(
+      ejemplo.filter(deNicolas).filter((e) => e.fecha <= HOY).length,
+    )
+    const todos = await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: cardona, incluirFuturos: true }))
+    expect(todos.filter((e) => e.futuro).map((e) => e.id)).toEqual(ejemplo.filter((e) => deCardona(e) && e.fecha > HOY).map((e) => e.id))
     expect(todos.filter((e) => e.futuro).length).toBeGreaterThan(0)
     const dia = await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: admin, fecha: HOY }))
     expect(dia.map((e) => e.id)).toEqual(ejemplo.filter((e) => e.fecha === HOY).map((e) => e.id))
   })
 
-  it('cada entrenamiento trae el nombre de su entrenador, o "Todos los entrenadores" si no tiene uno fijo', async () => {
+  it('cada entrenamiento trae el nombre de su entrenador, o "Por turnos" si no tiene uno fijo', async () => {
     const lista = await resolver(servicio.listarEntrenamientosParaAsistencia({ actor: admin }))
     expect(lista.find((e) => e.id === ID.registrado).entrenador).toBe('Nicolás')
-    expect(lista.find((e) => e.id === ID.ajeno).entrenador).toBe('Dairo')
-    expect(lista.find((e) => e.categoria === 'Cachorros').entrenador).toBe('Todos los entrenadores')
+    expect(lista.find((e) => e.id === ID.ajeno).entrenador).toBe('David Mesa')
+    expect(lista.find((e) => e.categoria === 'Cachorros').entrenador).toBe('Por turnos')
   })
 
   it('un rol sin permiso lanza SIN_PERMISO', async () => {
@@ -117,7 +123,7 @@ describe('registrarAsistencia', () => {
   })
 
   it('entrenamiento futuro lanza ENTRENAMIENTO_FUTURO', async () => {
-    await expect(resolver(servicio.registrarAsistencia(ID.futuro, completos(), nicolas))).rejects.toMatchObject({ codigo: 'ENTRENAMIENTO_FUTURO' })
+    await expect(resolver(servicio.registrarAsistencia(ID.futuro, completos(), cardona))).rejects.toMatchObject({ codigo: 'ENTRENAMIENTO_FUTURO' })
   })
 
   it('doble registro lanza YA_REGISTRADA', async () => {
@@ -127,7 +133,7 @@ describe('registrarAsistencia', () => {
   })
 
   it('un entrenador ajeno no puede registrar (SIN_PERMISO) y no cambia nada', async () => {
-    await expect(resolver(servicio.registrarAsistencia(ID.pendiente, completos(), dairo))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+    await expect(resolver(servicio.registrarAsistencia(ID.pendiente, completos(), david))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
     await expect(resolver(servicio.registrarAsistencia(ID.ajeno, completos(), nicolas))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
     expect((await resolver(servicio.obtenerAsistencia(ID.pendiente, admin))).registro).toBeNull()
   })
@@ -190,7 +196,7 @@ describe('editarAsistencia', () => {
   })
 
   it('un entrenador ajeno no puede editar (SIN_PERMISO); el administrador sí', async () => {
-    await expect(resolver(servicio.editarAsistencia(ID.registrado, [{ idDeportista: 11, estado: 'ausente' }], dairo))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+    await expect(resolver(servicio.editarAsistencia(ID.registrado, [{ idDeportista: 11, estado: 'ausente' }], david))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
     await expect(resolver(servicio.editarAsistencia(ID.registrado, [{ idDeportista: 11, estado: 'ausente' }], admin))).resolves.toBeTruthy()
   })
 

@@ -9,7 +9,7 @@
 //     documento       dígitos para CC/CE; letras y dígitos para PASAPORTE, 6 a 12
 //     telefono        10 dígitos
 //     especialidad    texto, por ejemplo "Porteros"
-//     categorias      lista de categorías, por ejemplo ['Cachorros', 'Sub-10']
+//     categorias      lista de categorías, por ejemplo ['Sub-13', 'Sub-14']
 //     horarioTrabajo  texto libre, opcional
 //
 // PENDIENTE: confirmar con el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md, sección 5):
@@ -29,12 +29,11 @@ export const TIPOS_DOCUMENTO = ['CC', 'CE', 'PASAPORTE']
 export const ETIQUETAS_TIPO_DOCUMENTO = { CC: 'Cédula de ciudadanía', CE: 'Cédula de extranjería', PASAPORTE: 'Pasaporte' }
 export const ESPECIALIDADES = ['Porteros', 'Preparación física', 'Formación técnica', 'Táctica']
 
-// Entrenadores de ejemplo: los mismos de horarioClubData.js (el orden es el id numérico 1 a 6). Los que tienen un solo nombre
+// Entrenadores de ejemplo: los mismos de horarioClubData.js (el orden es el id numérico 1 a 5). Los que tienen un solo nombre
 // llevan el apellido "Ejemplo". Documentos, teléfonos y correos son ficticios.
 const uuid = (n) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`
 const DATOS_PERSONALES = [
   { apellido: 'Ejemplo', documento: '1017234567', fechaNacimiento: '1990-05-14', telefono: '3105558821', especialidad: 'Formación técnica', direccion: 'Calle 40 Sur 75b-81' },
-  { apellido: 'Ejemplo', documento: '71654321', fechaNacimiento: '1988-08-20', telefono: '3156674410', especialidad: 'Preparación física', direccion: 'Carrera 10 # 20-30' },
   { apellido: 'Mesa', documento: '1037001122', fechaNacimiento: '1992-02-11', telefono: '3001230003', especialidad: 'Formación técnica', direccion: 'Calle 50 # 30-40' },
   { apellido: 'Cardona', documento: '98123456', fechaNacimiento: '1985-11-30', telefono: '3001230004', especialidad: 'Táctica', direccion: 'Carrera 45 # 12-20' },
   { apellido: 'Ejemplo', documento: '1128456789', fechaNacimiento: '1995-07-02', telefono: '3001230005', especialidad: 'Preparación física', direccion: 'Calle 33 # 65-10' },

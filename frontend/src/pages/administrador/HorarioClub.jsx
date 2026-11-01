@@ -17,7 +17,7 @@ import { NOMBRES_CATEGORIAS } from '../../utils/categorias.js'
 // Es distinto de "Entrenamientos y horarios" (/administrador/horarios), que programa entrenamientos con fecha.
 // Figma no tiene esta pantalla: usa los componentes del proyecto. PENDIENTE: permisos y datos los valida el backend con el JWT.
 const SIN_FILTRO = ''
-const TODOS_LOS_ENTRENADORES = 'todos'
+const POR_TURNOS = 'todos'
 
 const aTexto = (f) => ({
   idCategoria: String(f.idCategoria), dia: String(f.dia), horaInicio: f.horaInicio, horaFin: f.horaFin, sede: f.sede,
@@ -78,7 +78,7 @@ export default function HorarioClub() {
   const franjas = carga.franjas
   const visibles = franjas.filter(
     (f) => (!categoria || f.idCategoria === Number(categoria)) && (!sede || f.sede === sede)
-      && (!entrenador || (entrenador === TODOS_LOS_ENTRENADORES ? f.idEntrenador === null : f.idEntrenador === Number(entrenador))),
+      && (!entrenador || (entrenador === POR_TURNOS ? f.idEntrenador === null : f.idEntrenador === Number(entrenador))),
   )
   const filtrando = Boolean(categoria || entrenador || sede)
 
@@ -172,7 +172,7 @@ export default function HorarioClub() {
         <Field label="Entrenador" id="filtro-entrenador" as="select" value={entrenador} onChange={(e) => setEntrenador(e.target.value)}>
           <option value={SIN_FILTRO}>Todos</option>
           {ENTRENADORES_CLUB.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
-          <option value={TODOS_LOS_ENTRENADORES}>Sin entrenador fijo (todos los entrenadores)</option>
+          <option value={POR_TURNOS}>Por turnos</option>
         </Field>
         <Field label="Sede" id="filtro-sede" as="select" value={sede} onChange={(e) => setSede(e.target.value)}>
           <option value={SIN_FILTRO}>Todas las sedes</option>

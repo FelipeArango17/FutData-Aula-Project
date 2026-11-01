@@ -9,13 +9,13 @@
 //     fecha        "AAAA-MM-DD"
 //     hora         "HH:MM" (24 h) de inicio; horaFin "HH:MM" de fin
 //     sede         "Horizontes" o "UVA El Paraíso"
-//     idEntrenador número, o null = "Todos los entrenadores" (Párvulos, Cachorros y Semillero no tienen entrenador fijo)
-//     grupo        "mañana" | "tarde" | null (solo Sub-9 y Sub-10, que tienen dos grupos)
+//     idEntrenador número, o null = "Por turnos" (Párvulos, Cachorros y Semillero no tienen entrenador fijo)
+//     grupo        "mañana" | "tarde" | null (solo Cachorros y Semillero, martes y jueves: dos sesiones alternativas el mismo día)
 //   Los entrenamientos de ejemplo de la semana de HOY_EJEMPLO salen de la plantilla semanal del club
 //   (horarioClubData.js + utils/horarioClub.js).
 //
 // Conflicto: un entrenador no puede tener dos entrenamientos que se cruzan en la misma fecha. Varias categorías sí pueden
-// coincidir en hora y sede (el club lo hace), y "Todos los entrenadores" no choca con nadie.
+// coincidir en hora y sede (el club lo hace), y "Por turnos" no choca con nadie.
 //
 // PENDIENTE: confirmar con el modelo de datos del backend. Entrenamiento, Categoría y Sede
 // NO existen todavía en docs/info-sprints/sprint-1/diccionario-datos.md (solo Entrenador, con
@@ -46,7 +46,7 @@ export const categoriasPorRol = {
 
 // Jugadores por categoría, solo para el mensaje simulado "Se notificará a N jugadores".
 const JUGADORES_POR_CATEGORIA = {
-  Párvulos: 10, Cachorros: 14, 'Sub-9': 13, 'Sub-10': 15, 'Sub-11': 16, 'Sub-12': 17, 'Sub-13': 15, 'Sub-14': 16, 'Sub-15': 14, 'Sub-16': 12,
+  Párvulos: 10, Cachorros: 14, Semillero: 28, 'Sub-11': 16, 'Sub-12': 17, 'Sub-13': 15, 'Sub-14': 16, 'Sub-15': 14, 'Sub-16': 12,
 }
 
 // Entrenamientos de la semana de HOY_EJEMPLO, sacados de la plantilla semanal. Se calculan una vez para poder compartir ids
@@ -72,7 +72,7 @@ export async function listar() {
   return entrenamientos.map(copiar)
 }
 
-// Conflicto = el mismo entrenador ya tiene otro entrenamiento que se cruza ese día. Sin entrenador ("Todos") no hay conflicto.
+// Conflicto = el mismo entrenador ya tiene otro entrenamiento que se cruza ese día. Sin entrenador ("Por turnos") no hay conflicto.
 // Devuelve { hayConflicto, alternativas: [{ tipo: 'hora', hora, horaFin }] } con el siguiente horario libre del entrenador
 // (pasos de 1 h 30 min, con la misma duración).
 export async function detectarConflicto(datos, ignorarId = null) {

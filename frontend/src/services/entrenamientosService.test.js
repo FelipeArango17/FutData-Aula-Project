@@ -8,13 +8,13 @@ beforeEach(async () => {
   servicio = await import('./entrenamientosService.js')
 })
 
-// Dairo (id 2) no tiene franjas los miércoles
+// David Mesa (id 2, Sub-11) no tiene nada el miércoles 21 de 10:00 a 11:00
 const nuevo = (extra = {}) => ({
-  categoria: 'Sub-10', fecha: '2026-10-21', hora: '10:00', horaFin: '11:00', sede: 'Horizontes', idEntrenador: '2', grupo: '', ...extra,
+  categoria: 'Sub-11', fecha: '2026-10-21', hora: '10:00', horaFin: '11:00', sede: 'Horizontes', idEntrenador: '2', grupo: '', ...extra,
 })
 const buscar = async (filtro) => (await servicio.listar()).find(filtro)
-// Sub-10 del lunes 19 de octubre, 7:00 p. m. a 8:00 p. m. (de Dairo)
-const dairoLunes = { fecha: '2026-10-19', hora: '19:00', horaFin: '20:00', idEntrenador: 2 }
+// Sub-11 del miércoles 21 de octubre, 7:00 p. m. a 8:00 p. m. (de David Mesa)
+const davidMiercoles = { fecha: '2026-10-21', hora: '19:00', horaFin: '20:00', idEntrenador: 2 }
 
 describe('listar', () => {
   it('devuelve los entrenamientos de la semana de HOY_EJEMPLO que salen de la plantilla, como copias', async () => {
@@ -42,57 +42,57 @@ describe('listar', () => {
     expect(lista.map((e) => e.id)).toEqual(lista.map((_, i) => i + 1))
   })
 
-  it('Sub-9 y Sub-10 tienen entrenamientos de grupo mañana y tarde sin entrenador fijo; las demás categorías no tienen grupo', async () => {
+  it('Cachorros y Semillero tienen entrenamientos de grupo mañana y tarde (martes y jueves) sin entrenador fijo; las demás categorías no tienen grupo', async () => {
     const lista = await servicio.listar()
     const conGrupo = lista.filter((e) => e.grupo)
-    expect(new Set(conGrupo.map((e) => e.categoria))).toEqual(new Set(['Sub-9', 'Sub-10']))
+    expect(new Set(conGrupo.map((e) => e.categoria))).toEqual(new Set(['Cachorros', 'Semillero']))
+    expect(new Set(conGrupo.map((e) => e.fecha))).toEqual(new Set(['2026-10-20', '2026-10-22']))
     expect(new Set(conGrupo.map((e) => e.grupo))).toEqual(new Set(['mañana', 'tarde']))
     expect(conGrupo.every((e) => e.idEntrenador === null)).toBe(true)
-    expect(lista.filter((e) => !['Sub-9', 'Sub-10'].includes(e.categoria)).every((e) => e.grupo === null)).toBe(true)
+    expect(lista.filter((e) => !['Cachorros', 'Semillero'].includes(e.categoria)).every((e) => e.grupo === null)).toBe(true)
   })
 
-  it('la sede de Párvulos a Sub-11 es UVA El Paraíso y la de Sub-12 a Sub-16 es Horizontes', async () => {
+  it('la sede sale de cada franja: Párvulos, Cachorros y Semillero van a UVA El Paraíso entre semana y a Horizontes el sábado; Sub-11 a Sub-16 solo a Horizontes', async () => {
     for (const e of await servicio.listar()) {
-      const numero = Number(e.categoria.replace('Sub-', ''))
-      const enUva = ['Párvulos', 'Cachorros'].includes(e.categoria) || numero <= 11
-      expect(e.sede, e.categoria).toBe(enUva ? 'UVA El Paraíso' : 'Horizontes')
+      const enUva = ['Párvulos', 'Cachorros', 'Semillero'].includes(e.categoria) && e.fecha !== '2026-10-24'
+      expect(e.sede, `${e.categoria} ${e.fecha}`).toBe(enUva ? 'UVA El Paraíso' : 'Horizontes')
     }
   })
 })
 
 describe('detectarConflicto (mismo entrenador, misma fecha, horarios que se cruzan)', () => {
   it('el mismo entrenador con un horario que se cruza es conflicto', async () => {
-    const r = await servicio.detectarConflicto({ ...dairoLunes, hora: '19:30', horaFin: '20:30' })
+    const r = await servicio.detectarConflicto({ ...davidMiercoles, hora: '19:30', horaFin: '20:30' })
     expect(r.hayConflicto).toBe(true)
   })
 
-  it('terminar justo cuando empieza otro, otro entrenador, otra fecha o "Todos los entrenadores" no es conflicto', async () => {
+  it('terminar justo cuando empieza otro, otro entrenador, otra fecha o "Por turnos" no es conflicto', async () => {
     const sinConflicto = { hayConflicto: false, alternativas: [] }
-    expect(await servicio.detectarConflicto({ ...dairoLunes, hora: '20:00', horaFin: '21:00' })).toEqual(sinConflicto)
-    expect(await servicio.detectarConflicto({ ...dairoLunes, idEntrenador: 3 })).toEqual(sinConflicto)
-    expect(await servicio.detectarConflicto({ ...dairoLunes, fecha: '2026-10-26' })).toEqual(sinConflicto)
-    expect(await servicio.detectarConflicto({ ...dairoLunes, idEntrenador: '' })).toEqual(sinConflicto)
-    expect(await servicio.detectarConflicto({ ...dairoLunes, idEntrenador: null })).toEqual(sinConflicto)
+    expect(await servicio.detectarConflicto({ ...davidMiercoles, hora: '20:00', horaFin: '21:00' })).toEqual(sinConflicto)
+    expect(await servicio.detectarConflicto({ ...davidMiercoles, idEntrenador: 4 })).toEqual(sinConflicto)
+    expect(await servicio.detectarConflicto({ ...davidMiercoles, fecha: '2026-10-26' })).toEqual(sinConflicto)
+    expect(await servicio.detectarConflicto({ ...davidMiercoles, idEntrenador: '' })).toEqual(sinConflicto)
+    expect(await servicio.detectarConflicto({ ...davidMiercoles, idEntrenador: null })).toEqual(sinConflicto)
   })
 
   it('el id puede llegar como texto, como en el formulario', async () => {
-    expect((await servicio.detectarConflicto({ ...dairoLunes, idEntrenador: '2' })).hayConflicto).toBe(true)
+    expect((await servicio.detectarConflicto({ ...davidMiercoles, idEntrenador: '2' })).hayConflicto).toBe(true)
   })
 
   it('dos categorías pueden coincidir en fecha, hora y sede (el club lo hace)', async () => {
-    // Sub-9 y Sub-10 entrenan el sábado 24 a las 8:30 en UVA El Paraíso; Sub-11 también puede
-    const r = await servicio.crear(nuevo({ categoria: 'Sub-11', fecha: '2026-10-24', hora: '08:30', horaFin: '10:00', sede: 'UVA El Paraíso', idEntrenador: '3' }))
+    // Cachorros y Semillero entrenan el sábado 24 a las 8:30 en Horizontes; Sub-11 también puede
+    const r = await servicio.crear(nuevo({ categoria: 'Sub-11', fecha: '2026-10-24', hora: '08:30', horaFin: '10:00', sede: 'Horizontes', idEntrenador: '2' }))
     expect(r.entrenamiento.categoria).toBe('Sub-11')
   })
 
   it('ofrece el siguiente horario libre del entrenador, 90 minutos después y con la misma duración', async () => {
-    const r = await servicio.detectarConflicto(dairoLunes)
+    const r = await servicio.detectarConflicto(davidMiercoles)
     expect(r.alternativas).toEqual([{ tipo: 'hora', hora: '20:30', horaFin: '21:30' }])
   })
 
   it('salta una alternativa que también está ocupada', async () => {
-    await servicio.crear(nuevo({ fecha: '2026-10-19', hora: '20:30', horaFin: '21:30' }))
-    const r = await servicio.detectarConflicto(dairoLunes)
+    await servicio.crear(nuevo({ fecha: '2026-10-21', hora: '20:30', horaFin: '21:30' }))
+    const r = await servicio.detectarConflicto(davidMiercoles)
     expect(r.alternativas).toEqual([{ tipo: 'hora', hora: '22:00', horaFin: '23:00' }])
   })
 
@@ -102,10 +102,10 @@ describe('detectarConflicto (mismo entrenador, misma fecha, horarios que se cruz
   })
 
   it('ignorarId evita el conflicto de un entrenamiento consigo mismo', async () => {
-    const propio = await buscar((e) => e.idEntrenador === 2 && e.fecha === '2026-10-19')
-    expect((await servicio.detectarConflicto(dairoLunes)).hayConflicto).toBe(true)
-    expect((await servicio.detectarConflicto(dairoLunes, propio.id)).hayConflicto).toBe(false)
-    expect((await servicio.detectarConflicto(dairoLunes, propio.id + 1)).hayConflicto).toBe(true)
+    const propio = await buscar((e) => e.idEntrenador === 2 && e.fecha === '2026-10-21')
+    expect((await servicio.detectarConflicto(davidMiercoles)).hayConflicto).toBe(true)
+    expect((await servicio.detectarConflicto(davidMiercoles, propio.id)).hayConflicto).toBe(false)
+    expect((await servicio.detectarConflicto(davidMiercoles, propio.id + 1)).hayConflicto).toBe(true)
   })
 })
 
@@ -122,11 +122,11 @@ describe('crear', () => {
     expect(lista.at(-1)).toEqual(entrenamiento)
   })
 
-  it('"Todos los entrenadores" se guarda como null y el grupo vacío también', async () => {
+  it('"Por turnos" se guarda como null y el grupo vacío también', async () => {
     const { entrenamiento } = await servicio.crear(nuevo({ categoria: 'Cachorros', idEntrenador: '' }))
     expect(entrenamiento.idEntrenador).toBeNull()
     expect(entrenamiento.grupo).toBeNull()
-    expect((await servicio.crear(nuevo({ categoria: 'Sub-9', idEntrenador: '', hora: '12:00', horaFin: '13:00', grupo: 'tarde' }))).entrenamiento.grupo).toBe('tarde')
+    expect((await servicio.crear(nuevo({ categoria: 'Semillero', idEntrenador: '', hora: '12:00', horaFin: '13:00', grupo: 'tarde' }))).entrenamiento.grupo).toBe('tarde')
   })
 
   it('los ids no se repiten', async () => {
@@ -136,7 +136,7 @@ describe('crear', () => {
   })
 
   it('rechaza un conflicto de entrenador con error que trae las alternativas y no guarda', async () => {
-    const error = await servicio.crear(nuevo({ fecha: '2026-10-19', hora: '19:00', horaFin: '20:00' })).catch((e) => e)
+    const error = await servicio.crear(nuevo({ fecha: '2026-10-21', hora: '19:00', horaFin: '20:00' })).catch((e) => e)
     expect(error).toBeInstanceOf(Error)
     expect(error.conflicto.hayConflicto).toBe(true)
     expect(error.conflicto.alternativas.length).toBeGreaterThan(0)
@@ -144,7 +144,7 @@ describe('crear', () => {
   })
 
   it('el número de jugadores avisados depende de la categoría', async () => {
-    const r = await servicio.crear(nuevo({ categoria: 'Sub-16', hora: '08:00', horaFin: '09:00', idEntrenador: '6' }))
+    const r = await servicio.crear(nuevo({ categoria: 'Sub-16', hora: '08:00', horaFin: '09:00', idEntrenador: '5' }))
     expect(r.notificados).toBe(12)
   })
 })
@@ -169,7 +169,7 @@ describe('editar', () => {
 
   it('rechaza mover un entrenamiento a un horario donde su entrenador ya tiene otro', async () => {
     const propio = await buscar((e) => e.idEntrenador === 2 && e.fecha === '2026-10-20')
-    const error = await servicio.editar(propio.id, { ...propio, fecha: '2026-10-19', hora: '19:30', horaFin: '20:30' }).catch((e) => e)
+    const error = await servicio.editar(propio.id, { ...propio, fecha: '2026-10-21', hora: '19:30', horaFin: '20:30' }).catch((e) => e)
     expect(error.conflicto.hayConflicto).toBe(true)
     expect((await buscar((e) => e.id === propio.id)).fecha).toBe('2026-10-20')
   })
@@ -190,10 +190,10 @@ describe('eliminar', () => {
   })
 
   it('libera el horario del entrenador para otro entrenamiento', async () => {
-    const propio = await buscar((e) => e.idEntrenador === 2 && e.fecha === '2026-10-19')
-    expect((await servicio.detectarConflicto(dairoLunes)).hayConflicto).toBe(true)
+    const propio = await buscar((e) => e.idEntrenador === 2 && e.fecha === '2026-10-21')
+    expect((await servicio.detectarConflicto(davidMiercoles)).hayConflicto).toBe(true)
     await servicio.eliminar(propio.id)
-    expect((await servicio.detectarConflicto(dairoLunes)).hayConflicto).toBe(false)
+    expect((await servicio.detectarConflicto(davidMiercoles)).hayConflicto).toBe(false)
   })
 
   it('falla si no existe o ya se eliminó', async () => {
@@ -204,15 +204,15 @@ describe('eliminar', () => {
 })
 
 describe('catálogos de ejemplo', () => {
-  it('el entrenador gestiona Sub-9 y Sub-12 (las de Nicolás) y el administrador todas', () => {
-    expect(servicio.categoriasPorRol.entrenador).toEqual(['Sub-9', 'Sub-12'])
+  it('el entrenador gestiona Sub-12 (la de Nicolás) y el administrador todas', () => {
+    expect(servicio.categoriasPorRol.entrenador).toEqual(['Sub-12'])
     expect(servicio.categoriasPorRol.administrador).toEqual(servicio.CATEGORIAS)
     expect(servicio.ENTRENADORES.find((e) => e.id === servicio.ID_ENTRENADOR_EJEMPLO).nombre).toBe('Nicolás')
   })
 
-  it('las sedes son Horizontes y UVA El Paraíso, y los entrenadores de ejemplo son los seis del club, todos activos', () => {
+  it('las sedes son Horizontes y UVA El Paraíso, y los entrenadores de ejemplo son los cinco del club, todos activos', () => {
     expect(servicio.SEDES).toEqual(['Horizontes', 'UVA El Paraíso'])
-    expect(servicio.ENTRENADORES.map((e) => e.nombre)).toEqual(['Nicolás', 'Dairo', 'David Mesa', 'Jhon Cardona', 'Giovanny', 'Jhon Ramírez'])
+    expect(servicio.ENTRENADORES.map((e) => e.nombre)).toEqual(['Nicolás', 'David Mesa', 'Jhon Cardona', 'Giovanny', 'Jhon Ramírez'])
     expect(servicio.ENTRENADORES.every((e) => e.activo)).toBe(true)
   })
 })

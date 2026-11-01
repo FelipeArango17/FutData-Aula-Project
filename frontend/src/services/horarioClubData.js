@@ -4,7 +4,10 @@
 //
 //   Franja = { id, idCategoria, dia (1 = lunes … 6 = sábado), horaInicio "HH:mm", horaFin "HH:mm", sede, idEntrenador | null,
 //              grupo ("mañana" | "tarde" | null) }
-//   idEntrenador null = "Todos los entrenadores". grupo solo en Sub-9 y Sub-10 (dos grupos por categoría; el niño va a uno solo).
+//   idEntrenador null = "Por turnos" (Párvulos, Cachorros y Semillero se turnan los entrenadores, sobre todo los sábados).
+//   grupo solo en Cachorros y Semillero, martes y jueves: dos sesiones alternativas el mismo día (según el horario del colegio);
+//   cada niño asiste a una sola. Todavía no hay asignación de niños a grupos.
+//   La sede va POR FRANJA (se escribe explícita en cada una). Plantilla según el Excel oficial del club.
 import { NOMBRES_CATEGORIAS } from '../utils/categorias.js'
 
 export const SEDES = ['Horizontes', 'UVA El Paraíso']
@@ -15,55 +18,61 @@ export const NOMBRES_DIAS = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Juev
 export const idCategoriaDe = (nombre) => NOMBRES_CATEGORIAS.indexOf(nombre) + 1
 export const nombreDeCategoria = (idCategoria) => NOMBRES_CATEGORIAS[Number(idCategoria) - 1] ?? null
 
-// Una categoría tiene un solo entrenador responsable; un entrenador puede tener varias. Párvulos y Cachorros no tienen uno fijo.
+// Una categoría tiene un solo entrenador responsable; un entrenador puede tener varias (Jhon Cardona: Sub-13 y Sub-14).
+// Párvulos, Cachorros y Semillero no tienen entrenador fijo: se turnan.
 export const ENTRENADORES_CLUB = [
-  { id: 1, nombre: 'Nicolás', categorias: ['Sub-9', 'Sub-12'] },
-  { id: 2, nombre: 'Dairo', categorias: ['Sub-10'] },
-  { id: 3, nombre: 'David Mesa', categorias: ['Sub-11'] },
-  { id: 4, nombre: 'Jhon Cardona', categorias: ['Sub-13', 'Sub-14'] },
-  { id: 5, nombre: 'Giovanny', categorias: ['Sub-15'] },
-  { id: 6, nombre: 'Jhon Ramírez', categorias: ['Sub-16'] },
+  { id: 1, nombre: 'Nicolás', categorias: ['Sub-12'] },
+  { id: 2, nombre: 'David Mesa', categorias: ['Sub-11'] },
+  { id: 3, nombre: 'Jhon Cardona', categorias: ['Sub-13', 'Sub-14'] },
+  { id: 4, nombre: 'Giovanny', categorias: ['Sub-15'] },
+  { id: 5, nombre: 'Jhon Ramírez', categorias: ['Sub-16'] },
 ]
 export const entrenadorDeCategoria = (nombre) => ENTRENADORES_CLUB.find((e) => e.categorias.includes(nombre))?.id ?? null
 
-// Párvulos a Sub-11 en UVA El Paraíso; Sub-12 a Sub-16 en Horizontes (dato de ejemplo)
-export const sedeDeCategoria = (nombre) => (idCategoriaDe(nombre) <= idCategoriaDe('Sub-11') ? 'UVA El Paraíso' : 'Horizontes')
+const H = 'Horizontes'
+const UVA = 'UVA El Paraíso'
+const id = idCategoriaDe
+const idEntrenador = entrenadorDeCategoria
 
-// Las horas finales que no estaban en la hoja del club se asumieron de 1 hora (ver el reporte).
-const TODOS = null
-const franjasDe = (categoria, dias, horaInicio, horaFin, { entrenador = entrenadorDeCategoria(categoria), grupo = null } = {}) =>
-  dias.map((dia) => ({ idCategoria: idCategoriaDe(categoria), dia, horaInicio, horaFin, sede: sedeDeCategoria(categoria), idEntrenador: entrenador, grupo }))
-
-// Franjas de "Semillero" de Sub-9 y Sub-10 (sin entrenador fijo): dos grupos, mañana y tarde
-const semillero = (categoria) => [
-  ...franjasDe(categoria, [2], '07:00', '08:00', { entrenador: TODOS, grupo: 'mañana' }),
-  ...franjasDe(categoria, [4], '07:00', '08:30', { entrenador: TODOS, grupo: 'mañana' }),
-  ...franjasDe(categoria, [2], '16:30', '17:30', { entrenador: TODOS, grupo: 'tarde' }),
-  ...franjasDe(categoria, [4], '16:30', '18:00', { entrenador: TODOS, grupo: 'tarde' }),
-]
-
+// 30 franjas, escritas una por una (sede, día, hora y grupo explícitos). Días: 1 lunes … 6 sábado. Horas en 24 h.
 export const FRANJAS_EJEMPLO = [
-  ...franjasDe('Párvulos', [2], '08:30', '09:30', { entrenador: TODOS }),
-  ...franjasDe('Párvulos', [6], '08:30', '10:00', { entrenador: TODOS }),
-  ...franjasDe('Cachorros', [2, 4], '07:00', '08:00', { entrenador: TODOS }),
-  ...franjasDe('Cachorros', [2, 4], '16:30', '17:30', { entrenador: TODOS }),
-  ...franjasDe('Cachorros', [6], '08:30', '10:00', { entrenador: TODOS }),
-  ...franjasDe('Sub-9', [5], '19:00', '20:00'),
-  ...franjasDe('Sub-9', [6], '08:30', '10:00'),
-  ...semillero('Sub-9'),
-  ...franjasDe('Sub-10', [1, 2, 5], '19:00', '20:00'),
-  ...franjasDe('Sub-10', [6], '08:30', '10:00'),
-  ...semillero('Sub-10'),
-  ...franjasDe('Sub-11', [2], '20:00', '21:00'),
-  ...franjasDe('Sub-11', [3, 4], '19:00', '20:00'),
-  ...franjasDe('Sub-12', [1], '19:00', '20:00'),
-  ...franjasDe('Sub-12', [2], '18:00', '19:00'),
-  ...franjasDe('Sub-12', [4], '19:00', '20:00'),
-  ...franjasDe('Sub-13', [1, 3, 5], '19:00', '20:00'),
-  ...franjasDe('Sub-14', [1, 3, 5], '18:00', '19:00'),
-  ...franjasDe('Sub-15', [1], '18:00', '19:00'),
-  ...franjasDe('Sub-15', [2], '20:00', '21:00'),
-  ...franjasDe('Sub-15', [4], '18:00', '19:00'),
-  ...franjasDe('Sub-16', [2, 4], '16:30', '18:00'),
-  ...franjasDe('Sub-16', [3], '18:00', '19:00'),
+  // Párvulos (por turnos)
+  { idCategoria: id('Párvulos'), dia: 2, horaInicio: '08:30', horaFin: '10:00', sede: UVA, idEntrenador: null, grupo: null },
+  { idCategoria: id('Párvulos'), dia: 6, horaInicio: '09:00', horaFin: '10:00', sede: H, idEntrenador: null, grupo: null },
+  // Cachorros (por turnos): martes y jueves en dos grupos (mañana / tarde), sábado sin grupo
+  { idCategoria: id('Cachorros'), dia: 2, horaInicio: '07:30', horaFin: '09:00', sede: UVA, idEntrenador: null, grupo: 'mañana' },
+  { idCategoria: id('Cachorros'), dia: 2, horaInicio: '16:30', horaFin: '18:00', sede: UVA, idEntrenador: null, grupo: 'tarde' },
+  { idCategoria: id('Cachorros'), dia: 4, horaInicio: '07:30', horaFin: '09:00', sede: UVA, idEntrenador: null, grupo: 'mañana' },
+  { idCategoria: id('Cachorros'), dia: 4, horaInicio: '16:30', horaFin: '18:00', sede: UVA, idEntrenador: null, grupo: 'tarde' },
+  { idCategoria: id('Cachorros'), dia: 6, horaInicio: '08:30', horaFin: '10:00', sede: H, idEntrenador: null, grupo: null },
+  // Semillero (por turnos): igual que Cachorros
+  { idCategoria: id('Semillero'), dia: 2, horaInicio: '07:30', horaFin: '09:00', sede: UVA, idEntrenador: null, grupo: 'mañana' },
+  { idCategoria: id('Semillero'), dia: 2, horaInicio: '16:30', horaFin: '18:00', sede: UVA, idEntrenador: null, grupo: 'tarde' },
+  { idCategoria: id('Semillero'), dia: 4, horaInicio: '07:30', horaFin: '09:00', sede: UVA, idEntrenador: null, grupo: 'mañana' },
+  { idCategoria: id('Semillero'), dia: 4, horaInicio: '16:30', horaFin: '18:00', sede: UVA, idEntrenador: null, grupo: 'tarde' },
+  { idCategoria: id('Semillero'), dia: 6, horaInicio: '08:30', horaFin: '10:00', sede: H, idEntrenador: null, grupo: null },
+  // Sub-11 (David Mesa)
+  { idCategoria: id('Sub-11'), dia: 2, horaInicio: '20:00', horaFin: '21:00', sede: H, idEntrenador: idEntrenador('Sub-11'), grupo: null },
+  { idCategoria: id('Sub-11'), dia: 3, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-11'), grupo: null },
+  { idCategoria: id('Sub-11'), dia: 4, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-11'), grupo: null },
+  // Sub-12 (Nicolás)
+  { idCategoria: id('Sub-12'), dia: 1, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-12'), grupo: null },
+  { idCategoria: id('Sub-12'), dia: 2, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-12'), grupo: null },
+  { idCategoria: id('Sub-12'), dia: 4, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-12'), grupo: null },
+  // Sub-13 (Jhon Cardona)
+  { idCategoria: id('Sub-13'), dia: 1, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-13'), grupo: null },
+  { idCategoria: id('Sub-13'), dia: 3, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-13'), grupo: null },
+  { idCategoria: id('Sub-13'), dia: 5, horaInicio: '19:00', horaFin: '20:00', sede: H, idEntrenador: idEntrenador('Sub-13'), grupo: null },
+  // Sub-14 (Jhon Cardona)
+  { idCategoria: id('Sub-14'), dia: 1, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-14'), grupo: null },
+  { idCategoria: id('Sub-14'), dia: 3, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-14'), grupo: null },
+  { idCategoria: id('Sub-14'), dia: 5, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-14'), grupo: null },
+  // Sub-15 (Giovanny)
+  { idCategoria: id('Sub-15'), dia: 1, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-15'), grupo: null },
+  { idCategoria: id('Sub-15'), dia: 2, horaInicio: '20:00', horaFin: '21:00', sede: H, idEntrenador: idEntrenador('Sub-15'), grupo: null },
+  { idCategoria: id('Sub-15'), dia: 4, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-15'), grupo: null },
+  // Sub-16 (Jhon Ramírez)
+  { idCategoria: id('Sub-16'), dia: 2, horaInicio: '16:30', horaFin: '18:00', sede: H, idEntrenador: idEntrenador('Sub-16'), grupo: null },
+  { idCategoria: id('Sub-16'), dia: 3, horaInicio: '18:00', horaFin: '19:00', sede: H, idEntrenador: idEntrenador('Sub-16'), grupo: null },
+  { idCategoria: id('Sub-16'), dia: 4, horaInicio: '16:30', horaFin: '18:00', sede: H, idEntrenador: idEntrenador('Sub-16'), grupo: null },
 ].map((franja, i) => ({ id: i + 1, ...franja }))

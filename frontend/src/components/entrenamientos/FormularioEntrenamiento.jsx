@@ -11,12 +11,12 @@ import { MENSAJES, enLista, validarCampos, validarFechaEntrenamiento, validarHor
 // fechaOriginal: la fecha con la que se abrió el formulario al editar (null al crear). Conservarla no da error aunque ya
 // haya pasado; cambiarla a otra fecha pasada sí.
 const ENTRENADORES_ACTIVOS = ENTRENADORES.filter((e) => e.activo)
-const nombreEntrenador = (id) => ENTRENADORES.find((e) => String(e.id) === String(id))?.nombre ?? 'Todos los entrenadores'
+const nombreEntrenador = (id) => ENTRENADORES.find((e) => String(e.id) === String(id))?.nombre ?? 'Por turnos'
 
 function validar(v, categorias, fechaOriginal = null) {
   return validarCampos(v, {
     categoria: [enLista(categorias, MENSAJES.entrenamientoCategoria)],
-    // '' = "Todos los entrenadores"; solo se ofrecen los activos
+    // '' = "Por turnos"; solo se ofrecen los activos
     idEntrenador: [enLista(['', ...ENTRENADORES_ACTIVOS.map((e) => String(e.id))], MENSAJES.entrenamientoEntrenador)],
     fecha: [(valor) => validarFechaEntrenamiento(valor, valor === fechaOriginal ? valor : hoyLocal())],
     hora: [validarHoraEntrenamiento],
@@ -62,7 +62,7 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
   function cambiar(campo, valor) {
     const nuevos = { ...valores, [campo]: valor }
     if (campo === 'categoria') {
-      // Al elegir categoría se propone su entrenador responsable (o "Todos los entrenadores") y se limpia un grupo que no aplica
+      // Al elegir categoría se propone su entrenador responsable (o "Por turnos") y se limpia un grupo que no aplica
       nuevos.idEntrenador = String(entrenadorDeCategoria(valor) ?? '')
       if (!CATEGORIAS_CON_GRUPO.includes(valor)) nuevos.grupo = ''
     }
@@ -112,7 +112,7 @@ export default function FormularioEntrenamiento({ inicial, categorias, ignorarId
         {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
       </Field>
       <Field label="Entrenador" id="idEntrenador" as="select" value={valores.idEntrenador} error={errores.idEntrenador} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('idEntrenador', e.target.value)}>
-        <option value="">Todos los entrenadores</option>
+        <option value="">Por turnos</option>
         {ENTRENADORES_ACTIVOS.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
       </Field>
       <Field label="Fecha" requerido id="fecha" type="date" min={fechaMinima} value={valores.fecha} error={errores.fecha} describedBy={describe} invalid={Boolean(conflicto)} onChange={(e) => cambiar('fecha', e.target.value)} />

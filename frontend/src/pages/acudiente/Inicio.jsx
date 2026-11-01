@@ -18,14 +18,14 @@ export default function Inicio() {
             <Avatar name="Santiago Ríos" />
             <div className="min-w-0">
               <h2 className="break-words text-h3">Santiago Ríos</h2>
-              <p className="text-small text-secondary">Sub-10 · Prado FC</p>
+              <p className="text-small text-secondary">Semillero · Prado FC</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge tone="warning">Pago pendiente</Badge>
             <Badge tone="success">Asistencia 90 %</Badge>
           </div>
-          <p className="text-body text-secondary">Mañana 7:00 p. m. · UVA El Paraíso</p>
+          <p className="text-body text-secondary">Sábado 8:30 a. m. · Horizontes</p>
           <Button to="/acudiente/pagos">Pagar ahora</Button>
         </Card>
         <Card aria-labelledby="pendientes-titulo" className="flex flex-col gap-3">

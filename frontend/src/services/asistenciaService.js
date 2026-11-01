@@ -25,7 +25,7 @@
 // - "Hoy" es HOY_EJEMPLO. La fecha de los registros nuevos usa ese día con la hora real, para que la demo sea coherente.
 import { ENTRENADORES, HOY_EJEMPLO, entrenamientosDeEjemplo, listar as listarEntrenamientos } from './entrenamientosService.js'
 import { obtener as obtenerEntrenador } from './entrenadoresService.js'
-import { listarCategorias, listarDeportistas } from './deportistasService.js'
+import { idsDeEjemploDeCategoria, listarCategorias, listarDeportistas } from './deportistasService.js'
 
 export const ESTADOS = ['presente', 'ausente', 'justificado']
 export const MAX_OBSERVACION = 200
@@ -34,18 +34,16 @@ export const MAX_OBSERVACION = 200
 // tiene un cambio en el historial, para probar la edición sin empezar de cero. Los demás de la semana hasta hoy (22 de
 // octubre) están sin registrar; los del viernes 23 y el sábado 24 son futuros. Los ids salen de la plantilla del club.
 const ID_REGISTRADO = entrenamientosDeEjemplo().find((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-20').id
+// Los deportistas del registro sembrado son los de ejemplo de Sub-12 (sin ids fijos): el 1.º, 2.º y 5.º presentes, el 3.º ausente
+// sin aviso y el 4.º justificado (cita médica).
+const ID_DEPORTISTAS_REGISTRADO = idsDeEjemploDeCategoria('Sub-12')
+const ESTADOS_SEMBRADOS = [['presente', ''], ['presente', ''], ['ausente', 'Sin aviso'], ['justificado', 'Cita médica'], ['presente', '']]
 const sembrar = () =>
   new Map([
     [
       ID_REGISTRADO,
       {
-        items: [
-          { idDeportista: 11, estado: 'presente', observacion: '' },
-          { idDeportista: 12, estado: 'presente', observacion: '' },
-          { idDeportista: 13, estado: 'ausente', observacion: 'Sin aviso' },
-          { idDeportista: 14, estado: 'justificado', observacion: 'Cita médica' },
-          { idDeportista: 15, estado: 'presente', observacion: '' },
-        ],
+        items: ID_DEPORTISTAS_REGISTRADO.map((idDeportista, i) => ({ idDeportista, estado: ESTADOS_SEMBRADOS[i % 5][0], observacion: ESTADOS_SEMBRADOS[i % 5][1] })),
         registradoPor: 'Nicolás',
         registradoEn: '2026-10-20T19:05',
         historial: [
@@ -54,7 +52,7 @@ const sembrar = () =>
             responsable: 'Nicolás',
             cambios: [
               {
-                idDeportista: 14,
+                idDeportista: ID_DEPORTISTAS_REGISTRADO[3],
                 antes: { estado: 'ausente', observacion: '' },
                 despues: { estado: 'justificado', observacion: 'Cita médica' },
               },
@@ -137,7 +135,7 @@ const datosEntrenamiento = (e) => ({
   ...e,
   futuro: esFuturo(e),
   registrada: registros.has(e.id),
-  entrenador: ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? 'Todos los entrenadores',
+  entrenador: ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? 'Por turnos',
 })
 
 // Entrenamientos que el actor puede gestionar, ya ocurridos o de hoy. Con incluirFuturos también los próximos

@@ -21,7 +21,7 @@ export default function ListaPorDia({ dias, entrenamientos, base, onEliminar }) 
               {delDia.map((e) => {
                 const categoria = e.grupo ? `${e.categoria} · grupo ${e.grupo}` : e.categoria
                 const descripcion = `${categoria}, ${diaLargo(dia).toLowerCase()}, ${formatHora(e.hora)}`
-                const entrenador = ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? 'Todos los entrenadores'
+                const entrenador = ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? 'Por turnos'
                 return (
                   <Card as="li" key={e.id} className="flex flex-col gap-3">
                     <div className="flex flex-wrap items-start justify-between gap-2">
