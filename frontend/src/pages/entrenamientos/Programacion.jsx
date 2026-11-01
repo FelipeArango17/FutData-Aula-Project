@@ -64,13 +64,15 @@ export default function Programacion() {
   const enSemana = delRol.filter((e) => dias.includes(e.fecha) && (filtro === 'Todas' || e.categoria === filtro))
 
   const inicial = editando
-    ? { ...editando, idEntrenador: String(editando.idEntrenador) }
+    ? { ...editando, idEntrenador: editando.idEntrenador === null ? '' : String(editando.idEntrenador), grupo: editando.grupo ?? '' }
     : {
         categoria: categorias.length === 1 ? categorias[0] : '',
         idEntrenador: role === 'entrenador' ? String(ID_ENTRENADOR_EJEMPLO) : '',
         fecha: '',
         hora: '',
-        lugar: '',
+        horaFin: '',
+        sede: '',
+        grupo: '',
       }
 
   async function guardar(valores) {
@@ -109,7 +111,7 @@ export default function Programacion() {
                 <CuadriculaSemanal dias={dias} entrenamientos={enSemana} base={base} editandoId={editando?.id} />
               </div>
               <div className={compacta ? '' : 'md:hidden'}>
-                <ListaPorDia dias={dias} entrenamientos={enSemana} base={base} mostrarEntrenador={role === 'administrador'} onEliminar={setPorEliminar} />
+                <ListaPorDia dias={dias} entrenamientos={enSemana} base={base} onEliminar={setPorEliminar} />
               </div>
             </>
           )}
@@ -119,7 +121,7 @@ export default function Programacion() {
           <div className="flex flex-col gap-4 md:min-w-0 md:shrink md:grow-0 md:basis-80">
             <div className="flex flex-col gap-1 md:hidden">
               <h1 ref={tituloMovil} tabIndex={-1} className="break-words text-display outline-none">{titulo}</h1>
-              <p className="text-body text-secondary">Define la categoría, la fecha, la hora y el lugar</p>
+              <p className="text-body text-secondary">Define la categoría, el entrenador, la fecha, la hora y la sede</p>
             </div>
             <section aria-labelledby="titulo-panel" className="rounded-lg border bg-surface p-4">
               <h2 id="titulo-panel" ref={tituloPanel} tabIndex={-1} className="mb-4 hidden break-words text-h3 outline-none md:block">{titulo}</h2>
@@ -143,7 +145,7 @@ export default function Programacion() {
         titulo="¿Eliminar este entrenamiento?"
         descripcion={
           porEliminar
-            ? `${porEliminar.categoria} · ${porEliminar.lugar} · ${diaLargo(porEliminar.fecha)}, ${formatHora(porEliminar.hora)}. Esta acción no se puede deshacer y se avisará a los jugadores y sus acudientes.`
+            ? `${porEliminar.categoria}${porEliminar.grupo ? ` (grupo ${porEliminar.grupo})` : ''} · ${porEliminar.sede} · ${diaLargo(porEliminar.fecha)}, ${formatHora(porEliminar.hora)}. Esta acción no se puede deshacer y se avisará a los jugadores y sus acudientes.`
             : ''
         }
         textoConfirmar="Sí, eliminar"

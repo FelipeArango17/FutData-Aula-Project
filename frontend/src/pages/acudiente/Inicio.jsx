@@ -25,7 +25,7 @@ export default function Inicio() {
             <Badge tone="warning">Pago pendiente</Badge>
             <Badge tone="success">Asistencia 90 %</Badge>
           </div>
-          <p className="text-body text-secondary">Hoy 4:00 p. m. · Cancha 1</p>
+          <p className="text-body text-secondary">Mañana 7:00 p. m. · UVA El Paraíso</p>
           <Button to="/acudiente/pagos">Pagar ahora</Button>
         </Card>
         <Card aria-labelledby="pendientes-titulo" className="flex flex-col gap-3">

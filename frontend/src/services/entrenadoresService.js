@@ -21,6 +21,7 @@
 // - La base de datos también deberá exigir que documento y correo no se repitan (observación 2).
 import { apiRequest } from './apiClient.js'
 import { CATEGORIAS } from './entrenamientosService.js'
+import { ENTRENADORES_CLUB } from './horarioClubData.js'
 import { CATEGORIAS_POR_EDAD } from '../utils/categorias.js'
 
 export { CATEGORIAS }
@@ -28,38 +29,37 @@ export const TIPOS_DOCUMENTO = ['CC', 'CE', 'PASAPORTE']
 export const ETIQUETAS_TIPO_DOCUMENTO = { CC: 'Cédula de ciudadanía', CE: 'Cédula de extranjería', PASAPORTE: 'Pasaporte' }
 export const ESPECIALIDADES = ['Porteros', 'Preparación física', 'Formación técnica', 'Táctica']
 
-let entrenadores = [
-  {
-    id: '11111111-1111-4111-8111-111111111111',
-    nombre: 'Andrés',
-    apellido: 'Mora',
-    tipoDocumento: 'CC',
-    documento: '1017234567',
-    fechaNacimiento: '1990-05-14',
-    telefono: '3105558821',
-    correo: 'andres.mora@pradofc.co',
-    especialidad: 'Formación técnica',
-    categorias: ['Sub-12'],
-    horarioTrabajo: 'Lunes, miércoles y sábado, 4:00 p. m. a 7:00 p. m.',
-    direccion: 'Calle 40 Sur 75b-81',
-    activo: true,
-  },
-  {
-    id: '22222222-2222-4222-8222-222222222222',
-    nombre: 'Carlos',
-    apellido: 'Díaz',
-    tipoDocumento: 'CC',
-    documento: '71654321',
-    fechaNacimiento: '1988-08-20',
-    telefono: '3156674410',
-    correo: 'carlos.diaz@pradofc.co',
-    especialidad: 'Preparación física',
-    categorias: ['Cachorros', 'Sub-10', 'Sub-14', 'Sub-16'],
-    horarioTrabajo: 'Lunes a viernes, 3:30 p. m. a 7:30 p. m.',
-    direccion: 'Carrera 10 # 20-30',
-    activo: true,
-  },
+// Entrenadores de ejemplo: los mismos de horarioClubData.js (el orden es el id numérico 1 a 6). Los que tienen un solo nombre
+// llevan el apellido "Ejemplo". Documentos, teléfonos y correos son ficticios.
+const uuid = (n) => `${String(n).repeat(8)}-${String(n).repeat(4)}-4${String(n).repeat(3)}-8${String(n).repeat(3)}-${String(n).repeat(12)}`
+const DATOS_PERSONALES = [
+  { apellido: 'Ejemplo', documento: '1017234567', fechaNacimiento: '1990-05-14', telefono: '3105558821', especialidad: 'Formación técnica', direccion: 'Calle 40 Sur 75b-81' },
+  { apellido: 'Ejemplo', documento: '71654321', fechaNacimiento: '1988-08-20', telefono: '3156674410', especialidad: 'Preparación física', direccion: 'Carrera 10 # 20-30' },
+  { apellido: 'Mesa', documento: '1037001122', fechaNacimiento: '1992-02-11', telefono: '3001230003', especialidad: 'Formación técnica', direccion: 'Calle 50 # 30-40' },
+  { apellido: 'Cardona', documento: '98123456', fechaNacimiento: '1985-11-30', telefono: '3001230004', especialidad: 'Táctica', direccion: 'Carrera 45 # 12-20' },
+  { apellido: 'Ejemplo', documento: '1128456789', fechaNacimiento: '1995-07-02', telefono: '3001230005', especialidad: 'Preparación física', direccion: 'Calle 33 # 65-10' },
+  { apellido: 'Ramírez', documento: '1020345678', fechaNacimiento: '1991-09-18', telefono: '3001230006', especialidad: 'Porteros', direccion: 'Carrera 70 # 44-15' },
 ]
+const sinTildes = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '.')
+let entrenadores = ENTRENADORES_CLUB.map((club, i) => {
+  const [nombre] = club.nombre.split(' ')
+  const datos = DATOS_PERSONALES[i]
+  return {
+    id: uuid(i + 1),
+    nombre,
+    apellido: datos.apellido,
+    tipoDocumento: 'CC',
+    documento: datos.documento,
+    fechaNacimiento: datos.fechaNacimiento,
+    telefono: datos.telefono,
+    correo: `${sinTildes(nombre)}.${sinTildes(datos.apellido)}@pradofc.co`,
+    especialidad: datos.especialidad,
+    categorias: [...club.categorias],
+    horarioTrabajo: 'Lunes a sábado, según el horario del club.',
+    direccion: datos.direccion,
+    activo: true,
+  }
+})
 const copiar = (e) => ({ ...e, categorias: [...e.categorias] })
 const buscarPorId = (id) => {
   const texto = String(id)

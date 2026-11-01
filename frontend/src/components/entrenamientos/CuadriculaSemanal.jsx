@@ -1,8 +1,12 @@
 import { Link } from 'react-router-dom'
+import { ENTRENADORES } from '../../services/entrenamientosService.js'
 import { diaCorto, diaLargo, formatHora } from '../../utils/fechas.js'
 
+const nombreEntrenador = (id) => ENTRENADORES.find((x) => x.id === id)?.nombre ?? 'Todos los entrenadores'
+const conGrupo = (e) => (e.grupo ? `${e.categoria} · ${e.grupo}` : e.categoria)
+
 // Cuadrícula semanal (escritorio): columnas Lun a Sáb, una fila por cada hora que tiene entrenamientos.
-// Cada entrenamiento es un enlace que abre su edición.
+// Cada entrenamiento es un enlace que abre su edición y muestra categoría (y grupo), hora, sede y entrenador.
 export default function CuadriculaSemanal({ dias, entrenamientos, base, editandoId }) {
   const horas = [...new Set(entrenamientos.map((e) => e.hora))].sort()
 
@@ -33,14 +37,16 @@ export default function CuadriculaSemanal({ dias, entrenamientos, base, editando
                         <Link
                           key={e.id}
                           to={`${base}/${e.id}/editar`}
-                          aria-label={`Editar entrenamiento ${e.categoria}, ${e.lugar}, ${diaLargo(dia).toLowerCase()}, ${formatHora(hora)}`}
+                          aria-label={`Editar entrenamiento ${conGrupo(e)}, ${e.sede}, entrenador: ${nombreEntrenador(e.idEntrenador)}, ${diaLargo(dia).toLowerCase()}, ${formatHora(hora)}`}
                           aria-current={e.id === editandoId ? 'true' : undefined}
                           className={`block min-h-11 rounded-md p-2 text-on-dark hover:bg-brand-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 ${
                             e.id === editandoId ? 'bg-brand-primary-hover underline' : 'bg-brand-primary'
                           }`}
                         >
-                          <span className="block break-words font-semibold">{e.categoria}</span>
-                          <span className="block break-words">{e.lugar}</span>
+                          <span className="block break-words font-semibold">{conGrupo(e)}</span>
+                          <span className="block break-words">{formatHora(e.hora)} – {formatHora(e.horaFin)}</span>
+                          <span className="block break-words">{e.sede}</span>
+                          <span className="block break-words">{nombreEntrenador(e.idEntrenador)}</span>
                         </Link>
                       ))}
                   </div>

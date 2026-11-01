@@ -11,6 +11,7 @@ import ListaPorGrupo from './deportistas/ListaPorGrupo.jsx'
 import DeportistaNuevo from './deportistas/DeportistaNuevo.jsx'
 import FichaDeportista from './deportistas/FichaDeportista.jsx'
 import Programacion from './entrenamientos/Programacion.jsx'
+import AdmHorarioClub from './administrador/HorarioClub.jsx'
 import EntTorneos from './entrenador/Torneos.jsx'
 import TesInicio from './tesorero/Inicio.jsx'
 import TesPagos from './tesorero/Pagos.jsx'
@@ -56,6 +57,7 @@ export const screens = {
   '/administrador/grupos': ListaPorGrupo,
   '/administrador/asistencia': EntAsistencia, // mismo control de asistencia que el entrenador (Figma AD10)
   '/administrador/horarios': Programacion,
+  '/administrador/horario-club': AdmHorarioClub,
   '/administrador/torneos': AdmTorneos,
   '/administrador/pagos': AdmPagos,
   '/administrador/reportes': AdmReportes,

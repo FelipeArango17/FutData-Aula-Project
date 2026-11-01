@@ -4,13 +4,12 @@ import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
 
 const semana = [
-  { lugar: 'Sub-10 · Cancha 1', cuando: 'Hoy · 4:00 p. m.', estado: 'Sin asistencia', tone: 'warning' },
-  { lugar: 'Sub-12 · Cancha 2', cuando: 'Hoy · 5:30 p. m.', estado: 'Sin asistencia', tone: 'warning' },
-  { lugar: 'Sub-10 · Cancha 1', cuando: 'Mar 27 · 4:00 p. m.', estado: 'Programado', tone: 'neutral' },
-  { lugar: 'Sub-12 · Cancha 2', cuando: 'Mié 28 · 5:30 p. m.', estado: 'Programado', tone: 'neutral' },
+  { lugar: 'Sub-12 · Horizontes', cuando: 'Hoy · 7:00 p. m.', estado: 'Sin asistencia', tone: 'warning' },
+  { lugar: 'Sub-9 · UVA El Paraíso', cuando: 'Vie 23 · 7:00 p. m.', estado: 'Programado', tone: 'neutral' },
+  { lugar: 'Sub-9 · UVA El Paraíso', cuando: 'Sáb 24 · 8:30 a. m.', estado: 'Programado', tone: 'neutral' },
 ]
 const faltas = [
-  { nombre: 'Mateo Vélez', detalle: '6 faltas · 62 % asistencia', accion: 'Revisar', tone: 'danger' },
+  { nombre: 'Emmanuel Arias', detalle: '6 faltas · 62 % asistencia', accion: 'Revisar', tone: 'danger' },
   { nombre: 'Tomás Giraldo', detalle: '4 faltas · 71 % asistencia', accion: 'Seguir', tone: 'warning' },
   { nombre: 'Nicolás Mejía', detalle: '3 faltas · 76 % asistencia', accion: 'Seguir', tone: 'warning' },
 ]
@@ -27,12 +26,12 @@ function Indicador({ titulo, valor, detalle }) {
 
 export default function Inicio() {
   return (
-    <Page title="Hola, Andrés" subtitle="Tus categorías: Sub-10 y Sub-12">
+    <Page title="Hola, Nicolás" subtitle="Tus categorías: Sub-9 y Sub-12">
       <Button to="/entrenador/asistencia" className="md:self-start">Tomar asistencia</Button>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador titulo="Jugadores Sub-10" valor="17" detalle="2 con documentos pendientes" />
-        <Indicador titulo="Asistencia Sub-10" valor="88 %" detalle="Últimas 4 semanas" />
-        <Indicador titulo="Entrenamientos hoy" valor="1" detalle="4:00 p. m. · Cancha 1" />
+        <Indicador titulo="Jugadores Sub-12" valor="5" detalle="2 con documentos pendientes" />
+        <Indicador titulo="Asistencia Sub-12" valor="88 %" detalle="Últimas 4 semanas" />
+        <Indicador titulo="Entrenamientos hoy" valor="1" detalle="7:00 p. m. · Horizontes" />
         <Indicador titulo="Convocados Copa Prado" valor="14 / 18" detalle="Faltan 4 por confirmar" />
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

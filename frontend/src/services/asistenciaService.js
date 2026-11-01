@@ -23,20 +23,21 @@
 // - Solo se listan deportistas ACTIVOS del grupo; el historial nunca se borra.
 // - RF008: los permisos se validan aquí solo como simulación. En producción los valida el backend con el JWT.
 // - "Hoy" es HOY_EJEMPLO. La fecha de los registros nuevos usa ese día con la hora real, para que la demo sea coherente.
-import { ENTRENADORES, HOY_EJEMPLO, listar as listarEntrenamientos } from './entrenamientosService.js'
+import { ENTRENADORES, HOY_EJEMPLO, entrenamientosDeEjemplo, listar as listarEntrenamientos } from './entrenamientosService.js'
 import { obtener as obtenerEntrenador } from './entrenadoresService.js'
 import { listarCategorias, listarDeportistas } from './deportistasService.js'
 
 export const ESTADOS = ['presente', 'ausente', 'justificado']
 export const MAX_OBSERVACION = 200
 
-// Registros de ejemplo. El entrenamiento 6 (Sub-12, miércoles 21 de octubre, de Andrés Mora) ya está registrado y
-// tiene un cambio en el historial, para probar la edición sin empezar de cero. El 1, 2, 3, 4, 5, 7 y 8 son pasados
-// o de hoy sin registrar; el 9, 10 y 11 son futuros.
+// Registros de ejemplo. El entrenamiento de Sub-12 del martes 20 de octubre (de Nicolás) ya está registrado y
+// tiene un cambio en el historial, para probar la edición sin empezar de cero. Los demás de la semana hasta hoy (22 de
+// octubre) están sin registrar; los del viernes 23 y el sábado 24 son futuros. Los ids salen de la plantilla del club.
+const ID_REGISTRADO = entrenamientosDeEjemplo().find((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-20').id
 const sembrar = () =>
   new Map([
     [
-      6,
+      ID_REGISTRADO,
       {
         items: [
           { idDeportista: 11, estado: 'presente', observacion: '' },
@@ -45,12 +46,12 @@ const sembrar = () =>
           { idDeportista: 14, estado: 'justificado', observacion: 'Cita médica' },
           { idDeportista: 15, estado: 'presente', observacion: '' },
         ],
-        registradoPor: 'Andrés Mora',
-        registradoEn: '2026-10-21T19:05',
+        registradoPor: 'Nicolás',
+        registradoEn: '2026-10-20T19:05',
         historial: [
           {
-            fechaHora: '2026-10-21T20:10',
-            responsable: 'Andrés Mora',
+            fechaHora: '2026-10-20T20:10',
+            responsable: 'Nicolás',
             cambios: [
               {
                 idDeportista: 14,
@@ -136,7 +137,7 @@ const datosEntrenamiento = (e) => ({
   ...e,
   futuro: esFuturo(e),
   registrada: registros.has(e.id),
-  entrenador: ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? '',
+  entrenador: ENTRENADORES.find((x) => x.id === e.idEntrenador)?.nombre ?? 'Todos los entrenadores',
 })
 
 // Entrenamientos que el actor puede gestionar, ya ocurridos o de hoy. Con incluirFuturos también los próximos

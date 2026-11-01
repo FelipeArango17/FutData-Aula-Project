@@ -19,7 +19,7 @@ import { ID_ENTRENADOR_EJEMPLO } from '../../services/entrenamientosService.js'
 // - entrenador: ve solo las categorías que tiene asignadas en entrenadoresService.
 // PENDIENTE (decisión D1): ¿una categoría tiene un solo entrenador o varios? Aquí se filtra por la lista de
 // categorías del entrenador, que sirve en ambos casos. Además, entrenamientosService.categoriasPorRol.entrenador
-// (Sub-10 y Sub-12) no coincide con las categorías de Andrés Mora en entrenadoresService (Sub-12); aquí manda entrenadoresService.
+// ahora sale de la plantilla del club (Sub-9 y Sub-12, de Nicolás), igual que entrenadoresService.
 // No se muestran datos sensibles (ficha médica, teléfono del menor).
 
 const plural = (n) => `${n} ${n === 1 ? 'deportista' : 'deportistas'}`

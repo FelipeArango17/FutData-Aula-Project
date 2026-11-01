@@ -42,7 +42,7 @@ const PASSWORD_DEMO = 'Demo2026!'
 
 const CUENTAS = [
   { correo: 'acudiente@pradofc.co', rol: 'acudiente', nombre: 'María Torres', activa: true },
-  { correo: 'entrenador@pradofc.co', rol: 'entrenador', nombre: 'Andrés Mora', activa: true },
+  { correo: 'entrenador@pradofc.co', rol: 'entrenador', nombre: 'Nicolás', activa: true },
   { correo: 'tesorero@pradofc.co', rol: 'tesorero', nombre: 'Laura Gómez', activa: true },
   { correo: 'administrador@pradofc.co', rol: 'administrador', nombre: 'Carlos Mendoza', activa: true },
   { correo: 'inactivo@pradofc.co', rol: 'acudiente', nombre: 'Pedro Londoño', activa: false },
