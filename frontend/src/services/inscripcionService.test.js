@@ -142,10 +142,10 @@ describe('crearInscripcion: validación', () => {
     expect(await todos()).toHaveLength(21)
   })
 
-  it('fecha de nacimiento futura respecto a HOY_EJEMPLO: 2026-10-23 falla y 2026-10-22 pasa', async () => {
+  it('fecha de nacimiento futura respecto al reloj (2026-10-22): 2026-10-23 falla y 2018-10-22 pasa', async () => {
     const e = await resolver(inscripcion.crearInscripcion(datos({ fechaNacimiento: '2026-10-23' }))).catch((x) => x)
     expect(e.errores).toEqual({ fechaNacimiento: 'La fecha de nacimiento no puede ser futura.' })
-    await expect(resolver(inscripcion.crearInscripcion(datos({ fechaNacimiento: '2026-10-22' })))).resolves.toBeTruthy()
+    await expect(resolver(inscripcion.crearInscripcion(datos({ fechaNacimiento: '2018-10-22' })))).resolves.toBeTruthy()
   })
 
   it('formatos de los datos del deportista: nombre con números, documento corto, teléfono de 9 dígitos', async () => {

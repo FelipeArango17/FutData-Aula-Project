@@ -5,6 +5,7 @@ import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import Icon from '../Icon.jsx'
 import CamposDeportista from '../deportistas/CamposDeportista.jsx'
+import { aplicarCambio } from '../../services/deportistasService.js'
 import { INSCRIPCION_VACIA, validarDatosInscripcion } from '../../services/inscripcionService.js'
 
 // Formulario público de inscripción en línea (HU-009): deportista, acudiente y autorización. No guarda por sí mismo:
@@ -32,7 +33,7 @@ export default function FormularioInscripcion({ onGuardar, onCancelar }) {
   }, [intentos])
 
   function cambiar(campo, valor) {
-    setValores({ ...valores, [campo]: valor })
+    setValores(aplicarCambio(valores, campo, valor))
     if (errores[campo]) setErrores({ ...errores, [campo]: undefined })
   }
 

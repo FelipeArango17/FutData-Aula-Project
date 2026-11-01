@@ -4,12 +4,15 @@ import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import Icon from '../Icon.jsx'
 import CamposDeportista from './CamposDeportista.jsx'
-import { DEPORTISTA_VACIO, validarDatosDeportista } from '../../services/deportistasService.js'
+import { categoriaPorFecha } from '../../utils/categorias.js'
+import { DEPORTISTA_VACIO, aplicarCambio, validarDatosDeportista } from '../../services/deportistasService.js'
 
 // Datos personales de un deportista (HU-008). Es reutilizable: la edición de la ficha usará el mismo formulario.
 // No guarda por sí mismo: llama a onGuardar(valores) y, si el servicio rechaza, muestra el error en el campo que corresponde.
 // props: inicial, categorias (las vigentes: [{ id, nombre }]), onGuardar, onCancelar, textoGuardar
 // Los campos están en CamposDeportista (los comparte la inscripción en línea).
+// La categoría no se elige: al guardar, idCategoria sale de la categoría que corresponde a la fecha de nacimiento (se busca por
+// nombre en `categorias`; si no está en la lista queda sin asignar). No se guarda en el estado del formulario.
 export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categorias, onGuardar, onCancelar, textoGuardar = 'Guardar deportista' }) {
   const [valores, setValores] = useState(inicial)
   const [errores, setErrores] = useState({})
@@ -27,7 +30,7 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
   }, [intentos])
 
   function cambiar(campo, valor) {
-    setValores({ ...valores, [campo]: valor })
+    setValores(aplicarCambio(valores, campo, valor))
     setSinCambios(false)
     if (errores[campo]) setErrores({ ...errores, [campo]: undefined })
   }
@@ -46,7 +49,8 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
     enVuelo.current = true
     setGuardando(true)
     try {
-      await onGuardar(valores)
+      const categoria = categorias.find((c) => c.nombre === categoriaPorFecha(valores.fechaNacimiento))
+      await onGuardar({ ...valores, idCategoria: categoria ? String(categoria.id) : '' })
     } catch (error) {
       if (error.codigo === 'VALIDACION') setErrores(error.errores)
       else if (error.codigo === 'DOCUMENTO_DUPLICADO') setErrores({ documento: error.message })
@@ -77,7 +81,7 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
   return (
     <form ref={formRef} noValidate onSubmit={enviar} className="flex flex-col gap-4">
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
-      <CamposDeportista texto={texto} fechaNacimiento={valores.fechaNacimiento} categorias={categorias} />
+      <CamposDeportista texto={texto} fechaNacimiento={valores.fechaNacimiento} />
 
       <div role="status">
         {sinCambios && (

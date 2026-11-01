@@ -23,11 +23,12 @@ describe('leyenda "* Campo obligatorio" y asteriscos', () => {
     expect(html).toMatch(/Horario de trabajo \(opcional\)<\/label>/)
   })
 
-  it('CamposDeportista: leyenda y todos los campos salvo categoría y edad', () => {
-    const html = renderToStaticMarkup(<CamposDeportista texto={texto} fechaNacimiento="" categorias={[]} />)
+  it('CamposDeportista: leyenda y todos los campos salvo categoría y edad (que son de solo lectura)', () => {
+    const html = renderToStaticMarkup(<CamposDeportista texto={texto} fechaNacimiento="" />)
     expect(html).toContain(LEYENDA)
-    expect(html.match(/aria-required="true"/g)).toHaveLength(7)
-    expect(html).toMatch(/Categoría \(opcional\)<\/label>/)
+    // nombres, apellidos, tipo y número de documento, día, mes y año, teléfono y dirección
+    expect(html.match(/aria-required="true"/g)).toHaveLength(9)
+    expect(html).not.toMatch(/id="categoria"[^>]*aria-required/)
   })
 
   it('FormularioEntrenamiento: leyenda y los cinco campos obligatorios', () => {
@@ -56,11 +57,6 @@ describe('límites de las fechas en los formularios', () => {
     const [anio, resto] = [Number(hoyLocal().slice(0, 4)) - 18, hoyLocal().slice(4)]
     const esperado = resto === '-02-29' ? `${anio}-02-28` : `${anio}${resto}`
     expect(html).toMatch(new RegExp(`id="fechaNacimiento"[^>]*max="${esperado}"|max="${esperado}"[^>]*id="fechaNacimiento"`))
-  })
-
-  it('deportista: max de la fecha de nacimiento es hoy', () => {
-    const html = renderToStaticMarkup(<CamposDeportista texto={texto} fechaNacimiento="" />)
-    expect(html).toContain(`max="${hoyLocal()}"`)
   })
 
   it('entrenamiento nuevo: min de la fecha es hoy; al editar uno pasado no hay min', () => {

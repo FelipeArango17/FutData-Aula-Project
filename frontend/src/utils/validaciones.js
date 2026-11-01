@@ -4,6 +4,7 @@
 // Los mensajes que ya ven los usuarios (entrenadores, entrenamientos, inicio de sesión) están aquí TAL CUAL, como
 // constantes; los de los validadores nuevos (nombre, dirección, fecha de nacimiento y monto) todavía no se muestran
 // en ninguna pantalla.
+import { rangoAniosNacimiento } from './categorias.js'
 import { esDomingo, esFechaValida, esHoraValida, hoyLocal } from './fechas.js'
 
 export const MENSAJES = {
@@ -69,6 +70,8 @@ export const MENSAJES = {
   fechaNacimientoFutura: 'La fecha de nacimiento no puede ser futura.',
   fechaNacimientoEdad: 'La edad no puede superar los 100 años.',
   fechaNacimientoMenorDeEdad: 'El entrenador debe tener al menos 18 años.',
+  // Recibe los años del rango (salen de rangoAniosNacimiento, no van fijos en el texto)
+  fechaNacimientoDeportistaRango: (anioMinimo, anioMaximo) => `Solo se inscriben deportistas nacidos entre ${anioMinimo} y ${anioMaximo}.`,
   montoObligatorio: 'Escribe el monto.',
   montoFormato: 'El monto debe ser un número entero de pesos, sin puntos, comas, símbolo $ ni signos.',
   montoPositivo: 'El monto debe ser mayor que cero.',
@@ -138,6 +141,15 @@ export function validarFechaNacimiento(valor, hoy = hoyLocal()) {
   if (!/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(fecha) || !esFechaValida(fecha)) return MENSAJES.fechaNacimientoFormato
   if (fecha > hoy) return MENSAJES.fechaNacimientoFutura
   return edadEn(fecha, hoy) > EDAD_MAXIMA ? MENSAJES.fechaNacimientoEdad : null
+}
+
+// Deportistas: el año de nacimiento debe estar en el rango de rangoAniosNacimiento(hoy). Se usa después de validarFechaNacimiento.
+export function validarAnioNacimientoDeportista(valor, hoy = hoyLocal()) {
+  const fecha = texto(valor)
+  if (!fecha) return null
+  const { anioMinimo, anioMaximo } = rangoAniosNacimiento(hoy)
+  const anio = Number(fecha.slice(0, 4))
+  return anio < anioMinimo || anio > anioMaximo ? MENSAJES.fechaNacimientoDeportistaRango(anioMinimo, anioMaximo) : null
 }
 
 export const EDAD_MINIMA_ENTRENADOR = 18
