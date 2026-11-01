@@ -30,7 +30,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * <p>Las migraciones referencian {@code auth.users}, que en Supabase ya existe. Aquí se crea antes un esquema
  * {@code auth} mínimo con {@code auth.users(id uuid primary key)}, solo para que se puedan aplicar.
  *
- * <p>La migración 004 crea las cinco categorías ({@link #CATEGORIAS_DE_LA_MIGRACION} las registra antes de la
+ * <p>Las migraciones 004 y 007 dejan las diez categorías del club ({@link #CATEGORIAS_DE_LA_MIGRACION} las registra antes de la
  * primera prueba). Para que cada prueba controle sus datos, {@link #limpiar()} borra categorías y entrenadores, y
  * cada prueba inserta los suyos con {@link #categoria} y {@link #entrenador}.
  */
@@ -59,8 +59,10 @@ public final class PostgresDePrueba {
     }
 
     private static final Map<String, int[]> RANGOS = Map.of(
-            "Sub-8", new int[] {0, 7}, "Sub-10", new int[] {8, 9}, "Sub-12", new int[] {10, 11},
-            "Sub-14", new int[] {12, 13}, "Sub-16", new int[] {14, 15});
+            "Párvulos", new int[] {4, 6}, "Cachorros", new int[] {7, 8}, "Sub-9", new int[] {9, 9},
+            "Sub-10", new int[] {10, 10}, "Sub-11", new int[] {11, 11}, "Sub-12", new int[] {12, 12},
+            "Sub-13", new int[] {13, 13}, "Sub-14", new int[] {14, 14}, "Sub-15", new int[] {15, 15},
+            "Sub-16", new int[] {16, 16});
 
     private static PostgreSQLContainer<?> contenedor;
     private static DataSource dataSource;
@@ -93,7 +95,7 @@ public final class PostgresDePrueba {
     }
 
     /**
-     * Las categorías que dejó la migración, antes de cualquier prueba: {@code "Sub-8 0-7 sin entrenador"}, en el
+     * Las categorías que dejó la migración, antes de cualquier prueba: {@code "Párvulos 4-6 sin entrenador"}, en el
      * orden oficial.
      */
     public static List<String> categoriasDeLaMigracion() {

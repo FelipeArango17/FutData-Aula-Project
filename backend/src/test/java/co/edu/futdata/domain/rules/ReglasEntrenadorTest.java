@@ -227,8 +227,8 @@ class ReglasEntrenadorTest {
 
     @Test
     void categoriasEnElOrdenOficial() {
-        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-16", "Sub-8", "Sub-12")))
-                .containsExactly("Sub-8", "Sub-12", "Sub-16");
+        assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-16", "Sub-9", "Sub-12")))
+                .containsExactly("Sub-9", "Sub-12", "Sub-16");
         assertThat(ReglasEntrenador.enOrdenOficial(List.of("Sub-99", "Sub-10")))
                 .containsExactly("Sub-10", "Sub-99");
         assertThat(ReglasEntrenador.esCategoria("Sub-12")).isTrue();

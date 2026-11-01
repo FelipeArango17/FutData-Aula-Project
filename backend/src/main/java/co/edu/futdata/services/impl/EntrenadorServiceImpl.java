@@ -222,12 +222,17 @@ public class EntrenadorServiceImpl implements IEntrenadorService {
         if (!desconocidas.isEmpty()) {
             throw DatosInvalidosException.de("categorias", enumerar(desconocidas)
                     + (desconocidas.size() == 1 ? " no es una categoría" : " no son categorías")
-                    + " del club (Sub-8, Sub-10, Sub-12, Sub-14 o Sub-16)");
+                    + " del club (" + CATEGORIAS_OFICIALES + ")");
         }
         return pedidas;
     }
 
-    /** {@code Sub-8}, {@code Sub-8 y Sub-10}, {@code Sub-8, Sub-10 y Sub-12}, en el orden oficial. */
+    /** Los nombres oficiales para el mensaje de error: "Párvulos, Cachorros, Sub-9, ... o Sub-16". */
+    private static final String CATEGORIAS_OFICIALES = String.join(", ",
+            ReglasEntrenador.CATEGORIAS.subList(0, ReglasEntrenador.CATEGORIAS.size() - 1))
+            + " o " + ReglasEntrenador.CATEGORIAS.getLast();
+
+    /** {@code Sub-9}, {@code Sub-9 y Sub-10}, {@code Sub-9, Sub-10 y Sub-12}, en el orden oficial. */
     private static String enumerar(List<String> nombres) {
         List<String> ordenados = ReglasEntrenador.enOrdenOficial(nombres);
         if (ordenados.size() == 1) {

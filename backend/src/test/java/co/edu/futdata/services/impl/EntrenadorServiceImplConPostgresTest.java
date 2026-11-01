@@ -42,7 +42,7 @@ class EntrenadorServiceImplConPostgresTest {
         transaccion = new TransactionTemplate(new DataSourceTransactionManager(PostgresDePrueba.dataSource()));
         mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
         diaz = PostgresDePrueba.entrenador("Carlos", "Díaz", "71654321", "carlos.diaz@pradofc.co");
-        PostgresDePrueba.categoria("Sub-8", diaz);
+        PostgresDePrueba.categoria("Sub-9", diaz);
         PostgresDePrueba.categoria("Sub-10", diaz);
         PostgresDePrueba.categoria("Sub-12", mora);
     }
@@ -57,28 +57,28 @@ class EntrenadorServiceImplConPostgresTest {
                 new AsignarCategoriasRequestDTO(List.of("Sub-10", "Sub-12"), true)));
 
         List<CategoriaResponseDTO> lista = enTransaccion(servicio::listarCategorias);
-        assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-8", "Sub-10", "Sub-12");
+        assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-9", "Sub-10", "Sub-12");
         assertThat(lista).extracting(c -> c.entrenador().id()).containsExactly(diaz, mora, mora);
     }
 
     @Test
     void unConflictoNoDejaCambiosAMedias() {
         assertThatThrownBy(() -> enTransaccion(() -> servicio.asignarCategorias(diaz,
-                new AsignarCategoriasRequestDTO(List.of("Sub-8", "Sub-12"), false))))
+                new AsignarCategoriasRequestDTO(List.of("Sub-9", "Sub-12"), false))))
                 .isInstanceOf(ConflictoException.class)
                 .hasMessageStartingWith("Sub-12 ya tiene otro entrenador");
 
-        assertThat(enTransaccion(() -> servicio.consultar(diaz)).categorias()).containsExactly("Sub-8", "Sub-10");
+        assertThat(enTransaccion(() -> servicio.consultar(diaz)).categorias()).containsExactly("Sub-9", "Sub-10");
         assertThat(enTransaccion(() -> servicio.consultar(mora)).categorias()).containsExactly("Sub-12");
     }
 
     @Test
     void quitarYTomarDeOtroQuedaGuardadoEnLaBase() {
         enTransaccion(() -> servicio.asignarCategorias(diaz,
-                new AsignarCategoriasRequestDTO(List.of("Sub-8", "Sub-12"), true)));
+                new AsignarCategoriasRequestDTO(List.of("Sub-9", "Sub-12"), true)));
 
         List<CategoriaResponseDTO> lista = enTransaccion(servicio::listarCategorias);
-        assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-8", "Sub-10", "Sub-12");
+        assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-9", "Sub-10", "Sub-12");
         assertThat(lista).extracting(c -> c.entrenador() == null ? null : c.entrenador().id())
                 .containsExactly(diaz, null, diaz);
     }

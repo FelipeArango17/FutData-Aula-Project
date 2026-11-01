@@ -18,7 +18,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * EntrenadorDAOImpl y CategoriaDAOImpl contra un PostgreSQL real con las migraciones 001 a 004 (Testcontainers o
+ * EntrenadorDAOImpl y CategoriaDAOImpl contra un PostgreSQL real con las migraciones 001 a 007 (Testcontainers o
  * una base local). Sin ninguno de los dos, se omiten (ver {@link DockerDisponible}).
  */
 @ExtendWith(DockerDisponible.class)
@@ -73,10 +73,12 @@ class EntrenadorDAOImplTest {
     }
 
     @Test
-    void laMigracionCreaLasCincoCategoriasSinEntrenador() {
+    void laMigracionCreaLasDiezCategoriasDelClubSinEntrenador() {
         assertThat(PostgresDePrueba.categoriasDeLaMigracion()).containsExactly(
-                "Sub-8 0-7 sin entrenador", "Sub-10 8-9 sin entrenador", "Sub-12 10-11 sin entrenador",
-                "Sub-14 12-13 sin entrenador", "Sub-16 14-15 sin entrenador");
+                "Párvulos 4-6 sin entrenador", "Cachorros 7-8 sin entrenador", "Sub-9 9-9 sin entrenador",
+                "Sub-10 10-10 sin entrenador", "Sub-11 11-11 sin entrenador", "Sub-12 12-12 sin entrenador",
+                "Sub-13 13-13 sin entrenador", "Sub-14 14-14 sin entrenador", "Sub-15 15-15 sin entrenador",
+                "Sub-16 16-16 sin entrenador");
     }
 
     @Test
@@ -119,13 +121,13 @@ class EntrenadorDAOImplTest {
         UUID ana = PostgresDePrueba.entrenador("Ana", "Díaz", "52123456", "ana.diaz@pradofc.co");
         PostgresDePrueba.categoria("Sub-16", diaz);
         PostgresDePrueba.categoria("Sub-12", mora);
-        PostgresDePrueba.categoria("Sub-8", diaz);
+        PostgresDePrueba.categoria("Sub-9", diaz);
 
         List<Entrenador> lista = entrenadores.listar();
 
         assertThat(lista).extracting(Entrenador::getId).containsExactly(ana, diaz, mora);
         assertThat(lista).extracting(Entrenador::getCategorias)
-                .containsExactly(List.of(), List.of("Sub-8", "Sub-16"), List.of("Sub-12"));
+                .containsExactly(List.of(), List.of("Sub-9", "Sub-16"), List.of("Sub-12"));
     }
 
     @Test
@@ -218,14 +220,14 @@ class EntrenadorDAOImplTest {
     void listaLasCategoriasEnOrdenOficialConSuEntrenador() {
         UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
         PostgresDePrueba.categoria("Sub-14", mora);
-        PostgresDePrueba.categoria("Sub-8", mora);
+        PostgresDePrueba.categoria("Sub-9", mora);
         PostgresDePrueba.categoria("Sub-10", mora);
 
         List<Categoria> lista = categorias.listar();
 
-        assertThat(lista).extracting(Categoria::getNombre).containsExactly("Sub-8", "Sub-10", "Sub-14");
-        assertThat(lista).extracting(Categoria::getEdadMinima).containsExactly(0, 8, 12);
-        assertThat(lista).extracting(Categoria::getEdadMaxima).containsExactly(7, 9, 13);
+        assertThat(lista).extracting(Categoria::getNombre).containsExactly("Sub-9", "Sub-10", "Sub-14");
+        assertThat(lista).extracting(Categoria::getEdadMinima).containsExactly(9, 10, 14);
+        assertThat(lista).extracting(Categoria::getEdadMaxima).containsExactly(9, 10, 14);
         assertThat(lista).extracting(Categoria::getIdEntrenador).containsOnly(mora);
     }
 
@@ -233,7 +235,7 @@ class EntrenadorDAOImplTest {
     void asignaCategoriasAOtroEntrenadorDentroDeUnaTransaccion() {
         UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
         UUID diaz = PostgresDePrueba.entrenador("Carlos", "Díaz", "71654321", "carlos.diaz@pradofc.co");
-        UUID sub8 = PostgresDePrueba.categoria("Sub-8", mora);
+        UUID sub8 = PostgresDePrueba.categoria("Sub-9", mora);
         UUID sub10 = PostgresDePrueba.categoria("Sub-10", mora);
         PostgresDePrueba.categoria("Sub-12", mora);
         TransactionTemplate transaccion = new TransactionTemplate(new DataSourceTransactionManager(PostgresDePrueba.dataSource()));
@@ -244,20 +246,20 @@ class EntrenadorDAOImplTest {
         });
         categorias.asignarEntrenador(List.of(), diaz);
 
-        assertThat(entrenadores.buscarPorId(diaz).orElseThrow().getCategorias()).containsExactly("Sub-8", "Sub-10");
+        assertThat(entrenadores.buscarPorId(diaz).orElseThrow().getCategorias()).containsExactly("Sub-9", "Sub-10");
         assertThat(entrenadores.buscarPorId(mora).orElseThrow().getCategorias()).containsExactly("Sub-12");
     }
 
     @Test
     void conEntrenadorNullDejaLasCategoriasSinEntrenador() {
         UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
-        UUID sub8 = PostgresDePrueba.categoria("Sub-8", mora);
+        UUID sub8 = PostgresDePrueba.categoria("Sub-9", mora);
         PostgresDePrueba.categoria("Sub-10", mora);
 
         categorias.asignarEntrenador(List.of(sub8), null);
 
         assertThat(categorias.listar()).extracting(Categoria::getNombre, Categoria::getIdEntrenador)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple("Sub-8", null),
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("Sub-9", null),
                         org.assertj.core.groups.Tuple.tuple("Sub-10", mora));
         assertThat(entrenadores.buscarPorId(mora).orElseThrow().getCategorias()).containsExactly("Sub-10");
     }

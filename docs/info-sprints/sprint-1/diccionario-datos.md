@@ -6,7 +6,8 @@
 **Ampliación Sprint 2:** se agregan las tablas `Categoria`, `Entrenamiento` y `Notificacion`, además de los campos y relaciones que las HU-025 (entrenadores) y HU-026 (programar entrenamientos) necesitan. Todo lo nuevo está marcado como **Nuevo (Sprint 2)** y se alinea con el diagrama de clases del dominio (`docs/diagramas-clases/01-dominio-fig.png`).  
 **Migraciones 002 y 003 (equipo):** la tabla `AcudienteDeportista`, la asistencia con tres estados, `Usuario.apellido`, la categoría del deportista y la fecha de pago opcionales, y la tabla `CodigoVerificacion` del 2FA. Están marcadas como **Migración 002** o **Migración 003**.  
 **Migración 004:** se agregan las tablas `Documento`, `Venta`, `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y se ajustan `Deportista`, `Entrenador`, `Usuario`, `Pago`, `Asistencia`, `Categoria` y `Entrenamiento`. Lo que cambia está marcado como **Migración 004** y explicado en la sección 6 (decisiones D6 a D16).  
-El esquema vigente son las migraciones de `supabase/migrations/` aplicadas en orden: `001_schema_inicial.sql`, `002_modelo_datos.sql`, `003_codigo_verificacion_2fa.sql` y `004_ajustes_modelo.sql`.
+**Migración 007:** categorías reales del club por año de nacimiento (diez, de Párvulos a Sub-16), registro civil como tipo de documento del deportista, sedes y horario fijo de lunes a sábado (nueva tabla `FranjaHorario`) y buckets de Storage para fotos y documentos. Marcado como **Migración 007** y explicado en la sección 6 (decisiones D18 a D20).  
+El esquema vigente son las migraciones de `supabase/migrations/` aplicadas en orden: `001_schema_inicial.sql`, `002_modelo_datos.sql`, `003_codigo_verificacion_2fa.sql`, `004_ajustes_modelo.sql`, `005_seguridad_sesion_2fa.sql`, `006_sesion_verificada_por_sesion.sql` y `007_categorias_club_y_horario.sql`.
 
 ## 1. Convenciones
 
@@ -34,7 +35,7 @@ Registro principal de los jugadores del club.
 | `id_deportista` | `UUID` | PK | Identificador único del deportista. |
 | `nombre` | `varchar` | — | Nombres del deportista. |
 | `apellido` | `varchar` | — | Apellidos del deportista. |
-| `tipo_documento` | `varchar` | — | Tipo de documento de identidad. |
+| `tipo_documento` | `varchar` | — | Tipo de documento de identidad: `TI`, `RC` (registro civil), `CE` o `PASAPORTE`. **Migración 007:** se agrega `RC` y sale `CC` (D18). |
 | `documento_identidad` | `varchar` | — | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. |
 | `fecha_nacimiento` | `date` | — | Fecha de nacimiento. |
 | `edad` | `int` | Calculado | Edad calculada a partir de `fecha_nacimiento`. |
@@ -43,9 +44,9 @@ Registro principal de los jugadores del club.
 | `telefono` | `varchar` | — | Teléfono de contacto. |
 | `correo` | `varchar` | — | Correo electrónico. |
 | `direccion` | `varchar` | — | Dirección de residencia. |
-| `foto` | `varchar` | — | URL de la fotografía en almacenamiento en la nube. |
+| `foto` | `varchar` | — | Ruta de la fotografía en el bucket privado `fotos` de Supabase Storage (JPG o PNG, máximo 5 MB). El backend entrega URL firmadas (D20). |
 | `fecha_registro` | `date` | — | Fecha de registro en el sistema. |
-| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. **Migración 002:** nullable mientras se asigna el grupo. **Migración 004:** obligatoria cuando la inscripción está `ACTIVA` (D9). |
+| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. **Migración 002:** nullable mientras se asigna el grupo. **Migración 004:** obligatoria cuando la inscripción está `ACTIVA` (D9). **Migración 007:** se asigna automáticamente según el año de nacimiento (D18). |
 | `estado_inscripcion` | `varchar` | — | **Migración 004.** `PENDIENTE` (recién inscrito, documentos en revisión), `ACTIVA` (aprobado, con categoría) o `RETIRADA`. Por defecto `PENDIENTE`. Ver decisión D9. |
 
 **Migración 004:** se quita `documentos`; los documentos del deportista están en la tabla `Documento` (D10). Los acudientes se asocian por `AcudienteDeportista` (migración 002).
@@ -245,17 +246,30 @@ Tabla intermedia para asociar usuarios con roles.
 
 ### 2.15 `Categoria`
 
-**Nuevo (Sprint 2).** Catálogo de categorías por edad del club (Sub-8, Sub-10, Sub-12, Sub-14 y Sub-16 en las pantallas actuales).
+**Nuevo (Sprint 2).** Catálogo de categorías del club. **Migración 007:** son diez y se asignan por **año de nacimiento** (edad por año = año actual − año de nacimiento), no por edad cumplida (D18).
 
 | Atributo | Tipo | Clave | Descripción |
 | :--- | :--- | :--- | :--- |
 | `id_categoria` | `UUID` | PK | Identificador único de la categoría. |
-| `nombre` | `varchar` | — | Nombre de la categoría: `Sub-8`, `Sub-10`, `Sub-12`, `Sub-14` o `Sub-16`. Único. |
-| `edad_minima` | `int` | — | Edad mínima cumplida: 0, 8, 10, 12 o 14, respectivamente. |
-| `edad_maxima` | `int` | — | Edad máxima cumplida: 7, 9, 11, 13 o 15, respectivamente. |
+| `nombre` | `varchar` | — | Nombre de la categoría: `Párvulos`, `Cachorros` o de `Sub-9` a `Sub-16`. Único. |
+| `edad_minima` | `int` | — | Edad por año de nacimiento mínima: 4 en Párvulos, 7 en Cachorros y el número de la categoría en las `Sub-N` (de 9 a 16). |
+| `edad_maxima` | `int` | — | Edad por año de nacimiento máxima: 6 en Párvulos, 8 en Cachorros y el mismo número que la mínima en las `Sub-N`. |
 | `id_entrenador` | `UUID` | FK | Entrenador que dirige la categoría. Referencia `Entrenador.id_entrenador`. Ver decisión D1. **Migración 004:** nullable; una categoría puede no tener entrenador asignado todavía (D7). |
 
-**Migración 004:** las cinco categorías se crean en la migración, sin entrenador.
+| Categoría | Edad por año | Nacidos en (2026) |
+| :--- | :--- | :--- |
+| Párvulos | 4 a 6 | 2020, 2021 y 2022 |
+| Cachorros | 7 y 8 | 2018 y 2019 |
+| Sub-9 | 9 | 2017 |
+| Sub-10 | 10 | 2016 |
+| Sub-11 | 11 | 2015 |
+| Sub-12 | 12 | 2014 |
+| Sub-13 | 13 | 2013 |
+| Sub-14 | 14 | 2012 |
+| Sub-15 | 15 | 2011 |
+| Sub-16 | 16 | 2010 |
+
+**Migración 004:** las cinco categorías (Sub-8 a Sub-16) se crean en la migración, sin entrenador. **Migración 007:** pasan a ser las diez del club. `Sub-8` se convierte en `Párvulos` y conserva su id, y no se admiten deportistas fuera de 4 a 16 años (D18).
 
 ### 2.16 `Entrenamiento`
 
@@ -269,7 +283,7 @@ Tabla intermedia para asociar usuarios con roles.
 | `fecha` | `date` | — | Fecha del entrenamiento. |
 | `hora_inicio` | `time` | — | Hora de inicio. |
 | `hora_fin` | `time` | — | **Migración 004.** Hora de fin, posterior a `hora_inicio`. Necesaria para detectar cruces de horario (CU-05). Los entrenamientos que ya existían quedan de 90 minutos. |
-| `lugar` | `varchar` | — | Cancha o lugar del entrenamiento, por ejemplo `Cancha 1`. Ver decisión D2. |
+| `lugar` | `varchar` | — | Sede del entrenamiento: `Horizontes` o `UVA El Paraíso`. **Migración 007:** restricción `entrenamiento_sede_ck`; antes era texto libre (D2, D19). |
 | `estado` | `varchar` | — | **Migración 004.** `PROGRAMADO` o `CANCELADO`. Cancelar no borra el entrenamiento, así sus avisos y asistencias conservan la referencia. Por defecto `PROGRAMADO`. |
 
 ### 2.17 `Documento`
@@ -372,6 +386,23 @@ Se borra una fila al cerrar sesión (`POST /api/auth/logout`, solo la de ese tok
 | `detalle` | `jsonb` | — | Datos adicionales del evento. Nunca códigos, tokens, contraseñas ni datos de menores. |
 | `ip` | `inet` | — | Dirección IP de la petición, si aplica. |
 
+### 2.23 `FranjaHorario`
+
+**Migración 007.** Horario fijo semanal del club, de lunes a sábado (RF004, CU-05, D19). Los entrenamientos concretos (`Entrenamiento`) se programan dentro de este horario.
+
+| Atributo | Tipo | Clave | Descripción |
+| :--- | :--- | :--- | :--- |
+| `id_franja` | `UUID` | PK | Identificador único de la franja. |
+| `id_categoria` | `UUID` | FK | Categoría que entrena. Referencia `Categoria.id_categoria`. Se borra junto con la categoría. |
+| `dia` | `smallint` | — | Día de la semana: de 1 (lunes) a 6 (sábado). No hay domingo. |
+| `hora_inicio` | `time` | — | Hora de inicio. |
+| `hora_fin` | `time` | — | Hora de fin, posterior a `hora_inicio`. |
+| `sede` | `varchar` | — | `Horizontes` o `UVA El Paraíso`. |
+| `id_entrenador` | `UUID` | FK, nullable | Entrenador de la franja. Referencia `Entrenador.id_entrenador`. NULL significa todos los entrenadores (Párvulos, Cachorros y los grupos de mañana y tarde de Sub-9 y Sub-10). |
+| `grupo` | `varchar` | nullable | `mañana` o `tarde`. Solo se usa en Sub-9 y Sub-10, donde unos niños estudian en la mañana y otros en la tarde. |
+
+Un mismo entrenador no puede tener dos franjas que se solapen el mismo día (restricción `franja_cruce_entrenador_ex`). Categorías distintas sí pueden coincidir en hora y sede. Una plantilla de ejemplo está en `supabase/seeds/franjas_ejemplo.sql`; no es una migración y se carga a mano.
+
 ## 3. Relaciones
 
 Las siguientes relaciones se derivan de las claves foráneas incluidas en el modelo:
@@ -398,6 +429,8 @@ Las siguientes relaciones se derivan de las claves foráneas incluidas en el mod
 | `UsuarioRol` | N:1 | `Rol` | Cada asociación referencia un rol; un rol puede asignarse a varios usuarios. |
 | `Deportista` | N:1 | `Categoria` | **Nuevo.** Cada deportista pertenece a una categoría; una categoría agrupa a varios deportistas. |
 | `Categoria` | N:1 | `Entrenador` | **Nuevo.** Cada categoría la dirige como máximo un entrenador; un entrenador puede dirigir varias categorías (decisiones D1 y D7). |
+| `FranjaHorario` | N:1 | `Categoria` | **Migración 007.** Cada franja es de una categoría; una categoría tiene varias franjas a la semana. |
+| `FranjaHorario` | N:1 | `Entrenador` | **Migración 007.** Una franja puede tener un entrenador fijo (opcional); un entrenador puede tener varias franjas. |
 | `Entrenamiento` | N:1 | `Categoria` | **Nuevo.** Cada entrenamiento es de una categoría; una categoría tiene muchos entrenamientos. |
 | `Entrenamiento` | N:1 | `Entrenador` | **Nuevo.** Cada entrenamiento tiene un entrenador a cargo; un entrenador puede tener muchos entrenamientos. |
 | `Asistencia` | N:1 | `Entrenamiento` | **Nuevo.** Cada registro de asistencia pertenece a un entrenamiento; un entrenamiento tiene muchas asistencias (decisión D5). |
@@ -428,8 +461,8 @@ Estas decisiones fueron confirmadas para cerrar el modelo antes de crear tablas.
 | Id | Decisión | Propuesta |
 | :--- | :--- | :--- |
 | D1 | ¿Un entrenador dirige varias categorías y una categoría tiene un solo entrenador, o una categoría puede tener varios entrenadores (por ejemplo, un auxiliar)? | Confirmado: seguir el diagrama de clases con `Categoria.id_entrenador` (1 entrenador, varias categorías). No se crea `EntrenadorCategoria`. |
-| D2 | ¿`lugar` es texto libre o un catálogo? | Confirmado: texto, con restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`). |
-| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Confirmado: guardar `Deportista.id_categoria` y asignarla según la edad cumplida: `Sub-8` (0–7), `Sub-10` (8–9), `Sub-12` (10–11), `Sub-14` (12–13) y `Sub-16` (14–15). Se recalcula al registrar y se actualiza explícitamente cuando cambie la edad; no se cambia silenciosamente durante una consulta. |
+| D2 | ¿`lugar` es texto libre o un catálogo? | Confirmado: texto, con restricción de unicidad sobre (`lugar`, `fecha`, `hora_inicio`). **Migración 007:** `lugar` pasa a ser una de las dos sedes del club (D19). |
+| D3 | ¿La categoría de un deportista se guarda o se calcula a partir de la edad? | Confirmado: guardar `Deportista.id_categoria` y asignarla según la edad cumplida: `Sub-8` (0–7), `Sub-10` (8–9), `Sub-12` (10–11), `Sub-14` (12–13) y `Sub-16` (14–15). Se recalcula al registrar y se actualiza explícitamente cuando cambie la edad; no se cambia silenciosamente durante una consulta. **Reemplazada por D18 (migración 007):** las categorías son las diez del club y se asignan por año de nacimiento, no por edad cumplida. |
 | D4 | ¿Cómo se guarda el aviso a deportistas y acudientes cuando se crea, cambia o elimina un entrenamiento (tarea 338)? | Confirmado: crear una tabla `Notificacion` general con tipo; `NotificacionPago` queda reservada para pagos. |
 | D5 | ¿La asistencia se toma por entrenamiento? | Confirmado: agregar `Asistencia.id_entrenamiento` y usar la restricción (`id_deportista`, `id_entrenamiento`). `Asistencia.fecha` queda derivable de `Entrenamiento.fecha`. |
 
@@ -447,14 +480,14 @@ La capa `services/entrenamientosService.js` usa esta forma de datos, que debe ca
 | `idEntrenador` | `Entrenamiento.id_entrenador` | — |
 | Jugadores a notificar (por ejemplo, 17) | Conteo de `Deportista` con el mismo `id_categoria` | Hoy es un dato de ejemplo en el frontend. |
 
-## 6. Decisiones de la revisión del modelo (migraciones 002, 003 y 004)
+## 6. Decisiones de la revisión del modelo (migraciones 002 a 007)
 
 Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres estados) y la tabla de códigos de D16 los aplicaron las migraciones 002 y 003 del equipo; el resto está en `supabase/migrations/004_ajustes_modelo.sql`.
 
 | Id | Problema | Decisión |
 | :--- | :--- | :--- |
 | D6 | `Acudiente.id_deportista` era obligatorio y el documento y el correo del acudiente son únicos: una madre con dos hijos en el club no se podía registrar. | **Migración 002.** Tabla intermedia `AcudienteDeportista` (N:M). Se quita `Acudiente.id_deportista`; las asociaciones existentes se copian a la tabla nueva. |
-| D7 | `Categoria.id_entrenador` era obligatorio y la migración no creaba categorías: sin un entrenador no existía ninguna categoría, y sin categorías no se podía inscribir a nadie. | `id_entrenador` pasa a ser opcional y la migración crea Sub-8 a Sub-16 sin entrenador. Se mantiene D1: como máximo un entrenador por categoría. |
+| D7 | `Categoria.id_entrenador` era obligatorio y la migración no creaba categorías: sin un entrenador no existía ninguna categoría, y sin categorías no se podía inscribir a nadie. | `id_entrenador` pasa a ser opcional y la migración crea las categorías sin entrenador (hoy son diez, ver D18). Se mantiene D1: como máximo un entrenador por categoría. |
 | D8 | No había forma de desactivar un entrenador (CU-10, camino alternativo 2). | `Entrenador.activo`. Desactivar no borra: conserva el historial y lo retira de las asignaciones futuras. |
 | D9 | El PPI dice que la inscripción queda pendiente hasta que el administrador aprueba la documentación y asigna la categoría (BPMN 3.1, CU-01 y CU-04), pero el deportista no tenía estado y la categoría era obligatoria desde el inicio. | `Deportista.estado_inscripcion` (`PENDIENTE`, `ACTIVA`, `RETIRADA`). La categoría es opcional mientras está pendiente y obligatoria cuando está activa. Un rechazo de documentos no cambia el estado: el acudiente los corrige y la inscripción sigue pendiente. |
 | D10 | `Deportista.documentos` era un solo texto: no permitía aprobar o rechazar cada documento, dejar comentarios ni alertar vencimientos (RF009). | Tabla `Documento`, un registro por archivo, con estado, comentario obligatorio al rechazar, vencimiento y quién lo cargó y revisó. Acepta PDF, JPG y PNG de hasta 5 MB. Se quita `Deportista.documentos`. |
@@ -465,6 +498,9 @@ Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres esta
 | D15 | `Entrenamiento` solo tenía hora de inicio, así que no se podían detectar cruces de horario (CU-05); y eliminar un entrenamiento dejaba sus avisos sin referencia. | `hora_fin` y `estado` (`PROGRAMADO`, `CANCELADO`). Tres restricciones de exclusión impiden cruces de cancha, de categoría y de entrenador entre entrenamientos programados. Cancelar reemplaza a borrar. |
 | D16 | El PPI define la verificación en dos pasos, los equipos de confianza, la auditoría y las preferencias de accesibilidad (4.1, 4.2, CU-00 y CU-08), pero no había dónde guardarlos. | **Migración 003:** `CodigoVerificacion`. **Migración 004:** `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y en `Usuario` las columnas `alto_contraste`, `tamano_texto` y `paleta_daltonismo`. "Recordar este equipo" usa una cookie HttpOnly, como dice el PPI. |
 | D17 | La migración 005 dejó `SesionVerificada` con una fila por usuario: verificar el código en un equipo habilitaba todas las sesiones de ese usuario durante 12 horas, incluso las abiertas después en otro equipo. El PPI marca como verificada la sesión. | **Migración 006:** `SesionVerificada` por `session_id` del JWT (§2.21). El backend rechaza con `401` los tokens sin ese claim, borra la sesión al cerrar sesión y todas las del usuario al revocar su acceso. |
+| D18 | El club tiene diez categorías (Párvulos, Cachorros y de Sub-9 a Sub-16) que se asignan por año de nacimiento, pero el modelo tenía cinco por edad cumplida (Sub-8 a Sub-16). Además, el tipo de documento del deportista no incluía el registro civil, que es el que tienen los niños pequeños. | **Migración 007.** `Categoria` con las diez categorías y rangos por año: edad por año = año actual − año de nacimiento. Cada deportista se asigna automáticamente al registrarse (CU-01) y no se admite a nadie fuera de 4 a 16 años. `Sub-8` pasa a `Párvulos` conservando su id. `Deportista.tipo_documento` queda en `TI`, `RC`, `CE` o `PASAPORTE` (sale `CC`; entrenador y acudiente la conservan). Reemplaza a D3. |
+| D19 | `lugar` era texto libre y la restricción de cruce por lugar impedía que varias categorías entrenaran a la misma hora en la misma sede, algo normal en el club. Tampoco había dónde guardar el horario fijo semanal. | **Migración 007.** `Entrenamiento.lugar` pasa a ser `Horizontes` o `UVA El Paraíso`. Se elimina `entrenamiento_cruce_lugar_ex` y se conservan las de categoría y entrenador. Tabla `FranjaHorario` con el horario fijo de lunes a sábado y una restricción de cruce por entrenador. Reemplaza a D2 en lo del lugar. |
+| D20 | Las fotos y los documentos de los deportistas no tenían dónde guardarse. | **Migración 007.** Buckets privados de Supabase Storage: `fotos` (JPG o PNG) y `documentos` (PDF, JPG o PNG), de máximo 5 MB. Sin políticas: solo el backend entra con la llave `service_role` y entrega URL firmadas de corta duración, como el bucket de comprobantes. `Deportista.foto` guarda la ruta. |
 
 Además, los correos de `Usuario`, `Entrenador`, `Deportista` y `Acudiente` pasan a ser únicos sin distinguir mayúsculas.
 
@@ -475,3 +511,12 @@ Además, los correos de `Usuario`, `Entrenador`, `Deportista` y `Acudiente` pasa
 3. Abrir **SQL Editor**, pegar todo `004_ajustes_modelo.sql` y ejecutarlo una sola vez.
 4. Si termina con error, no se aplicó **ningún** cambio (va en una transacción). El mensaje dice qué dato hay que corregir antes: montos con centavos, valores en `deportista.documentos`, correos repetidos sin distinguir mayúsculas o entrenamientos que se cruzan.
 5. Comprobar: `select nombre from categoria order by edad_minima;` debe devolver las cinco categorías.
+
+### 6.2 Migración 007 (categorías del club, sedes y horario)
+
+1. Hacer una copia de seguridad del proyecto en Supabase (**Database → Backups**) o exportar los datos.
+2. Comprobar que ya se aplicaron la 001 a la 006.
+3. Abrir **SQL Editor**, pegar todo `007_categorias_club_y_horario.sql` y ejecutarlo una sola vez.
+4. Si termina con error, no se aplicó **ningún** cambio (va en una transacción). El mensaje dice qué dato hay que corregir antes: deportistas con tipo de documento `CC`, deportistas fuera de 4 a 16 años por año de nacimiento, o entrenamientos con un lugar que no sea una de las dos sedes.
+5. Comprobar: `select nombre, edad_minima, edad_maxima from categoria order by edad_minima;` debe devolver las diez categorías, y `select count(*) from franja_horario;` debe devolver 0.
+6. Opcional, solo en una base nueva o de pruebas: cargar la plantilla de ejemplo con `supabase/seeds/franjas_ejemplo.sql` (39 franjas, sin entrenador). Las sedes de esa plantilla son de ejemplo hasta que el club las confirme.
