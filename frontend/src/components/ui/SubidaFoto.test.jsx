@@ -66,6 +66,13 @@ describe('Avatar con foto', () => {
     expect(html).toContain('min-h-10 min-w-10')
   })
 
+  it('la imagen redonda usa object-fit: cover, con alt vacío y sin aparecer para lectores de pantalla', () => {
+    const html = renderToStaticMarkup(<Avatar name="Santiago Ríos" foto="blob:x" />)
+    expect(html).toContain('object-cover')
+    expect(html).toContain('alt=""')
+    expect(html).toContain('aria-hidden="true"')
+  })
+
   it('con foto muestra una imagen redonda decorativa del mismo tamaño', () => {
     const html = renderToStaticMarkup(<Avatar name="Santiago Ríos" foto="blob:x" />)
     expect(html).toMatch(/<img src="blob:x" alt=""/)

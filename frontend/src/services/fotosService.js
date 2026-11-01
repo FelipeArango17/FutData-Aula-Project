@@ -8,6 +8,8 @@
 // Solo el administrador sube o quita fotos (el servicio lo simula; en producción lo valida el backend con el JWT).
 import { TIPOS_FOTO, validarArchivo } from '../utils/archivos.js'
 
+// Las fotos viven en este módulo (no en un componente): sobreviven a la navegación entre páginas hasta recargar la pestaña.
+// Los object URL solo se revocan al reemplazar o quitar la foto, así la lista nunca recibe una imagen rota.
 const fotos = new Map() // idDeportista -> object URL
 
 const error = (codigo, mensaje) => Object.assign(new Error(mensaje), { codigo })
@@ -21,6 +23,15 @@ function exigirAdministrador(actor) {
 export async function obtenerFoto(idDeportista) {
   await simularRed()
   return fotos.get(Number(idDeportista)) ?? null
+}
+
+// Fotos de varios deportistas de una vez, para las listas (una sola llamada por pantalla, no una por fila):
+// { idDeportista: url } solo con los que tienen foto. Sin `ids` devuelve todas. Los ids pueden ser texto.
+// PENDIENTE (backend): la lista de deportistas traerá la ruta de la foto (deportista.foto) y no hará falta esta llamada aparte.
+export async function obtenerFotos(ids) {
+  await simularRed()
+  const buscados = ids ? new Set(ids.map(Number)) : null
+  return Object.fromEntries([...fotos].filter(([id]) => !buscados || buscados.has(id)))
 }
 
 // archivo: File (o { name, type, size, ... } que URL.createObjectURL acepte). JPG o PNG, de 1 byte a 5 MB.

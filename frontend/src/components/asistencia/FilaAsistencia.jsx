@@ -8,7 +8,7 @@ import { MAX_OBSERVACION } from '../../services/asistenciaService.js'
 // Un deportista de la lista editable: fieldset con legend (nombre) y tres opciones tipo radio
 // (Presente / Ausente / Justificado, con texto + ícono) y una observación opcional de hasta 200 caracteres.
 // El avatar va encima del nombre cuando no hay ancho (flex-wrap en rem), para no partir nombres largos.
-export default function FilaAsistencia({ deportista, nombre, valor, error, obsAbierta, deshabilitado, onEstado, onObservacion, onAlternarObs }) {
+export default function FilaAsistencia({ deportista, nombre, foto, valor, error, obsAbierta, deshabilitado, onEstado, onObservacion, onAlternarObs }) {
   const { id } = deportista
   const errorId = error ? `asistencia-${id}-error` : undefined
   const obsId = `observacion-${id}`
@@ -19,7 +19,7 @@ export default function FilaAsistencia({ deportista, nombre, valor, error, obsAb
   return (
     <Card as="li" className={error ? 'border-danger' : ''}>
       <div className="flex flex-wrap items-start gap-3">
-        <Avatar name={nombre} />
+        <Avatar name={nombre} foto={foto} />
         <div className="flex min-w-0 grow basis-[14rem] flex-col gap-3">
           <fieldset aria-describedby={errorId} disabled={deshabilitado} className="flex min-w-0 flex-col gap-2">
             <legend className="mb-1 break-words text-body-medium">{nombre}</legend>

@@ -10,6 +10,7 @@ import FilaAsistencia from '../../components/asistencia/FilaAsistencia.jsx'
 import FilaLectura from '../../components/asistencia/FilaLectura.jsx'
 import HistorialCambios from '../../components/asistencia/HistorialCambios.jsx'
 import { ESTADOS_ASISTENCIA, ORDEN_ESTADOS } from '../../components/asistencia/estados.js'
+import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { useAuth } from '../../context/AuthContext.js'
 import { editarAsistencia, listarEntrenamientosParaAsistencia, obtenerAsistencia, registrarAsistencia } from '../../services/asistenciaService.js'
@@ -61,6 +62,7 @@ const etiquetaMomento = (fechaHora) => {
 
 export default function Asistencia() {
   const { role } = useRole()
+  const fotos = useFotosDeportistas()
   const { estado: estadoSesion, usuario } = useAuth()
   const [params] = useSearchParams()
   const tituloRef = useRef(null)
@@ -357,7 +359,7 @@ export default function Asistencia() {
           {modo === 'lectura' ? (
             <ul className="grid grid-cols-1 gap-4" aria-label="Asistencia registrada">
               {deportistas.map((d) => (
-                <FilaLectura key={d.id} nombre={nombreDe(d)} estado={itemRegistrado(d.id).estado} observacion={itemRegistrado(d.id).observacion} />
+                <FilaLectura key={d.id} nombre={nombreDe(d)} foto={fotos[d.id]} estado={itemRegistrado(d.id).estado} observacion={itemRegistrado(d.id).observacion} />
               ))}
             </ul>
           ) : (
@@ -367,6 +369,7 @@ export default function Asistencia() {
                   key={d.id}
                   deportista={d}
                   nombre={nombreDe(d)}
+                  foto={fotos[d.id]}
                   valor={valorDe(d.id)}
                   error={faltan.includes(d.id) ? `Falta marcar la asistencia de ${nombreDe(d)}.` : undefined}
                   obsAbierta={sesionActual.abiertas[d.id] ?? Boolean(valorDe(d.id).observacion)}

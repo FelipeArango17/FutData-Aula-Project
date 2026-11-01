@@ -10,6 +10,7 @@ import Icon from '../../components/Icon.jsx'
 import Paginacion from '../../components/ui/Paginacion.jsx'
 import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
 import { SIN_CATEGORIA, calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { paginar } from '../../utils/paginacion.js'
 
 // Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
@@ -37,6 +38,7 @@ function Mensaje({ icono = 'info', children }) {
 
 export default function Deportistas() {
   const tituloRef = useRef(null)
+  const fotos = useFotosDeportistas()
   const zonaLista = useRef(null)
   const [intento, setIntento] = useState(0)
   const [texto, setTexto] = useState('')
@@ -165,7 +167,7 @@ export default function Deportistas() {
             <tr key={d.id} className="border-b last:border-b-0">
               <th scope="row" className="p-3 font-normal">
                 <div className="flex min-w-0 items-center gap-3">
-                  <Avatar name={nombreCompleto(d)} />
+                  <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
                   <span className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</span>
                 </div>
               </th>
@@ -187,7 +189,7 @@ export default function Deportistas() {
         {vista.items.map((d) => (
           <Card as="li" key={d.id} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start gap-3">
-              <Avatar name={nombreCompleto(d)} />
+              <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
               <div className="flex min-w-0 grow basis-[12rem] flex-col gap-1">
                 <h2 className="break-words text-h3">{nombreCompleto(d)}</h2>
                 <p className="break-words text-small text-secondary">{textoEdad(d)} · Documento: {d.documento}</p>

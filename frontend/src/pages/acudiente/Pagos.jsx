@@ -7,6 +7,7 @@ import FilterChips from '../../components/ui/FilterChips.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import ListaPagos from '../../components/pagos/ListaPagos.jsx'
+import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { useAuth } from '../../context/AuthContext.js'
 import { obtenerEstadoCuenta, prepararDescargaEstadoCuenta } from '../../services/pagosService.js'
@@ -51,6 +52,7 @@ function EstadoDeportista({ d }) {
 
 export default function Pagos() {
   const { role } = useRole()
+  const fotos = useFotosDeportistas()
   const { estado: estadoSesion, usuario } = useAuth()
   const tituloRef = useRef(null)
   const zonaPagos = useRef(null)
@@ -181,7 +183,7 @@ export default function Pagos() {
               <li key={d.deportista.id}>
                 <section aria-labelledby={`dep-${d.deportista.id}`} className="flex flex-col gap-4 rounded-lg border bg-surface p-4">
                   <div className="flex flex-wrap items-start gap-3">
-                    <Avatar name={nombre} />
+                    <Avatar name={nombre} foto={fotos[d.deportista.id]} />
                     <div className="flex min-w-0 grow basis-[12rem] flex-col gap-1">
                       <h2 id={`dep-${d.deportista.id}`} className="break-words text-h3">{nombre}</h2>
                       <p className="break-words text-body-medium">Total pendiente: {formatearCOP(d.totalPendiente)}</p>
