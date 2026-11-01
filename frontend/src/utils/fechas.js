@@ -1,7 +1,7 @@
 // Utilidades de fecha y hora para entrenamientos. Las fechas son texto AAAA-MM-DD y las horas HH:MM (24 h).
 // Se calcula en UTC para que la zona horaria del navegador no mueva el día.
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+export const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 const aDate = (fecha) => new Date(`${fecha}T00:00:00Z`)
 const aTexto = (date) => date.toISOString().slice(0, 10)

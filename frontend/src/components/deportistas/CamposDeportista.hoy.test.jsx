@@ -23,19 +23,23 @@ const deportista = (fechaNacimiento) => ({
 const texto = () => ({ value: '', error: undefined, onChange: () => {} })
 
 describe('el "hoy" de las validaciones es el día local', () => {
-  it('con el reloj en 2026-10-31, una fecha de nacimiento del 23 al 31 de octubre es válida en el formulario de deportista', () => {
+  it('con el reloj en 2026-10-31 el formulario de deportista acepta los años 2010 a 2018 y rechaza 2019 y 2026', () => {
     vi.setSystemTime(new Date('2026-10-31T10:00:00-05:00'))
-    for (const dia of ['2026-10-23', '2026-10-30', '2026-10-31']) {
+    for (const dia of ['2018-10-31', '2018-12-31', '2010-01-01']) {
       expect(validarDatosDeportista(deportista(dia)), dia).toEqual({})
     }
+    const fuera = { fechaNacimiento: 'Solo se inscriben deportistas nacidos entre 2010 y 2018.' }
+    expect(validarDatosDeportista(deportista('2019-01-01'))).toEqual(fuera)
+    expect(validarDatosDeportista(deportista('2009-12-31'))).toEqual(fuera)
+    // una fecha de octubre de 2026 ya no es futura el 31, pero tampoco está en el rango; el 1 de noviembre es futura
+    expect(validarDatosDeportista(deportista('2026-10-23'))).toEqual(fuera)
     expect(validarDatosDeportista(deportista('2026-11-01'))).toEqual({ fechaNacimiento: 'La fecha de nacimiento no puede ser futura.' })
   })
 
-  it('el max del input, la edad mostrada y la validación coinciden', () => {
+  it('la edad mostrada usa el día local (2018-10-31 con el reloj en 2026-10-31 tiene 8 años)', () => {
     vi.setSystemTime(new Date('2026-10-31T10:00:00-05:00'))
-    const html = renderToStaticMarkup(<CamposDeportista texto={texto} fechaNacimiento="2026-10-31" />)
-    expect(html).toContain('max="2026-10-31"')
-    expect(html).toContain('0 años')
+    const html = renderToStaticMarkup(<CamposDeportista texto={texto} fechaNacimiento="2018-10-31" />)
+    expect(html).toContain('value="8 años"')
   })
 
   it('a las 8 p. m. en Colombia el "hoy" es el día local, no el siguiente en UTC', () => {

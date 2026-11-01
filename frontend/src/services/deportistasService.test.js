@@ -145,8 +145,8 @@ describe('datos de demo: teléfono y dirección', () => {
 })
 
 describe('TIPOS_DOCUMENTO_DEPORTISTA', () => {
-  it('incluye Registro civil y Tarjeta de identidad primero', () => {
-    expect(servicio.TIPOS_DOCUMENTO_DEPORTISTA.slice(0, 2)).toEqual(['Registro civil', 'Tarjeta de identidad'])
+  it('ofrece Tarjeta de identidad, Registro civil, Cédula de extranjería y Pasaporte, en ese orden, sin Cédula de ciudadanía', () => {
+    expect(servicio.TIPOS_DOCUMENTO_DEPORTISTA).toEqual(['Tarjeta de identidad', 'Registro civil', 'Cédula de extranjería', 'Pasaporte'])
   })
 })
 
@@ -223,8 +223,8 @@ describe('crearDeportista', () => {
     })
   })
 
-  it('hoy (2026-10-22) es válido y 2026-10-23 no, siempre respecto a HOY_EJEMPLO', async () => {
-    await expect(resolver(servicio.crearDeportista(datos({ fechaNacimiento: '2026-10-22' }), admin))).resolves.toBeTruthy()
+  it('el mismo día y mes de hoy en un año dentro del rango (2018-10-22) es válido y 2026-10-23 (futura) no', async () => {
+    await expect(resolver(servicio.crearDeportista(datos({ fechaNacimiento: '2018-10-22' }), admin))).resolves.toBeTruthy()
     await expect(resolver(servicio.crearDeportista(datos({ fechaNacimiento: '2026-10-23', documento: '1200000002' }), admin))).rejects.toMatchObject({ codigo: 'VALIDACION' })
   })
 
@@ -424,8 +424,8 @@ describe('actualizarDeportista', () => {
     expect(historial).toEqual([])
   })
 
-  it('la fecha de nacimiento se valida contra HOY_EJEMPLO: hoy (2026-10-22) sí, mañana no', async () => {
-    await expect(resolver(servicio.actualizarDeportista(1, { fechaNacimiento: '2026-10-22' }, admin))).resolves.toBeTruthy()
+  it('la fecha de nacimiento se valida contra el reloj: 2018-10-22 sí, 2026-10-23 (futura) no', async () => {
+    await expect(resolver(servicio.actualizarDeportista(1, { fechaNacimiento: '2018-10-22' }, admin))).resolves.toBeTruthy()
     await expect(resolver(servicio.actualizarDeportista(2, { fechaNacimiento: '2026-10-23' }, admin))).rejects.toMatchObject({ codigo: 'VALIDACION' })
     expect(servicio.calcularEdad('2026-10-22')).toBe(0)
   })

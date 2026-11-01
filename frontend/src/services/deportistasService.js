@@ -39,12 +39,14 @@
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
 import { hoyLocal } from '../utils/fechas.js'
 import {
-  MENSAJES, enLista, validarCampos, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
+  MENSAJES, enLista, validarCampos, validarAnioNacimientoDeportista, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
 } from '../utils/validaciones.js'
 
 export { HOY_EJEMPLO }
-// Los deportistas son menores: primero Registro civil y Tarjeta de identidad. La duplicidad se compara solo por número.
-export const TIPOS_DOCUMENTO_DEPORTISTA = ['Registro civil', 'Tarjeta de identidad', 'Cédula de extranjería', 'Pasaporte', 'Cédula de ciudadanía']
+// Los deportistas son menores. La duplicidad se compara solo por número.
+// No incluye cédula de ciudadanía (no aplica a menores). Los extranjeros usan cédula de extranjería o pasaporte.
+export const TIPO_DOCUMENTO_SUGERIDO = 'Tarjeta de identidad'
+export const TIPOS_DOCUMENTO_DEPORTISTA = [TIPO_DOCUMENTO_SUGERIDO, 'Registro civil', 'Cédula de extranjería', 'Pasaporte']
 export const ACUDIENTE_DEMO = 'acudiente@pradofc.co'
 
 // PENDIENTE: las categorías salen de la lista de entrenamientosService (CATEGORIAS) para no duplicarla.
@@ -189,6 +191,14 @@ export async function asignarCategoria(idDeportista, idCategoria) {
   return copiar(actualizado)
 }
 
+// Aplica el cambio de un campo a los valores del formulario. Al completar la fecha de nacimiento con el tipo de documento
+// vacío, se sugiere la tarjeta de identidad (el usuario puede cambiarla).
+export function aplicarCambio(valores, campo, valor) {
+  const nuevos = { ...valores, [campo]: valor }
+  if (campo === 'fechaNacimiento' && valor && !valores.tipoDocumento) nuevos.tipoDocumento = TIPO_DOCUMENTO_SUGERIDO
+  return nuevos
+}
+
 // Formulario en blanco (idCategoria '' = sin asignar)
 export const DEPORTISTA_VACIO = {
   nombre: '', apellido: '', tipoDocumento: '', documento: '', fechaNacimiento: '', telefono: '', direccion: '', idCategoria: '',
@@ -202,7 +212,7 @@ export function validarDatosDeportista(datos, hoy = hoyLocal()) {
     apellido: [(v) => validarNombre(v, { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres })],
     tipoDocumento: [enLista(TIPOS_DOCUMENTO_DEPORTISTA, MENSAJES.tipoDocumento)],
     documento: [validarDocumento],
-    fechaNacimiento: [(v) => validarFechaNacimiento(v, hoy)],
+    fechaNacimiento: [(v) => validarFechaNacimiento(v, hoy), (v) => validarAnioNacimientoDeportista(v, hoy)],
     telefono: [validarTelefono],
     direccion: [validarDireccion],
   })
