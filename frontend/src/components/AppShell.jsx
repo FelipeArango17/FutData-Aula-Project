@@ -7,10 +7,20 @@ import BottomNav from './BottomNav.jsx'
 import RoleSwitcher from './RoleSwitcher.jsx'
 import PanelAccesibilidad from './PanelAccesibilidad.jsx'
 import { useRole } from '../context/RoleContext.js'
+import Guardia from './Guardia.jsx'
 
 // Estructura única para los 4 roles; solo cambia el menú.
 // Móvil: TopBar + contenido + BottomNav en columna. Desde md: Sidebar + contenido.
+// Sin sesión verificada no se pinta nada del panel (ni menú ni contenido): la Guardia espera o redirige.
 export default function AppShell() {
+  return (
+    <Guardia>
+      <Panel />
+    </Guardia>
+  )
+}
+
+function Panel() {
   const { role } = useRole()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const menuButtonRef = useRef(null)

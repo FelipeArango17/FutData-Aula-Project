@@ -15,6 +15,6 @@ const CORREOS_DEMO = {
 export function useActor() {
   const { role } = useRole()
   const { estado, usuario } = useAuth()
-  const correo = estado === 'verificada' && usuario?.rol === role && usuario.correo ? usuario.correo : CORREOS_DEMO[role]
+  const correo = estado === 'verificada' && usuario?.rol === role && usuario.correo ? usuario.correo : CORREOS_DEMO[role] ?? null
   return useMemo(() => ({ rol: role, correo }), [role, correo])
 }

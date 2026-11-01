@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import AuthLayout from '../../components/auth/AuthLayout.jsx'
 import CodigoInput from '../../components/auth/CodigoInput.jsx'
 import { claseEnlace } from '../../components/auth/enlaces.js'
@@ -10,6 +10,7 @@ import Icon from '../../components/Icon.jsx'
 import Correo from '../../components/usuarios/Correo.jsx'
 import { useAuth } from '../../context/AuthContext.js'
 import { inicioDe } from '../../config/menus.js'
+import { rutaDeRetorno } from '../../utils/accesoRutas.js'
 
 const reloj = (segundos) => `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`
 
@@ -21,6 +22,7 @@ const SESION_RECHAZADA = ['SESION_INVALIDA', 'SIN_ROL', 'INACTIVA']
 export default function Verificar() {
   const { estado, usuario, verificarCodigo, reenviarCodigo, estadoCodigo, volverAlLogin } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const titulo = useRef(null)
   const primeraCasilla = useRef(null)
   const enviandoRef = useRef(false)
@@ -60,7 +62,7 @@ export default function Verificar() {
     ? 'Ya puedes reenviar el código.'
     : `Podrás reenviar el código en ${Math.ceil(reenvioRestante / 15) * 15} segundos.`
 
-  if (estado === 'verificada') return <Navigate to={inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
+  if (estado === 'verificada') return <Navigate to={rutaDeRetorno(location.state?.desde, usuario.rol) ?? inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
   if (estado !== 'pendiente' || !info) return <Navigate to="/login" replace />
 
   const enfocarCodigo = () => setTimeout(() => primeraCasilla.current?.focus(), 0)
@@ -91,7 +93,7 @@ export default function Verificar() {
     setEnviando(true)
     try {
       const sesion = await verificarCodigo(codigo, recordar)
-      navigate(inicioDe(sesion.rol), { state: { enfocarTitulo: true } })
+      navigate(rutaDeRetorno(location.state?.desde, sesion.rol) ?? inicioDe(sesion.rol), { state: { enfocarTitulo: true } })
     } catch (error) {
       setInfo(estadoCodigo())
       setAhora(Date.now())
