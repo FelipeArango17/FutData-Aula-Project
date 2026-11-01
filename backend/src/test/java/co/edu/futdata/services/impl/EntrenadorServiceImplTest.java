@@ -57,10 +57,15 @@ class EntrenadorServiceImplTest {
         // Los mismos datos de ejemplo del frontend (entrenadoresService.js)
         mora = entrenadores.agregar("Andrés", "Mora", "CC", "1017234567", "andres.mora@pradofc.co");
         diaz = entrenadores.agregar("Carlos", "Díaz", "CC", "71654321", "carlos.diaz@pradofc.co");
-        categorias.agregar("Sub-8", diaz);
-        categorias.agregar("Sub-10", diaz);
+        // Las 9 del club, en el orden oficial; las que no reparte cada prueba quedan sin entrenador
+        categorias.agregar("Párvulos", null);
+        categorias.agregar("Cachorros", diaz);
+        categorias.agregar("Semillero", diaz);
+        categorias.agregar("Sub-11", null);
         categorias.agregar("Sub-12", mora);
+        categorias.agregar("Sub-13", null);
         categorias.agregar("Sub-14", diaz);
+        categorias.agregar("Sub-15", null);
         categorias.agregar("Sub-16", diaz);
     }
 
@@ -99,7 +104,7 @@ class EntrenadorServiceImplTest {
             List<EntrenadorResponseDTO> lista = servicio.listar();
 
             assertThat(lista).extracting(EntrenadorResponseDTO::apellido).containsExactly("Díaz", "Mora");
-            assertThat(lista.get(0).categorias()).containsExactly("Sub-8", "Sub-10", "Sub-14", "Sub-16");
+            assertThat(lista.get(0).categorias()).containsExactly("Cachorros", "Semillero", "Sub-14", "Sub-16");
             assertThat(lista.get(1).categorias()).containsExactly("Sub-12");
         }
 
@@ -125,9 +130,9 @@ class EntrenadorServiceImplTest {
             List<CategoriaResponseDTO> lista = servicio.listarCategorias();
 
             assertThat(lista).extracting(CategoriaResponseDTO::nombre).containsExactlyElementsOf(ReglasEntrenador.CATEGORIAS);
-            CategoriaResponseDTO sub12 = lista.get(2);
-            assertThat(sub12.edadMinima()).isEqualTo(10);
-            assertThat(sub12.edadMaxima()).isEqualTo(11);
+            CategoriaResponseDTO sub12 = lista.get(ReglasEntrenador.CATEGORIAS.indexOf("Sub-12"));
+            assertThat(sub12.edadMinima()).isEqualTo(12);
+            assertThat(sub12.edadMaxima()).isEqualTo(12);
             assertThat(sub12.entrenador().id()).isEqualTo(mora);
             assertThat(sub12.entrenador().nombre()).isEqualTo("Andrés");
             assertThat(sub12.entrenador().apellido()).isEqualTo("Mora");
@@ -324,9 +329,9 @@ class EntrenadorServiceImplTest {
         @Test
         void unaCategoriaDeOtroSinReasignarEs409YNoCambiaNada() {
             ConflictoException e = catchThrowableOfType(ConflictoException.class,
-                    () -> servicio.asignarCategorias(mora, pedir(false, "Sub-14", "Sub-12", "Sub-8")));
+                    () -> servicio.asignarCategorias(mora, pedir(false, "Sub-14", "Sub-12", "Cachorros")));
 
-            assertThat(e).hasMessage("Sub-8 y Sub-14 ya tienen otro entrenador. "
+            assertThat(e).hasMessage("Cachorros y Sub-14 ya tienen otro entrenador. "
                     + "Confirma la reasignación para pasarlas a este entrenador.");
             assertThat(e.getCampos()).containsExactly("categorias");
             assertThat(e.getMessage()).doesNotContain("Carlos", "Díaz");
@@ -335,33 +340,33 @@ class EntrenadorServiceImplTest {
 
         @Test
         void unaSolaCategoriaDeOtroUsaElSingular() {
-            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null, "Sub-12", "Sub-10")))
+            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null, "Sub-12", "Semillero")))
                     .isInstanceOf(ConflictoException.class)
-                    .hasMessage("Sub-10 ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.");
+                    .hasMessage("Semillero ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.");
         }
 
         @Test
         void conReasignarLasPasaDeSuEntrenadorAnteriorAEste() {
-            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, "Sub-16", "Sub-12", "Sub-8"));
+            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, "Sub-16", "Sub-12", "Cachorros"));
 
-            assertThat(r.categorias()).containsExactly("Sub-8", "Sub-12", "Sub-16");
-            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Sub-10", "Sub-14");
+            assertThat(r.categorias()).containsExactly("Cachorros", "Sub-12", "Sub-16");
+            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Semillero", "Sub-14");
             assertThat(categorias.asignaciones).hasSize(1);
         }
 
         @Test
         void quitarUnaCategoriaLaDejaSinEntrenador() {
-            EntrenadorResponseDTO r = servicio.asignarCategorias(diaz, pedir(null, "Sub-8", "Sub-16"));
+            EntrenadorResponseDTO r = servicio.asignarCategorias(diaz, pedir(null, "Cachorros", "Sub-16"));
 
-            assertThat(r.categorias()).containsExactly("Sub-8", "Sub-16");
-            assertThat(categorias.listar()).filteredOn(c -> List.of("Sub-10", "Sub-14").contains(c.getNombre()))
+            assertThat(r.categorias()).containsExactly("Cachorros", "Sub-16");
+            assertThat(categorias.listar()).filteredOn(c -> List.of("Semillero", "Sub-14").contains(c.getNombre()))
                     .extracting(Categoria::getIdEntrenador).containsOnlyNulls();
         }
 
         @Test
         void unaListaVaciaLeQuitaTodasSusCategorias() {
             assertThat(servicio.asignarCategorias(mora, pedir(null)).categorias()).isEmpty();
-            assertThat(servicio.listarCategorias().get(2).entrenador()).isNull();
+            assertThat(servicio.listarCategorias().get(ReglasEntrenador.CATEGORIAS.indexOf("Sub-12")).entrenador()).isNull();
         }
 
         @Test
@@ -373,7 +378,7 @@ class EntrenadorServiceImplTest {
 
         @Test
         void unaCategoriaSinEntrenadorSeAsignaSinPedirConfirmacion() {
-            servicio.asignarCategorias(diaz, pedir(null, "Sub-8", "Sub-10", "Sub-14"));
+            servicio.asignarCategorias(diaz, pedir(null, "Cachorros", "Semillero", "Sub-14"));
 
             EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(null, "Sub-12", "Sub-16"));
 
@@ -382,16 +387,16 @@ class EntrenadorServiceImplTest {
 
         @Test
         void siQuitaYTomaDeOtroAlMismoTiempoHaceLasDosCosas() {
-            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, "Sub-8"));
+            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, "Cachorros"));
 
-            assertThat(r.categorias()).containsExactly("Sub-8");
-            assertThat(servicio.listarCategorias().get(2).entrenador()).isNull();
-            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Sub-10", "Sub-14", "Sub-16");
+            assertThat(r.categorias()).containsExactly("Cachorros");
+            assertThat(servicio.listarCategorias().get(ReglasEntrenador.CATEGORIAS.indexOf("Sub-12")).entrenador()).isNull();
+            assertThat(servicio.consultar(diaz).categorias()).containsExactly("Semillero", "Sub-14", "Sub-16");
         }
 
         @Test
         void siLaReasignacionNoEstaConfirmadaTampocoQuitaNada() {
-            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null, "Sub-8")))
+            assertThatThrownBy(() -> servicio.asignarCategorias(mora, pedir(null, "Cachorros")))
                     .isInstanceOf(ConflictoException.class);
 
             assertThat(servicio.consultar(mora).categorias()).containsExactly("Sub-12");
@@ -411,18 +416,18 @@ class EntrenadorServiceImplTest {
 
         @Test
         void ignoraRepetidosYEspaciosEnLosNombres() {
-            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, " Sub-12 ", "Sub-10", "Sub-10"));
+            EntrenadorResponseDTO r = servicio.asignarCategorias(mora, pedir(true, " Sub-12 ", "Semillero", "Semillero"));
 
-            assertThat(r.categorias()).containsExactly("Sub-10", "Sub-12");
+            assertThat(r.categorias()).containsExactly("Semillero", "Sub-12");
         }
 
         @Test
         void unNombreQueNoEsCategoriaDelClubEs400() {
             DatosInvalidosException e = catchThrowableOfType(DatosInvalidosException.class,
-                    () -> servicio.asignarCategorias(mora, pedir(true, "Sub-12", "Sub-99", "sub-8")));
+                    () -> servicio.asignarCategorias(mora, pedir(true, "Sub-12", "Sub-99", "sub-12")));
 
-            assertThat(e).hasMessage("categorias: Sub-99 y sub-8 no son categorías del club "
-                    + "(Sub-8, Sub-10, Sub-12, Sub-14 o Sub-16)");
+            assertThat(e).hasMessage("categorias: Sub-99 y sub-12 no son categorías del club "
+                    + "(Párvulos, Cachorros, Semillero, Sub-11, Sub-12, Sub-13, Sub-14, Sub-15 o Sub-16)");
             assertThat(e.getCampos()).containsExactly("categorias");
         }
 
@@ -467,7 +472,8 @@ class EntrenadorServiceImplTest {
             assertThat(r.apellido()).isEqualTo("Díaz");
             assertThat(categorias.bloqueadas).isTrue();
             assertThat(servicio.listarCategorias()).filteredOn(c -> c.entrenador() == null)
-                    .extracting(CategoriaResponseDTO::nombre).containsExactly("Sub-8", "Sub-10", "Sub-14", "Sub-16");
+                    .extracting(CategoriaResponseDTO::nombre).containsExactly("Párvulos", "Cachorros", "Semillero",
+                            "Sub-11", "Sub-13", "Sub-14", "Sub-15", "Sub-16");
             assertThat(servicio.consultar(mora).categorias()).containsExactly("Sub-12");
         }
 
@@ -513,8 +519,19 @@ class EntrenadorServiceImplTest {
         boolean bloqueadas;
 
         void agregar(String nombre, UUID idEntrenador) {
-            int edad = Map.of("Sub-8", 0, "Sub-10", 8, "Sub-12", 10, "Sub-14", 12, "Sub-16", 14).get(nombre);
-            filas.add(new Categoria(UUID.randomUUID(), nombre, edad, nombre.equals("Sub-8") ? 7 : edad + 1, idEntrenador));
+            int minima = switch (nombre) {
+                case "Párvulos" -> 4;
+                case "Cachorros" -> 7;
+                case "Semillero" -> 9;
+                default -> Integer.parseInt(nombre.substring("Sub-".length()));
+            };
+            int maxima = switch (nombre) {
+                case "Párvulos" -> 6;
+                case "Cachorros" -> 8;
+                case "Semillero" -> 10;
+                default -> minima;
+            };
+            filas.add(new Categoria(UUID.randomUUID(), nombre, minima, maxima, idEntrenador));
         }
 
         List<String> de(UUID idEntrenador) {

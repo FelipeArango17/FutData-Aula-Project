@@ -6,15 +6,15 @@ import java.util.UUID;
 /**
  * Una categoría con el entrenador que la dirige, para {@code GET /api/categorias}.
  *
- * @param edadMinima edad cumplida mínima, por ejemplo 10 en Sub-12
- * @param edadMaxima edad cumplida máxima, por ejemplo 11 en Sub-12
+ * @param edadMinima edad por año de nacimiento (año actual menos año de nacimiento), mínima; por ejemplo 12 en Sub-12
+ * @param edadMaxima edad por año de nacimiento, máxima; por ejemplo 12 en Sub-12
  * @param entrenador quien la dirige, o {@code null} si todavía no tiene entrenador
  */
 public record CategoriaResponseDTO(
         @Schema(example = "0b6c3f1e-9d2a-4c8b-a1e7-5f4d3c2b1a09") UUID id,
         @Schema(example = "Sub-12") String nombre,
-        @Schema(example = "10") int edadMinima,
-        @Schema(example = "11") int edadMaxima,
+        @Schema(example = "12") int edadMinima,
+        @Schema(example = "12") int edadMaxima,
         EntrenadorResumenDTO entrenador) {
 
     /** Solo lo necesario para mostrar quién dirige la categoría: nada de documento, teléfono ni correo. */

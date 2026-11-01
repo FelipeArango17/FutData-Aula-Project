@@ -82,7 +82,7 @@ class EntrenadorControllerTest {
 
     @Test
     void listaConLaFormaDeDatosDelFrontend() throws Exception {
-        when(servicio.listar()).thenReturn(List.of(luis(List.of("Sub-8", "Sub-12"))));
+        when(servicio.listar()).thenReturn(List.of(luis(List.of("Cachorros", "Sub-12"))));
 
         mvc.perform(get("/api/entrenadores"))
                 .andExpect(status().isOk())
@@ -96,7 +96,7 @@ class EntrenadorControllerTest {
                 .andExpect(jsonPath("$[0].telefono").value("3001112233"))
                 .andExpect(jsonPath("$[0].correo").value("luis.perez@pradofc.co"))
                 .andExpect(jsonPath("$[0].especialidad").value("Porteros"))
-                .andExpect(jsonPath("$[0].categorias").value(contains("Sub-8", "Sub-12")))
+                .andExpect(jsonPath("$[0].categorias").value(contains("Cachorros", "Sub-12")))
                 .andExpect(jsonPath("$[0].horarioTrabajo").value("Lunes a viernes"))
                 .andExpect(jsonPath("$[0].direccion").value(nullValue()))
                 .andExpect(jsonPath("$[0].activo").value(true));
@@ -149,7 +149,7 @@ class EntrenadorControllerTest {
     @Test
     void alCrearIgnoraElIdYLasCategoriasDelCuerpo() throws Exception {
         when(servicio.crear(any())).thenReturn(luis(List.of()));
-        String conExtras = CUERPO.replace("{\"nombre\"", "{\"id\": 7, \"categorias\": [\"Sub-8\"], \"nombre\"");
+        String conExtras = CUERPO.replace("{\"nombre\"", "{\"id\": 7, \"categorias\": [\"Cachorros\"], \"nombre\"");
 
         mvc.perform(post("/api/entrenadores").contentType(MediaType.APPLICATION_JSON).content(conExtras))
                 .andExpect(status().isCreated())
@@ -216,26 +216,26 @@ class EntrenadorControllerTest {
 
     @Test
     void asignaCategoriasConReasignar() throws Exception {
-        when(servicio.asignarCategorias(eq(ID), any())).thenReturn(luis(List.of("Sub-8", "Sub-12")));
+        when(servicio.asignarCategorias(eq(ID), any())).thenReturn(luis(List.of("Cachorros", "Sub-12")));
 
         mvc.perform(put("/api/entrenadores/" + ID + "/categorias").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"categorias\": [\"Sub-12\", \"Sub-8\"], \"reasignar\": true}"))
+                        .content("{\"categorias\": [\"Sub-12\", \"Cachorros\"], \"reasignar\": true}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.categorias").value(contains("Sub-8", "Sub-12")));
+                .andExpect(jsonPath("$.categorias").value(contains("Cachorros", "Sub-12")));
 
-        verify(servicio).asignarCategorias(ID, new AsignarCategoriasRequestDTO(List.of("Sub-12", "Sub-8"), true));
+        verify(servicio).asignarCategorias(ID, new AsignarCategoriasRequestDTO(List.of("Sub-12", "Cachorros"), true));
     }
 
     @Test
     void categoriasDeOtroSinReasignarEs409() throws Exception {
-        String mensaje = "Sub-8 ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.";
+        String mensaje = "Cachorros ya tiene otro entrenador. Confirma la reasignación para pasarla a este entrenador.";
         when(servicio.asignarCategorias(eq(ID), any())).thenThrow(new ConflictoException(mensaje, List.of("categorias")));
 
         error(mvc.perform(put("/api/entrenadores/" + ID + "/categorias").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"categorias\": [\"Sub-8\"]}")), 409, "Conflict", "/api/entrenadores/" + ID + "/categorias")
+                        .content("{\"categorias\": [\"Cachorros\"]}")), 409, "Conflict", "/api/entrenadores/" + ID + "/categorias")
                 .andExpect(jsonPath("$.mensaje").value(mensaje))
                 .andExpect(jsonPath("$.campos").value(contains("categorias")));
-        verify(servicio).asignarCategorias(ID, new AsignarCategoriasRequestDTO(List.of("Sub-8"), null));
+        verify(servicio).asignarCategorias(ID, new AsignarCategoriasRequestDTO(List.of("Cachorros"), null));
     }
 
     @Test
@@ -257,26 +257,26 @@ class EntrenadorControllerTest {
 
     @Test
     void unaCategoriaSinEntrenadorLlegaConEntrenadorNull() throws Exception {
-        when(servicio.listarCategorias()).thenReturn(List.of(new CategoriaResponseDTO(UUID.randomUUID(), "Sub-8", 0, 7, null)));
+        when(servicio.listarCategorias()).thenReturn(List.of(new CategoriaResponseDTO(UUID.randomUUID(), "Cachorros", 7, 8, null)));
 
         mvc.perform(get("/api/categorias"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].nombre").value("Sub-8"))
+                .andExpect(jsonPath("$[0].nombre").value("Cachorros"))
                 .andExpect(jsonPath("$[0].entrenador").value(nullValue()));
     }
 
     @Test
     void listaLasCategoriasConSuEntrenador() throws Exception {
         UUID sub12 = UUID.randomUUID();
-        when(servicio.listarCategorias()).thenReturn(List.of(new CategoriaResponseDTO(sub12, "Sub-12", 10, 11,
+        when(servicio.listarCategorias()).thenReturn(List.of(new CategoriaResponseDTO(sub12, "Sub-12", 12, 12,
                 new CategoriaResponseDTO.EntrenadorResumenDTO(ID, "Andrés", "Mora"))));
 
         mvc.perform(get("/api/categorias"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(sub12.toString()))
                 .andExpect(jsonPath("$[0].nombre").value("Sub-12"))
-                .andExpect(jsonPath("$[0].edadMinima").value(10))
-                .andExpect(jsonPath("$[0].edadMaxima").value(11))
+                .andExpect(jsonPath("$[0].edadMinima").value(12))
+                .andExpect(jsonPath("$[0].edadMaxima").value(12))
                 .andExpect(jsonPath("$[0].entrenador.id").value(ID.toString()))
                 .andExpect(jsonPath("$[0].entrenador.nombre").value("Andrés"))
                 .andExpect(jsonPath("$[0].entrenador.apellido").value("Mora"))

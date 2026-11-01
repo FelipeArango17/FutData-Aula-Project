@@ -178,9 +178,11 @@ Después de la 001 se ejecutan, una sola vez cada una y en orden, las demás de 
 
 1. [002_modelo_datos.sql](../supabase/migrations/002_modelo_datos.sql): `acudiente_deportista`, asistencia con tres estados y `usuario.apellido`.
 2. [003_codigo_verificacion_2fa.sql](../supabase/migrations/003_codigo_verificacion_2fa.sql): códigos del 2FA.
-3. [004_ajustes_modelo.sql](../supabase/migrations/004_ajustes_modelo.sql): categorías Sub-8 a Sub-16, `documento`, `venta`, pagos con periodo, vencimiento y comprobante, entrenamientos sin cruces, equipos de confianza, sesiones verificadas y auditoría. El detalle y los pasos (incluida la copia de seguridad previa) están en la sección 6 del [diccionario de datos](info-sprints/sprint-1/diccionario-datos.md).
+3. [004_ajustes_modelo.sql](../supabase/migrations/004_ajustes_modelo.sql): las cinco categorías iniciales (Sub-8 a Sub-16), `documento`, `venta`, pagos con periodo, vencimiento y comprobante, entrenamientos sin cruces, equipos de confianza, sesiones verificadas y auditoría. El detalle y los pasos (incluida la copia de seguridad previa) están en la sección 6 del [diccionario de datos](info-sprints/sprint-1/diccionario-datos.md).
+4. [005_seguridad_sesion_2fa.sql](../supabase/migrations/005_seguridad_sesion_2fa.sql) y [006_sesion_verificada_por_sesion.sql](../supabase/migrations/006_sesion_verificada_por_sesion.sql): sesiones del 2FA verificadas por sesión.
+5. [007_categorias_club_y_horario.sql](../supabase/migrations/007_categorias_club_y_horario.sql): las 9 categorías reales del club por año de nacimiento (Párvulos, Cachorros, Semillero y Sub-11 a Sub-16), registro civil como tipo de documento del deportista, los 7 tipos de documento que pide el club, sedes (`Horizontes` y `UVA El Paraíso`), la tabla `franja_horario` con el horario fijo de lunes a sábado y los buckets privados `fotos` y `documentos`. Los pasos y los errores que puede dar (deportistas con `CC` o fuera de 4 a 16 años, entrenamientos con un lugar que no es una sede, documentos con un tipo que el club ya no pide) están en la sección 6.2 del [diccionario de datos](info-sprints/sprint-1/diccionario-datos.md). El horario del club (30 franjas) está aparte, en `supabase/seeds/franjas_club.sql`, y no es una migración.
 
-La 004 va en una transacción: si falla, no queda ningún cambio y el mensaje dice qué dato corregir.
+La 004 y la 007 van en una transacción: si falla, no queda ningún cambio y el mensaje dice qué dato corregir.
 
 ## 7. Verificar las tablas
 
