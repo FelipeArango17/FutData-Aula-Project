@@ -7,11 +7,15 @@ import Field from '../../components/ui/Field.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
+import Paginacion from '../../components/ui/Paginacion.jsx'
 import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
 import { SIN_CATEGORIA, calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { paginar } from '../../utils/paginacion.js'
 
 // Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
 // filtra por estado y por categoría (se combinan con AND) y lleva a la ficha. Reemplaza la maqueta con datos fijos; Figma no tiene una pantalla de esta lista.
+// Paginación: del lado del cliente, sobre la lista ya filtrada. GET /api/deportistas hoy devuelve la lista completa (sin
+// parámetros de página), así que al conectarlo seguirá siendo del cliente hasta que el backend añada paginación.
 // Privacidad: la lista no muestra teléfono ni dirección; esos datos solo están en la ficha.
 const FILTROS = { Todos: 'todos', Activos: 'activos', Inactivos: 'inactivos' }
 const TODAS = '' // valor del selector de categoría para «Todas las categorías»
@@ -39,6 +43,8 @@ export default function Deportistas() {
   const [filtro, setFiltro] = useState('Todos')
   const [categoria, setCategoria] = useState(TODAS)
   const [conTabla, setConTabla] = useState(false)
+  // Página elegida y los filtros con los que se eligió: si los filtros cambian, vuelve a la página 1 (sin setState en un efecto)
+  const [elegida, setElegida] = useState({ filtros: '', pagina: 1 })
   // Categorías para el selector. Se cargan aparte: si fallan, el selector queda solo con «Todas las categorías» y la lista sigue
   const [categorias, setCategorias] = useState([])
   // Resultados con la clave de la petición que los produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
@@ -101,6 +107,8 @@ export default function Deportistas() {
   const actualizando = lista.clave !== clave
   const error = base.error || (!actualizando && lista.error)
   const items = lista.items
+  const filtros = `${estado}|${categoria}|${busqueda}`
+  const vista = items ? paginar(items, elegida.filtros === filtros ? elegida.pagina : 1) : null
   const nombresCategoria = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]))
   const categoriaDe = (d) => (d.idCategoria === null ? 'Sin asignar' : nombresCategoria[d.idCategoria] ?? 'No disponible')
   // «Sin asignar» o el nombre de la categoría elegida (vacío si el filtro es «Todas las categorías»)
@@ -153,7 +161,7 @@ export default function Deportistas() {
           </tr>
         </thead>
         <tbody>
-          {items.map((d) => (
+          {vista.items.map((d) => (
             <tr key={d.id} className="border-b last:border-b-0">
               <th scope="row" className="p-3 font-normal">
                 <div className="flex min-w-0 items-center gap-3">
@@ -176,7 +184,7 @@ export default function Deportistas() {
   } else {
     contenido = (
       <ul aria-busy={actualizando} aria-label="Deportistas registrados" className="grid grid-cols-1 gap-4">
-        {items.map((d) => (
+        {vista.items.map((d) => (
           <Card as="li" key={d.id} className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start gap-3">
               <Avatar name={nombreCompleto(d)} />
@@ -218,6 +226,9 @@ export default function Deportistas() {
         <p role="status" className="min-h-[1.125rem] text-small text-secondary">{cuenta}</p>
       </div>
       <div ref={zonaLista} className="min-w-0">{contenido}</div>
+      {vista && !error && items.length > 0 && (
+        <Paginacion {...vista} onCambiar={(pagina) => setElegida({ filtros, pagina })} />
+      )}
     </Page>
   )
 }

@@ -37,6 +37,7 @@
 //   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
 // - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
 import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
+import { hoyLocal } from '../utils/fechas.js'
 import {
   MENSAJES, enLista, validarCampos, validarDireccion, validarDocumento, validarFechaNacimiento, validarNombre, validarTelefono,
 } from '../utils/validaciones.js'
@@ -194,14 +195,14 @@ export const DEPORTISTA_VACIO = {
 }
 
 // Reglas de los datos personales (HU-008): las usan el formulario y crearDeportista, con los validadores compartidos.
-// La fecha de nacimiento siempre se valida contra HOY_EJEMPLO. Devuelve { campo: mensaje } solo con los campos con error.
-export function validarDatosDeportista(datos) {
+// La fecha de nacimiento se valida contra `hoy` (por defecto hoyLocal(), igual que el max del input de fecha). Devuelve { campo: mensaje } solo con los campos con error.
+export function validarDatosDeportista(datos, hoy = hoyLocal()) {
   return validarCampos(datos, {
     nombre: [(v) => validarNombre(v, { obligatorio: MENSAJES.nombresObligatorio, longitud: MENSAJES.nombresLongitud, caracteres: MENSAJES.nombresCaracteres })],
     apellido: [(v) => validarNombre(v, { obligatorio: MENSAJES.apellidosObligatorio, longitud: MENSAJES.apellidosLongitud, caracteres: MENSAJES.apellidosCaracteres })],
     tipoDocumento: [enLista(TIPOS_DOCUMENTO_DEPORTISTA, MENSAJES.tipoDocumento)],
     documento: [validarDocumento],
-    fechaNacimiento: [(v) => validarFechaNacimiento(v, HOY_EJEMPLO)],
+    fechaNacimiento: [(v) => validarFechaNacimiento(v, hoy)],
     telefono: [validarTelefono],
     direccion: [validarDireccion],
   })

@@ -34,7 +34,7 @@ export const INSCRIPCION_VACIA = {
   consentimiento: false,
 }
 
-// Reglas de toda la inscripción: los datos del deportista salen de validarDatosDeportista (con HOY_EJEMPLO) y los del
+// Reglas de toda la inscripción: los datos del deportista salen de validarDatosDeportista (contra hoyLocal()) y los del
 // acudiente y el consentimiento, de los validadores compartidos. Devuelve { campo: mensaje } solo con los campos con error.
 export function validarDatosInscripcion(datos) {
   return {

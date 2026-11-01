@@ -122,9 +122,6 @@ export function validarDireccion(valor) {
   return direccion.length < 5 || direccion.length > 120 ? MENSAJES.direccionLongitud : null
 }
 
-// Fecha de hoy según el reloj del sistema (AAAA-MM-DD, en UTC como utils/fechas.js)
-const hoySistema = () => new Date().toISOString().slice(0, 10)
-
 // Años cumplidos a la fecha `hoy`; las dos son "AAAA-MM-DD"
 const edadEn = (nacimiento, hoy) => {
   const [a, m, d] = nacimiento.split('-').map(Number)
@@ -133,9 +130,8 @@ const edadEn = (nacimiento, hoy) => {
 }
 
 // AAAA-MM-DD, una fecha que existe, no futura respecto a `hoy` y con edad de 100 años como máximo.
-// `hoy`: quien llama pasa el "hoy" de la demo (HOY_EJEMPLO, de entrenamientosService: utils no importa de services);
-// si no lo pasa se usa la fecha del sistema.
-export function validarFechaNacimiento(valor, hoy = hoySistema()) {
+// `hoy`: "AAAA-MM-DD"; si quien llama no lo pasa se usa hoyLocal() (la fecha local del navegador, no la de UTC).
+export function validarFechaNacimiento(valor, hoy = hoyLocal()) {
   const fecha = texto(valor)
   if (!fecha) return MENSAJES.fechaNacimientoObligatoria
   // Se revisa mes 01-12 y día 01-31 antes de esFechaValida, que lanza RangeError con un mes 13 (ver fechas.test.js)
@@ -147,7 +143,7 @@ export function validarFechaNacimiento(valor, hoy = hoySistema()) {
 export const EDAD_MINIMA_ENTRENADOR = 18
 
 // Como validarFechaNacimiento, y además con al menos 18 años cumplidos a la fecha `hoy` (regla del backend para entrenadores).
-export function validarFechaNacimientoEntrenador(valor, hoy = hoySistema()) {
+export function validarFechaNacimientoEntrenador(valor, hoy = hoyLocal()) {
   const error = validarFechaNacimiento(valor, hoy)
   if (error) return error
   return edadEn(texto(valor), hoy) < EDAD_MINIMA_ENTRENADOR ? MENSAJES.fechaNacimientoMenorDeEdad : null
@@ -169,8 +165,8 @@ export function validarMonto(valor) {
 // Una fecha "AAAA-MM-DD" que existe. Se revisa mes 01-12 y día 01-31 antes de esFechaValida, que lanza RangeError con un mes 13.
 const fechaReal = (fecha) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(fecha) && esFechaValida(fecha)
 
-// Mes "AAAA-MM" que se paga: no puede ser posterior al mes de `hoy` (quien llama pasa HOY_EJEMPLO; sin él, la fecha del sistema).
-export function validarMes(valor, hoy = hoySistema()) {
+// Mes "AAAA-MM" que se paga: no puede ser posterior al mes de `hoy` (sin `hoy` se usa hoyLocal(); pagosService pasa HOY_EJEMPLO).
+export function validarMes(valor, hoy = hoyLocal()) {
   const mes = texto(valor)
   if (!mes) return MENSAJES.pagoMesObligatorio
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return MENSAJES.pagoMesInvalido
@@ -178,7 +174,7 @@ export function validarMes(valor, hoy = hoySistema()) {
 }
 
 // Fecha en que se pagó: "AAAA-MM-DD", que exista y no sea futura respecto a `hoy`.
-export function validarFechaPago(valor, hoy = hoySistema()) {
+export function validarFechaPago(valor, hoy = hoyLocal()) {
   const fecha = texto(valor)
   if (!fecha) return MENSAJES.pagoFechaObligatoria
   if (!fechaReal(fecha)) return MENSAJES.pagoFechaInvalida

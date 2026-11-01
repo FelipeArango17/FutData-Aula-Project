@@ -5,6 +5,8 @@ let inscripcion
 let deportistas
 beforeEach(async () => {
   vi.useFakeTimers()
+  // La validación usa hoyLocal(): el reloj queda en el "hoy" de los datos de ejemplo
+  vi.setSystemTime(new Date(2026, 9, 22, 12, 0))
   vi.resetModules()
   inscripcion = await import('./inscripcionService.js')
   deportistas = await import('./deportistasService.js')

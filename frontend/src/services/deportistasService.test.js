@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 let servicio
 beforeEach(async () => {
   vi.useFakeTimers()
+  // La validación usa hoyLocal(): el reloj queda en el "hoy" de los datos de ejemplo
+  vi.setSystemTime(new Date(2026, 9, 22, 12, 0))
   vi.resetModules()
   servicio = await import('./deportistasService.js')
 })

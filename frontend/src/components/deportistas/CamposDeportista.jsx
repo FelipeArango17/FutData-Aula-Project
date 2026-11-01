@@ -1,15 +1,16 @@
 import Field from '../ui/Field.jsx'
-import { HOY_EJEMPLO, TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad } from '../../services/deportistasService.js'
+import { TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad } from '../../services/deportistasService.js'
 import { hoyLocal } from '../../utils/fechas.js'
 import { validarFechaNacimiento } from '../../utils/validaciones.js'
 
 // Campos de los datos personales de un deportista. Los comparten el formulario del administrador (FormularioDeportista)
 // y la inscripción en línea. No guardan nada: reciben texto(campo) -> { value, error, onChange } de quien los usa.
 // props: texto, fechaNacimiento (para la edad en vivo), categorias y mostrarCategoria (la inscripción en línea no pide categoría)
-// La edad NO es un dato: se calcula en vivo desde la fecha de nacimiento (con el mismo HOY_EJEMPLO que el servicio).
+// La edad NO es un dato: se calcula en vivo desde la fecha de nacimiento (con hoyLocal(), el mismo "hoy" del max del input y de la validación).
 const textoEdad = (fechaNacimiento) => {
-  if (validarFechaNacimiento(fechaNacimiento, HOY_EJEMPLO) !== null) return '—'
-  const edad = calcularEdad(fechaNacimiento.trim(), HOY_EJEMPLO)
+  const hoy = hoyLocal()
+  if (validarFechaNacimiento(fechaNacimiento, hoy) !== null) return '—'
+  const edad = calcularEdad(fechaNacimiento.trim(), hoy)
   return `${edad} ${edad === 1 ? 'año' : 'años'}`
 }
 
