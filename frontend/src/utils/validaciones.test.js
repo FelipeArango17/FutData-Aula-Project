@@ -402,7 +402,7 @@ describe('validarCampos', () => {
     const fin = (valor, todos) => (valor < todos.inicio ? 'La fecha final no puede ser anterior a la inicial.' : null)
     expect(validarCampos({ inicio: '2026-10-10', fin: '2026-10-01' }, { fin: [fin] })).toEqual({ fin: 'La fecha final no puede ser anterior a la inicial.' })
     expect(validarCampos({ inicio: '2026-10-10', fin: '2026-10-11' }, { fin: [fin] })).toEqual({})
-    const categoria = enLista(['Cachorros', 'Sub-10'], 'Selecciona una categoría.')
+    const categoria = enLista(['Cachorros', 'Semillero'], 'Selecciona una categoría.')
     expect(validarCampos({ categoria: 'Sub-20' }, { categoria: [categoria] })).toEqual({ categoria: 'Selecciona una categoría.' })
   })
 

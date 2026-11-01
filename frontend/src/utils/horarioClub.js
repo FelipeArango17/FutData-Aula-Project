@@ -1,11 +1,11 @@
 // Lógica pura del horario semanal del club (franjas) y de los entrenamientos que salen de él. Sin estado ni red.
 // Franja = { id, idCategoria, dia (1 = lunes … 6 = sábado), horaInicio "HH:mm", horaFin "HH:mm", sede, idEntrenador | null, grupo }
-// (ver services/horarioClubData.js). idEntrenador null = "Todos los entrenadores": no genera choque de entrenador.
+// (ver services/horarioClubData.js). idEntrenador null = "Por turnos": no genera choque de entrenador.
 import { esHoraValida, sumarDias } from './fechas.js'
 import { NOMBRES_CATEGORIAS } from './categorias.js'
 
 export const SEDES_CLUB = ['Horizontes', 'UVA El Paraíso']
-export const CATEGORIAS_CON_GRUPO = ['Sub-9', 'Sub-10']
+export const CATEGORIAS_CON_GRUPO = ['Cachorros', 'Semillero']
 
 export const MENSAJES_FRANJA = {
   categoria: 'Selecciona la categoría.',
@@ -16,7 +16,7 @@ export const MENSAJES_FRANJA = {
   horaInvalida: 'La hora no es válida. Usa el formato HH:MM.',
   horaFinAnterior: 'La hora de fin debe ser posterior a la de inicio.',
   sede: 'Selecciona la sede.',
-  grupo: 'El grupo solo aplica a Sub-9 y Sub-10, y es mañana o tarde.',
+  grupo: 'El grupo solo aplica a Cachorros y Semillero, y es mañana o tarde.',
   entrenadorOcupado: 'Ese entrenador ya tiene otra franja que se cruza con este horario.',
 }
 

@@ -99,8 +99,16 @@ let deportistas = [
 ]
 let siguienteId = deportistas.length + 1
 
+// Ids de los deportistas de ejemplo de una categoría (por nombre), tal como se siembran. Sirve a otros datos de ejemplo (por ejemplo,
+// el registro de asistencia sembrado) para no depender de números fijos. No refleja cambios hechos después.
+const SEMBRADOS = deportistas.map(({ id, idCategoria }) => ({ id, idCategoria }))
+export const idsDeEjemploDeCategoria = (nombre) => {
+  const categoria = categorias.find((c) => c.nombre === nombre)
+  return categoria ? SEMBRADOS.filter((x) => x.idCategoria === categoria.id).map((x) => x.id) : []
+}
+
 // Historial de ediciones por deportista (id -> lista, de la más antigua a la más reciente). Se siembra uno en Emilio (3)
-// para probar la ficha: cambió el teléfono y pasó de Sub-10 a Cachorros.
+// para probar la ficha: cambió el teléfono y pasó de Semillero a Cachorros.
 const historiales = new Map([
   [3, [
     {
@@ -108,7 +116,7 @@ const historiales = new Map([
       responsable: 'administrador@pradofc.co',
       cambios: [
         { campo: 'telefono', antes: '3000000999', despues: '3000000003' },
-        { campo: 'idCategoria', antes: 4, despues: 2 },
+        { campo: 'idCategoria', antes: 3, despues: 2 },
       ],
     },
   ]],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ENTRENADORES_CLUB, FRANJAS_EJEMPLO, entrenadorDeCategoria, idCategoriaDe, nombreDeCategoria, sedeDeCategoria } from '../services/horarioClubData.js'
+import { ENTRENADORES_CLUB, FRANJAS_EJEMPLO, SEDES, entrenadorDeCategoria, idCategoriaDe, nombreDeCategoria } from '../services/horarioClubData.js'
 import { NOMBRES_CATEGORIAS } from './categorias.js'
 import {
   MENSAJES_FRANJA, chocaEntrenador, entrenamientosDeSemana, franjasDeCategoria, franjasDeEntrenador, franjasPorDia, haySolapamiento, seSolapan, validarFranja,
@@ -42,7 +42,7 @@ describe('franjasPorDia, franjasDeCategoria y franjasDeEntrenador', () => {
     const sub13 = franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe('Sub-13'))
     expect(sub13.map((f) => f.dia)).toEqual([1, 3, 5])
     expect(franjasDeCategoria(FRANJAS_EJEMPLO, String(idCategoriaDe('Sub-13')))).toEqual(sub13)
-    const cardona = franjasDeEntrenador(FRANJAS_EJEMPLO, 4) // Sub-13 y Sub-14
+    const cardona = franjasDeEntrenador(FRANJAS_EJEMPLO, 3) // Jhon Cardona: Sub-13 y Sub-14
     expect(new Set(cardona.map((f) => nombreDeCategoria(f.idCategoria)))).toEqual(new Set(['Sub-13', 'Sub-14']))
     expect(cardona).toHaveLength(6)
     expect(franjasDeEntrenador(FRANJAS_EJEMPLO, 99)).toEqual([])
@@ -109,78 +109,100 @@ describe('validarFranja', () => {
     expect(validarFranja(franja(), [otra])).toEqual({})
   })
 
-  it('una franja sin entrenador ("Todos los entrenadores") no genera choque de entrenador', () => {
+  it('una franja sin entrenador ("Por turnos") no genera choque de entrenador', () => {
     const existente = franja({ id: 1, idEntrenador: null })
     expect(validarFranja(franja({ idEntrenador: null }), [existente])).toEqual({})
     expect(validarFranja(franja({ idEntrenador: '' }), [existente])).toEqual({})
     expect(validarFranja(franja({ idEntrenador: 3 }), [existente])).toEqual({})
   })
 
-  it('el grupo solo aplica a Sub-9 y Sub-10 y es mañana o tarde', () => {
-    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Sub-9'), grupo: 'mañana', idEntrenador: null }), [])).toEqual({})
-    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Sub-10'), grupo: 'tarde', idEntrenador: null }), [])).toEqual({})
+  it('el grupo solo aplica a Cachorros y Semillero y es mañana o tarde', () => {
+    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Cachorros'), grupo: 'mañana', idEntrenador: null }), [])).toEqual({})
+    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Semillero'), grupo: 'tarde', idEntrenador: null }), [])).toEqual({})
+    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Párvulos'), grupo: 'tarde', idEntrenador: null }), [])).toEqual({ grupo: MENSAJES_FRANJA.grupo })
     expect(validarFranja(franja({ grupo: 'mañana' }), [])).toEqual({ grupo: MENSAJES_FRANJA.grupo }) // Sub-11
-    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Sub-9'), grupo: 'noche' }), [])).toEqual({ grupo: MENSAJES_FRANJA.grupo })
+    expect(validarFranja(franja({ idCategoria: idCategoriaDe('Semillero'), grupo: 'noche' }), [])).toEqual({ grupo: MENSAJES_FRANJA.grupo })
   })
 })
 
 describe('plantilla de ejemplo del club', () => {
-  it('ninguna franja tiene errores contra las demás: no hay choques de entrenador', () => {
+  const texto = (f) => `${f.dia} ${f.horaInicio}-${f.horaFin}`
+  const de = (categoria, filtro = () => true) => franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe(categoria)).filter(filtro).map((f) => `${texto(f)} ${f.sede}${f.grupo ? ` ${f.grupo}` : ''}`)
+
+  it('tiene exactamente 30 franjas', () => {
+    expect(FRANJAS_EJEMPLO).toHaveLength(30)
+  })
+
+  it('ninguna franja tiene errores contra las demás: ningún entrenador con id se cruza', () => {
     for (const f of FRANJAS_EJEMPLO) {
       const errores = validarFranja(f, FRANJAS_EJEMPLO, f.id)
       expect(errores, `${nombreDeCategoria(f.idCategoria)} día ${f.dia} ${f.horaInicio}`).toEqual({})
+    }
+    const conEntrenador = FRANJAS_EJEMPLO.filter((f) => f.idEntrenador !== null)
+    for (const f of conEntrenador) {
+      expect(conEntrenador.some((g) => g.id !== f.id && g.idEntrenador === f.idEntrenador && haySolapamiento(f, g)), `${nombreDeCategoria(f.idCategoria)} día ${f.dia}`).toBe(false)
     }
   })
 
   it('todas las categorías vigentes tienen franjas, y solo esas categorías existen', () => {
     for (const nombre of NOMBRES_CATEGORIAS) expect(franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe(nombre)).length, nombre).toBeGreaterThan(0)
     expect(new Set(FRANJAS_EJEMPLO.map((f) => f.idCategoria)).size).toBe(NOMBRES_CATEGORIAS.length)
-    expect(NOMBRES_CATEGORIAS).toHaveLength(10)
+    expect(NOMBRES_CATEGORIAS).toHaveLength(9)
   })
 
-  it('va de lunes a sábado, con ids únicos, horas válidas y las dos sedes', () => {
+  it('cada franja tiene una sede válida, de lunes a sábado, con ids únicos y horas válidas', () => {
+    for (const f of FRANJAS_EJEMPLO) expect(SEDES, `${nombreDeCategoria(f.idCategoria)} día ${f.dia}`).toContain(f.sede)
     expect(new Set(FRANJAS_EJEMPLO.map((f) => f.id)).size).toBe(FRANJAS_EJEMPLO.length)
     expect(FRANJAS_EJEMPLO.every((f) => f.dia >= 1 && f.dia <= 6 && f.horaFin > f.horaInicio)).toBe(true)
     expect(new Set(FRANJAS_EJEMPLO.map((f) => f.sede))).toEqual(new Set(['Horizontes', 'UVA El Paraíso']))
   })
 
-  it('el grupo solo se usa en Sub-9 y Sub-10, con mañana y tarde, y sin entrenador fijo', () => {
+  it('el grupo solo se usa en Cachorros y Semillero, martes y jueves, con mañana y tarde, y sin entrenador fijo', () => {
     const conGrupo = FRANJAS_EJEMPLO.filter((f) => f.grupo)
     expect(conGrupo).toHaveLength(8)
-    expect(new Set(conGrupo.map((f) => nombreDeCategoria(f.idCategoria)))).toEqual(new Set(['Sub-9', 'Sub-10']))
+    expect(new Set(conGrupo.map((f) => nombreDeCategoria(f.idCategoria)))).toEqual(new Set(['Cachorros', 'Semillero']))
     expect(new Set(conGrupo.map((f) => f.grupo))).toEqual(new Set(['mañana', 'tarde']))
+    expect(new Set(conGrupo.map((f) => f.dia))).toEqual(new Set([2, 4]))
     expect(conGrupo.every((f) => f.idEntrenador === null)).toBe(true)
   })
 
-  it('Párvulos y Cachorros no tienen entrenador fijo; las demás sí, y una categoría tiene un solo responsable', () => {
-    for (const nombre of ['Párvulos', 'Cachorros']) expect(entrenadorDeCategoria(nombre)).toBeNull()
-    for (const nombre of NOMBRES_CATEGORIAS.slice(2)) expect(entrenadorDeCategoria(nombre), nombre).not.toBeNull()
+  it('Párvulos, Cachorros y Semillero van por turnos; las demás tienen entrenador, y una categoría tiene un solo responsable', () => {
+    for (const nombre of ['Párvulos', 'Cachorros', 'Semillero']) {
+      expect(entrenadorDeCategoria(nombre), nombre).toBeNull()
+      expect(franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe(nombre)).every((f) => f.idEntrenador === null), nombre).toBe(true)
+    }
+    for (const nombre of NOMBRES_CATEGORIAS.slice(3)) expect(entrenadorDeCategoria(nombre), nombre).not.toBeNull()
     const responsables = ENTRENADORES_CLUB.flatMap((e) => e.categorias)
     expect(new Set(responsables).size).toBe(responsables.length)
-    for (const f of FRANJAS_EJEMPLO.filter((x) => !x.grupo)) expect(f.idEntrenador).toBe(entrenadorDeCategoria(nombreDeCategoria(f.idCategoria)))
+    for (const f of FRANJAS_EJEMPLO.filter((x) => x.idEntrenador !== null)) expect(f.idEntrenador).toBe(entrenadorDeCategoria(nombreDeCategoria(f.idCategoria)))
   })
 
-  it('las horas de ejemplo coinciden con la hoja del club', () => {
-    const de = (cat) => franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe(cat)).filter((f) => !f.grupo).map((f) => `${f.dia} ${f.horaInicio}-${f.horaFin}`)
-    expect(de('Párvulos')).toEqual(['2 08:30-09:30', '6 08:30-10:00'])
-    expect(de('Cachorros')).toEqual(['2 07:00-08:00', '2 16:30-17:30', '4 07:00-08:00', '4 16:30-17:30', '6 08:30-10:00'])
-    expect(de('Sub-9')).toEqual(['5 19:00-20:00', '6 08:30-10:00'])
-    expect(de('Sub-10')).toEqual(['1 19:00-20:00', '2 19:00-20:00', '5 19:00-20:00', '6 08:30-10:00'])
-    expect(de('Sub-11')).toEqual(['2 20:00-21:00', '3 19:00-20:00', '4 19:00-20:00'])
-    expect(de('Sub-12')).toEqual(['1 19:00-20:00', '2 18:00-19:00', '4 19:00-20:00'])
-    expect(de('Sub-13')).toEqual(['1 19:00-20:00', '3 19:00-20:00', '5 19:00-20:00'])
-    expect(de('Sub-14')).toEqual(['1 18:00-19:00', '3 18:00-19:00', '5 18:00-19:00'])
-    expect(de('Sub-15')).toEqual(['1 18:00-19:00', '2 20:00-21:00', '4 18:00-19:00'])
-    expect(de('Sub-16')).toEqual(['2 16:30-18:00', '3 18:00-19:00', '4 16:30-18:00'])
-    const semillero = (grupo) => franjasDeCategoria(FRANJAS_EJEMPLO, idCategoriaDe('Sub-9')).filter((f) => f.grupo === grupo).map((f) => `${f.dia} ${f.horaInicio}-${f.horaFin}`)
-    expect(semillero('mañana')).toEqual(['2 07:00-08:00', '4 07:00-08:30'])
-    expect(semillero('tarde')).toEqual(['2 16:30-17:30', '4 16:30-18:00'])
+  it('son 5 entrenadores; solo Jhon Cardona tiene dos categorías y Dairo ya no está', () => {
+    expect(ENTRENADORES_CLUB.map((e) => e.nombre)).toEqual(['Nicolás', 'David Mesa', 'Jhon Cardona', 'Giovanny', 'Jhon Ramírez'])
+    expect(ENTRENADORES_CLUB.filter((e) => e.categorias.length > 1).map((e) => e.nombre)).toEqual(['Jhon Cardona'])
+    expect(ENTRENADORES_CLUB.find((e) => e.nombre === 'Jhon Cardona').categorias).toEqual(['Sub-13', 'Sub-14'])
+    expect(ENTRENADORES_CLUB.find((e) => e.nombre === 'Dairo')).toBeUndefined()
   })
 
-  it('Párvulos a Sub-11 van en UVA El Paraíso y Sub-12 a Sub-16 en Horizontes', () => {
-    for (const f of FRANJAS_EJEMPLO) expect(f.sede).toBe(sedeDeCategoria(nombreDeCategoria(f.idCategoria)))
-    expect(sedeDeCategoria('Sub-11')).toBe('UVA El Paraíso')
-    expect(sedeDeCategoria('Sub-12')).toBe('Horizontes')
+  it('horas y sedes de la plantilla (Excel del club)', () => {
+    expect(de('Párvulos')).toEqual(['2 08:30-10:00 UVA El Paraíso', '6 09:00-10:00 Horizontes'])
+    const turnos = ['2 07:30-09:00 UVA El Paraíso mañana', '2 16:30-18:00 UVA El Paraíso tarde', '4 07:30-09:00 UVA El Paraíso mañana', '4 16:30-18:00 UVA El Paraíso tarde', '6 08:30-10:00 Horizontes']
+    expect(de('Cachorros')).toEqual(turnos)
+    expect(de('Semillero')).toEqual(turnos)
+    expect(de('Sub-11')).toEqual(['2 20:00-21:00 Horizontes', '3 19:00-20:00 Horizontes', '4 19:00-20:00 Horizontes'])
+    expect(de('Sub-12')).toEqual(['1 19:00-20:00 Horizontes', '2 18:00-19:00 Horizontes', '4 19:00-20:00 Horizontes'])
+    expect(de('Sub-13')).toEqual(['1 19:00-20:00 Horizontes', '3 19:00-20:00 Horizontes', '5 19:00-20:00 Horizontes'])
+    expect(de('Sub-14')).toEqual(['1 18:00-19:00 Horizontes', '3 18:00-19:00 Horizontes', '5 18:00-19:00 Horizontes'])
+    expect(de('Sub-15')).toEqual(['1 18:00-19:00 Horizontes', '2 20:00-21:00 Horizontes', '4 18:00-19:00 Horizontes'])
+    expect(de('Sub-16')).toEqual(['2 16:30-18:00 Horizontes', '3 18:00-19:00 Horizontes', '4 16:30-18:00 Horizontes'])
+  })
+
+  it('Párvulos, Cachorros y Semillero: UVA El Paraíso entre semana y Horizontes el sábado; Sub-11 a Sub-16 solo en Horizontes', () => {
+    for (const f of FRANJAS_EJEMPLO) {
+      const nombre = nombreDeCategoria(f.idCategoria)
+      const esperada = ['Párvulos', 'Cachorros', 'Semillero'].includes(nombre) && f.dia !== 6 ? 'UVA El Paraíso' : 'Horizontes'
+      expect(f.sede, `${nombre} día ${f.dia}`).toBe(esperada)
+    }
   })
 })
 
@@ -192,7 +214,7 @@ describe('entrenamientosDeSemana', () => {
     expect(semana.every((e) => e.fecha >= '2026-10-19' && e.fecha <= '2026-10-24')).toBe(true)
     const sub13 = semana.filter((e) => e.categoria === 'Sub-13')
     expect(sub13.map((e) => e.fecha)).toEqual(['2026-10-19', '2026-10-21', '2026-10-23'])
-    expect(sub13[0]).toEqual({ id: expect.any(Number), categoria: 'Sub-13', fecha: '2026-10-19', hora: '19:00', horaFin: '20:00', sede: 'Horizontes', idEntrenador: 4, grupo: null })
+    expect(sub13[0]).toEqual({ id: expect.any(Number), categoria: 'Sub-13', fecha: '2026-10-19', hora: '19:00', horaFin: '20:00', sede: 'Horizontes', idEntrenador: 3, grupo: null })
   })
 
   it('otra semana cambia solo las fechas', () => {

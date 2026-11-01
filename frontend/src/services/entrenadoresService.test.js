@@ -23,23 +23,23 @@ const datos = (extra = {}) => ({
 })
 
 describe('listar y obtener', () => {
-  it('listar devuelve los seis entrenadores de ejemplo, como copias', async () => {
+  it('listar devuelve los cinco entrenadores de ejemplo (sin Dairo), como copias', async () => {
     const lista = await servicio.listar()
-    expect(lista.map((e) => `${e.nombre} ${e.apellido}`)).toEqual(['Nicolás Ejemplo', 'Dairo Ejemplo', 'David Mesa', 'Jhon Cardona', 'Giovanny Ejemplo', 'Jhon Ramírez'])
+    expect(lista.map((e) => `${e.nombre} ${e.apellido}`)).toEqual(['Nicolás Ejemplo', 'David Mesa', 'Jhon Cardona', 'Giovanny Ejemplo', 'Jhon Ramírez'])
     lista[0].categorias.push('Sub-16')
     lista.pop()
     const otra = await servicio.listar()
-    expect(otra).toHaveLength(6)
-    expect(otra[0].categorias).toEqual(['Sub-9', 'Sub-12'])
+    expect(otra).toHaveLength(5)
+    expect(otra[0].categorias).toEqual(['Sub-12'])
   })
 
   it('las categorías de ejemplo coinciden con las del servicio de entrenamientos', async () => {
     const lista = await servicio.listar()
-    expect(lista.map((e) => e.categorias)).toEqual([['Sub-9', 'Sub-12'], ['Sub-10'], ['Sub-11'], ['Sub-13', 'Sub-14'], ['Sub-15'], ['Sub-16']])
+    expect(lista.map((e) => e.categorias)).toEqual([['Sub-12'], ['Sub-11'], ['Sub-13', 'Sub-14'], ['Sub-15'], ['Sub-16']])
   })
 
   it('obtener acepta el id como número o como texto y devuelve null si no existe', async () => {
-    expect((await servicio.obtener(2)).nombre).toBe('Dairo')
+    expect((await servicio.obtener(2)).nombre).toBe('David')
     expect((await servicio.obtener('1')).nombre).toBe('Nicolás')
     expect(await servicio.obtener(99)).toBeNull()
   })
@@ -57,8 +57,8 @@ describe('detectarDuplicado', () => {
   })
 
   it('mismo correo es duplicado sin distinguir mayúsculas ni espacios en los bordes', async () => {
-    expect(await servicio.detectarDuplicado(datos({ correo: 'DAIRO.EJEMPLO@PRADOFC.CO' }))).toEqual({ campo: 'correo' })
-    expect(await servicio.detectarDuplicado(datos({ correo: '  dairo.ejemplo@pradofc.co ' }))).toEqual({ campo: 'correo' })
+    expect(await servicio.detectarDuplicado(datos({ correo: 'DAVID.MESA@PRADOFC.CO' }))).toEqual({ campo: 'correo' })
+    expect(await servicio.detectarDuplicado(datos({ correo: '  david.mesa@pradofc.co ' }))).toEqual({ campo: 'correo' })
   })
 
   it('datos distintos no son duplicado', async () => {
@@ -66,7 +66,7 @@ describe('detectarDuplicado', () => {
   })
 
   it('si coinciden documento y correo, informa primero el documento', async () => {
-    const r = await servicio.detectarDuplicado(datos({ documento: '71654321', correo: 'nicolas.ejemplo@pradofc.co' }))
+    const r = await servicio.detectarDuplicado(datos({ documento: '1037001122', correo: 'nicolas.ejemplo@pradofc.co' }))
     expect(r).toEqual({ campo: 'documento' })
   })
 
@@ -104,13 +104,13 @@ describe('crear', () => {
       direccion: 'Calle 40 Sur 75b-81',
     }))
     expect(creado.id).toMatch(/^[0-9a-f-]{36}$/)
-    expect(await servicio.listar()).toHaveLength(7)
-    expect(await servicio.obtener(7)).toEqual(creado)
+    expect(await servicio.listar()).toHaveLength(6)
+    expect(await servicio.obtener(6)).toEqual(creado)
   })
 
   it('descarta categorías que no existen', async () => {
-    const creado = await servicio.crear(datos({ categorias: ['Sub-10', 'Sub-99'] }))
-    expect(creado.categorias).toEqual(['Sub-10'])
+    const creado = await servicio.crear(datos({ categorias: ['Semillero', 'Sub-99'] }))
+    expect(creado.categorias).toEqual(['Semillero'])
   })
 
   it('los ids no se repiten', async () => {
@@ -120,20 +120,20 @@ describe('crear', () => {
   })
 
   it('rechaza un duplicado con error que indica el campo y no guarda', async () => {
-    const error = await servicio.crear(datos({ correo: 'dairo.ejemplo@pradofc.co' })).catch((e) => e)
+    const error = await servicio.crear(datos({ correo: 'david.mesa@pradofc.co' })).catch((e) => e)
     expect(error).toBeInstanceOf(Error)
     expect(error.duplicado).toEqual({ campo: 'correo' })
-    expect(await servicio.listar()).toHaveLength(6)
+    expect(await servicio.listar()).toHaveLength(5)
   })
 })
 
 describe('editar', () => {
   it('actualiza los datos conservando el id', async () => {
-    const editado = await servicio.editar(1, datos({ nombre: 'Nicolás Felipe', categorias: ['Sub-12', 'Sub-9'] }))
+    const editado = await servicio.editar(1, datos({ nombre: 'Nicolás Felipe', categorias: ['Sub-12', 'Cachorros'] }))
     expect(editado.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(editado.nombre).toBe('Nicolás Felipe')
-    expect(editado.categorias).toEqual(['Sub-9', 'Sub-12'])
-    expect(await servicio.listar()).toHaveLength(6)
+    expect(editado.categorias).toEqual(['Cachorros', 'Sub-12'])
+    expect(await servicio.listar()).toHaveLength(5)
     expect((await servicio.obtener(1)).nombre).toBe('Nicolás Felipe')
   })
 
@@ -145,14 +145,14 @@ describe('editar', () => {
   })
 
   it('acepta el id como texto', async () => {
-    const editado = await servicio.editar('1', datos({ categorias: ['Sub-9', 'Sub-12'] }))
+    const editado = await servicio.editar('1', datos({ categorias: ['Cachorros', 'Sub-12'] }))
     expect(editado.id).toMatch(/^[0-9a-f-]{36}$/)
   })
 
   it('rechaza usar el documento o el correo de otro entrenador', async () => {
-    const porDocumento = await servicio.editar(1, datos({ documento: '71654321' })).catch((e) => e)
+    const porDocumento = await servicio.editar(1, datos({ documento: '1037001122' })).catch((e) => e)
     expect(porDocumento.duplicado).toEqual({ campo: 'documento' })
-    const porCorreo = await servicio.editar(1, datos({ correo: 'Dairo.Ejemplo@pradofc.co' })).catch((e) => e)
+    const porCorreo = await servicio.editar(1, datos({ correo: 'David.Mesa@pradofc.co' })).catch((e) => e)
     expect(porCorreo.duplicado).toEqual({ campo: 'correo' })
     expect((await servicio.obtener(1)).documento).toBe('1017234567')
   })

@@ -5,8 +5,8 @@ import Button from '../../components/ui/Button.jsx'
 
 const semana = [
   { lugar: 'Sub-12 · Horizontes', cuando: 'Hoy · 7:00 p. m.', estado: 'Sin asistencia', tone: 'warning' },
-  { lugar: 'Sub-9 · UVA El Paraíso', cuando: 'Vie 23 · 7:00 p. m.', estado: 'Programado', tone: 'neutral' },
-  { lugar: 'Sub-9 · UVA El Paraíso', cuando: 'Sáb 24 · 8:30 a. m.', estado: 'Programado', tone: 'neutral' },
+  { lugar: 'Sub-12 · Horizontes', cuando: 'Lun 26 · 7:00 p. m.', estado: 'Programado', tone: 'neutral' },
+  { lugar: 'Sub-12 · Horizontes', cuando: 'Mar 27 · 6:00 p. m.', estado: 'Programado', tone: 'neutral' },
 ]
 const faltas = [
   { nombre: 'Emmanuel Arias', detalle: '6 faltas · 62 % asistencia', accion: 'Revisar', tone: 'danger' },
@@ -26,7 +26,7 @@ function Indicador({ titulo, valor, detalle }) {
 
 export default function Inicio() {
   return (
-    <Page title="Hola, Nicolás" subtitle="Tus categorías: Sub-9 y Sub-12">
+    <Page title="Hola, Nicolás" subtitle="Tu categoría: Sub-12">
       <Button to="/entrenador/asistencia" className="md:self-start">Tomar asistencia</Button>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Indicador titulo="Jugadores Sub-12" valor="5" detalle="2 con documentos pendientes" />

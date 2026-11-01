@@ -9,7 +9,7 @@ import { franjasPorDia } from '../../utils/horarioClub.js'
 // Plantilla semanal del club, de lunes a sábado. Dos presentaciones con los mismos datos:
 // - cuadricula (escritorio): días como columnas y una fila por cada hora de inicio;
 // - lista (móvil, tablet vertical o letra grande): una sección por día con tarjetas, sin scroll horizontal.
-// Cada bloque muestra categoría (con grupo si aplica), hora, sede y el nombre del entrenador ("Todos los entrenadores" si no
+// Cada bloque muestra categoría (con grupo si aplica), hora, sede y el nombre del entrenador ("Por turnos" si no
 // hay uno fijo). onEditar(franja) / onEliminar(franja) son opcionales: sin ellas la vista es de solo lectura.
 const descripcion = (franja) => `${categoriaConGrupo(franja)}, ${NOMBRES_DIAS[franja.dia].toLowerCase()}, ${rangoHoras(franja)}, ${franja.sede}, entrenador: ${nombreEntrenadorDe(franja)}`
 

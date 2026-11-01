@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
-import { ENTRENADORES_CLUB, NOMBRES_DIAS, SEDES, entrenadorDeCategoria, nombreDeCategoria, sedeDeCategoria } from '../../services/horarioClubData.js'
+import { ENTRENADORES_CLUB, NOMBRES_DIAS, SEDES, entrenadorDeCategoria, nombreDeCategoria } from '../../services/horarioClubData.js'
 import { NOMBRES_CATEGORIAS } from '../../utils/categorias.js'
 import { CATEGORIAS_CON_GRUPO, validarFranja } from '../../utils/horarioClub.js'
 
@@ -26,10 +26,10 @@ export default function FormularioFranja({ inicial, franjas = [], ignorarId = nu
   function cambiar(campo, valor) {
     const nuevos = { ...valores, [campo]: valor }
     if (campo === 'idCategoria') {
-      // Al elegir la categoría se proponen su entrenador responsable y su sede (el usuario puede cambiarlos)
+      // Al elegir la categoría se proponen su entrenador responsable (o ninguno: por turnos) y la sede de sus otras franjas (editables)
       const nombre = nombreDeCategoria(valor)
       nuevos.idEntrenador = String(entrenadorDeCategoria(nombre) ?? '')
-      nuevos.sede = nombre ? sedeDeCategoria(nombre) : ''
+      nuevos.sede = franjas.find((f) => f.idCategoria === Number(valor))?.sede ?? valores.sede
       if (!CATEGORIAS_CON_GRUPO.includes(nombre)) nuevos.grupo = ''
     }
     setValores(nuevos)
@@ -83,7 +83,7 @@ export default function FormularioFranja({ inicial, franjas = [], ignorarId = nu
           {SEDES.map((s) => <option key={s} value={s}>{s}</option>)}
         </Field>
         <Field label="Entrenador" id="franja-entrenador" as="select" {...campo('idEntrenador')}>
-          <option value="">Todos los entrenadores</option>
+          <option value="">Por turnos</option>
           {ENTRENADORES_CLUB.map((e) => <option key={e.id} value={String(e.id)}>{e.nombre}</option>)}
         </Field>
         {grupoAplica && (

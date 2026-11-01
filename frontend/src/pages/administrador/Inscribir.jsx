@@ -11,7 +11,7 @@ export default function Inscribir() {
   const [paso, setPaso] = useState(1)
   const [datos, setDatos] = useState({
     nombres: 'Nicolás Mejía Ruiz', nacimiento: '14 mar. 2016', documento: 'TI 1.032.456.789',
-    categoria: 'Sub-10', posicion: 'Defensa', eps: 'Sura',
+    categoria: 'Semillero', posicion: 'Defensa', eps: 'Sura',
     acudiente: 'Claudia Ruiz', correo: 'claudia.ruiz@correo.com', telefono: '300 123 4567', parentesco: 'Madre',
   })
   const cambiar = (campo) => (e) => setDatos((d) => ({ ...d, [campo]: e.target.value }))

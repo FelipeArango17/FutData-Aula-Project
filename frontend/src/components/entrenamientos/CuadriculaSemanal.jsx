@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { ENTRENADORES } from '../../services/entrenamientosService.js'
 import { diaCorto, diaLargo, formatHora } from '../../utils/fechas.js'
 
-const nombreEntrenador = (id) => ENTRENADORES.find((x) => x.id === id)?.nombre ?? 'Todos los entrenadores'
+const nombreEntrenador = (id) => ENTRENADORES.find((x) => x.id === id)?.nombre ?? 'Por turnos'
 const conGrupo = (e) => (e.grupo ? `${e.categoria} · ${e.grupo}` : e.categoria)
 
 // Cuadrícula semanal (escritorio): columnas Lun a Sáb, una fila por cada hora que tiene entrenamientos.

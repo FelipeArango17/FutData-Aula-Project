@@ -18,8 +18,8 @@ const resolver = async (promesa) => {
   return v
 }
 
-// Sub-11 (id 5, David Mesa = 3): miércoles de 10 a 11
-const datos = (extra = {}) => ({ idCategoria: '5', dia: '3', horaInicio: '10:00', horaFin: '11:00', sede: 'UVA El Paraíso', idEntrenador: '3', grupo: '', ...extra })
+// Sub-11 (id 4, David Mesa = 2): miércoles de 10 a 11
+const datos = (extra = {}) => ({ idCategoria: '4', dia: '3', horaInicio: '10:00', horaFin: '11:00', sede: 'UVA El Paraíso', idEntrenador: '2', grupo: '', ...extra })
 
 describe('listar', () => {
   it('devuelve la plantilla de ejemplo, como copias', async () => {
@@ -70,14 +70,14 @@ describe('editar', () => {
   })
 
   it('guardar sin cambios no choca consigo misma', async () => {
-    const original = (await resolver(servicio.listar())).find((f) => f.idEntrenador === 3)
+    const original = (await resolver(servicio.listar())).find((f) => f.idEntrenador === 2)
     await expect(resolver(servicio.editar(original.id, original))).resolves.toEqual(original)
   })
 
   it('rechaza mover una franja a un horario donde su entrenador ya tiene otra', async () => {
     const lista = await resolver(servicio.listar())
-    const miercoles = lista.find((f) => f.idEntrenador === 3 && f.dia === 3)
-    const jueves = lista.find((f) => f.idEntrenador === 3 && f.dia === 4)
+    const miercoles = lista.find((f) => f.idEntrenador === 2 && f.dia === 3)
+    const jueves = lista.find((f) => f.idEntrenador === 2 && f.dia === 4)
     const error = await resolver(servicio.editar(jueves.id, { ...jueves, dia: 3, horaInicio: miercoles.horaInicio, horaFin: miercoles.horaFin })).catch((e) => e)
     expect(error.codigo).toBe('VALIDACION')
     expect(error.errores.idEntrenador).toBeTruthy()
@@ -91,7 +91,7 @@ describe('editar', () => {
 describe('eliminar', () => {
   it('quita la franja y libera el horario del entrenador', async () => {
     const lista = await resolver(servicio.listar())
-    const miercoles = lista.find((f) => f.idEntrenador === 3 && f.dia === 3)
+    const miercoles = lista.find((f) => f.idEntrenador === 2 && f.dia === 3)
     await expect(resolver(servicio.crear(datos({ horaInicio: miercoles.horaInicio, horaFin: miercoles.horaFin })))).rejects.toMatchObject({ codigo: 'VALIDACION' })
     expect(await resolver(servicio.eliminar(miercoles.id))).toEqual({ id: miercoles.id })
     expect(await resolver(servicio.listar())).toHaveLength(FRANJAS_EJEMPLO.length - 1)
