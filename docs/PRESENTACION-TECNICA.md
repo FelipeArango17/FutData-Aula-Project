@@ -3,21 +3,24 @@
 Sistema de gestión deportiva para la Asociación Deportiva Prado Fútbol Club (PPI, sexto semestre).
 
 > **Esta es la fuente de verdad del proyecto.** El documento PPI ya no se modifica: lo que se decida desde el 1 de noviembre de 2026 se registra aquí. Se actualiza con cada cambio (ver el registro de cambios al final).
-> Última actualización: 1 de noviembre de 2026.
+> Última actualización: 1 de noviembre de 2026 (versión 2: alcance de la entrega final).
+> **Entrega final al jurado: sábado 7 de noviembre de 2026.** Para esa fecha toda la aplicación debe funcionar con datos reales, con los cuatro roles y sin maquetas.
 
 ## 1. Qué es FutData
 
 Una aplicación para administrar un club de fútbol formativo: inscripción de deportistas y acudientes, documentos, categorías, entrenadores, horario de entrenamientos, mensualidades y comprobantes de pago.
 
-Roles: **administrador**, **entrenador** y **acudiente**. El ingreso usa verificación en dos pasos por correo (2FA, flujo en n8n).
+Roles (son **cuatro**): **administrador**, **entrenador**, **tesorero** y **acudiente**. El ingreso usa verificación en dos pasos por correo (2FA, flujo en n8n).
+
+Una aplicación **sin maquetas**: cada pantalla del menú de cada rol se conecta a la API real. Lo que no se alcance a conectar se oculta del menú; no se muestran datos de ejemplo al jurado.
 
 ## 2. Equipo y herramientas
 
 | Quién | Responsabilidad |
 |---|---|
-| Omar Támara | Backend completo (Spring Boot, base de datos, n8n) |
-| Felipe Arango | Frontend |
-| Juan Sebastián | Supabase (apoyo) |
+| Omar Támara | Backend (Spring Boot, base de datos, n8n, Wompi) |
+| Felipe Arango | Frontend y, por definir, módulos de backend (ver sección 9) |
+| Juan Sebastián | Apoyo: colección Postman (HU-057) y revisión de PR. Ya no está en la ruta crítica |
 
 Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-Aula-Project`), ramas desde `develop`, un PR por bloque.
 
@@ -25,7 +28,8 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 
 - **Backend:** Spring Boot 3.5, Java 21, Maven wrapper (`mvnw`), capas controlador, servicio y DAO con JDBC.
 - **Base de datos:** PostgreSQL en Supabase. Migraciones numeradas en `supabase/migrations/` (hoy 001 a 007).
-- **Autenticación:** Supabase Auth, con 2FA por correo.
+- **Autenticación:** Supabase Auth, con 2FA por correo. El backend exige el rol en cada controlador con `@PreAuthorize`. El frontend solo muestra las rutas de un panel si hay sesión verificada **y** el rol de la sesión coincide con el del panel (no se usa el rol guardado en el navegador).
+- **Pagos en línea:** Wompi (pasarela elegida por el equipo; el profesor la pidió expresamente). Se trabaja con el entorno de pruebas (sandbox). El webhook `POST /api/pagos/webhook/wompi` es público y debe **verificar la firma** del evento.
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
@@ -35,7 +39,7 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 
 Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 
-- **categoria:** 9 categorías por **año de nacimiento** (año actual − año de nacimiento).
+- **categoria:** 9 categorías por **año de nacimiento** (año actual − año de nacimiento). **La categoría del deportista se calcula al leer, a partir de su fecha de nacimiento**: así cambia sola cada 1 de enero, sin procesos programados ni actualizaciones masivas. La API devuelve el nombre de la categoría ya calculado.
 
 | Categoría | Edad por año | Nacidos en (2026) |
 |---|---|---|
@@ -50,7 +54,7 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 | Sub-16 | 16 | 2010 |
 
   No se inscribe a nadie fuera de 4–16 años. No existen Sub-8, Sub-9, Sub-10, Formación, Femenino ni Arqueros.
-- **deportista:** tipo de documento TI, RC, CE o PASAPORTE (sin CC). El número de documento es único. Tiene `posicion` (opcional) y `foto`.
+- **deportista:** tipo de documento TI, RC, CE o PASAPORTE (sin CC). El número de documento es único. Tiene `posicion` (opcional), `foto` y `grupo` (`mañana` o `tarde`, opcional, **migración 008**; solo se permite en Cachorros y Semillero, y el backend lo valida; si el deportista cambia a otra categoría, el grupo se descarta).
 - **acudiente** y **acudiente_deportista:** relación N:M (un acudiente puede tener varios jugadores). Pendiente: columna `parentesco` (migración 008).
 - **entrenador:** puede tener varias categorías; cada categoría con responsable tiene uno solo.
 - **entrenamiento:** `lugar` es una de las dos sedes. Hay bloqueo de cruce por categoría y por entrenador (no por lugar).
@@ -63,7 +67,7 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 2. **Documentos del deportista:** TI, RC, CE y PASAPORTE.
 3. **Sedes:** Horizontes y UVA El Paraíso. La sede va **por franja**, no por categoría.
 4. **Horario:** lunes a sábado. Varias categorías pueden coincidir en hora y sede. Un mismo entrenador no puede tener dos franjas ni dos entrenamientos que se solapen. No hay entrenamientos en fechas pasadas.
-5. **Grupo mañana/tarde** (Cachorros y Semillero, martes y jueves): la franja lo guarda; **el grupo de cada deportista solo vive en el front**. El backend no asigna grupos.
+5. **Grupo mañana/tarde** (Cachorros y Semillero, martes y jueves): la franja lo guarda y **el grupo de cada deportista también se guarda en la base** (columna `deportista.grupo`, migración 008). Lo elige el administrador al inscribir o editar; el backend solo lo acepta en Cachorros y Semillero. No cambia el horario ni las categorías.
 6. **Por turnos:** Párvulos, Cachorros y Semillero no tienen entrenador fijo (el club rota quién dirige).
 7. **Documentos de la inscripción (7 tipos):**
    - Obligatorios: `DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`.
@@ -72,6 +76,9 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
    - Archivos PDF, JPG o PNG, máximo 5 MB, validados por su contenido real (no por la extensión).
 8. **Validación de documentos:** el administrador revisa. Mientras no los haya validado, **la inscripción queda pendiente**. Al rechazar un documento el comentario es obligatorio y se envía por correo al acudiente (n8n).
 9. **Alta de entrenador y de acudiente:** sin contraseña temporal. Se envía un enlace para que cada persona cree su propia contraseña.
+10. **Inscripción pendiente:** el estado de la inscripción **se calcula** (no es una columna): está *pendiente* mientras alguno de los 4 documentos obligatorios no esté APROBADO. La API lo devuelve como `estadoInscripcion`. Mientras esté pendiente, el deportista queda **activo**, para que el administrador lo vea en la lista y valide sus documentos.
+11. **Parentesco** (acudiente–deportista): `Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio`, `Otro` (migración 008). El frontend lo muestra con tilde y lo envía sin tilde.
+12. **Protección de pantallas:** sin sesión verificada, cualquier ruta de la aplicación lleva a `/login`; con la sesión de un rol, las rutas de otro rol llevan al inicio del propio.
 
 ## 6. Horario del club (30 franjas)
 
@@ -125,6 +132,8 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 Los endpoints existentes están en `backend/README.md` y en la colección Postman (HU-057, pendiente). Endpoints previstos:
 
 - `GET/POST/PUT/DELETE /api/horario-club` (filtros `categoria`, `entrenador`, `sede`; 409 si el entrenador se cruza).
+- Pagos: crear el cobro (mensualidad), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
+- Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
 - `GET /api/deportistas` paginado (`page`, `size`, `sort`, total; filtro `activo`).
 - `POST/DELETE /api/deportistas/{id}/foto`.
 - Documentos: subir, aprobar y rechazar.
@@ -133,18 +142,52 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 
 ## 9. Estado y plan
 
-| Bloque | Qué incluye | Estado |
+### 9.1 Bloques de base de datos y API ya definidos
+
+| Bloque | Qué incluye | Responsable | Estado |
+|---|---|---|---|
+| 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | Omar | **Hecho** (en `develop` y en la base real) |
+| 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición | Omar | Pendiente |
+| 4 | Horario del club y entrenamientos (HU-026) | Omar | Pendiente |
+| 5 | Alta de entrenadores con enlace y reenvío | Omar | Pendiente |
+| 3 | Documentos: subir, aprobar, rechazar, correo | Omar | Pendiente |
+| 2B | Migración 008 (parentesco y `grupo`) e inscripción única | Omar | Pendiente |
+
+Orden acordado: 2A, 4, 5, 3, 2B.
+
+### 9.2 Módulos nuevos para la entrega final
+
+Estos módulos están en el menú de los cuatro roles y hoy son maquetas. Ninguno estaba en el plan anterior.
+
+| Bloque | Módulo | Quién lo usa | Responsable |
+|---|---|---|---|
+| 6 | **Pagos con Wompi** (cobro, pago en línea, webhook, comprobante PDF, estado de cuenta) | acudiente, tesorero, administrador | Omar (backend) y Felipe (pantallas). **Prioridad alta:** el profesor insistió en este punto; Omar decide si lo adelanta antes del bloque 3 |
+| 7 | Grupos (de entrenamiento) y asistencia | administrador, entrenador | Por definir |
+| 8 | Torneos | administrador, entrenador | Por definir |
+| 9 | Reportes y avisos / notificaciones | tesorero, administrador, acudiente | Por definir |
+| 10 | Dashboard, pantallas de inicio por rol, respaldo, usuarios y roles | todos | Por definir |
+
+Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa en cuanto se acuerde. Migraciones nuevas desde la 009.
+
+### 9.3 Frontend (Felipe)
+
+| Bloque | Qué hace el frontend | Estado |
 |---|---|---|
-| 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | **Hecho** (en `develop` y en la base real) |
-| 2A | API de deportistas: categoría automática, sin CC, paginación, foto | Pendiente |
-| 4 | Horario del club y entrenamientos (HU-026) | Pendiente |
-| 5 | Alta de entrenadores con enlace | Pendiente |
-| 3 | Documentos: subir, aprobar, rechazar, correo | Pendiente |
-| 2B | Migración 008 (parentesco) e inscripción única | Pendiente |
+| F-seg | Protección de rutas: sin sesión verificada no se entra; el rol sale de la sesión | En curso |
+| F0 | `apiClient` con subida de archivos y paginación; interruptor de API real por servicio (como `entrenadoresService`); parentescos alineados; quitar la fecha fija del 22 de octubre | Pendiente |
+| F-2A, F-4, F-5, F-3, F-2B, F-6… | Conectar cada pantalla a su bloque cuando Omar entregue los endpoints | Pendiente |
 
-Orden: 2A, 4, 5, 3, 2B (el 2B reutiliza lo que dejan el 3 y el 5). Backend: Omar. Frontend: Felipe.
+### 9.4 Cuándo se considera terminado un módulo
 
-Parentesco permitido (migración 008): `Madre`, `Padre`, `Abuelo`, `Tia`, `Tio`, `Otro`.
+1. Los datos se guardan en la base real y sobreviven a recargar la página.
+2. Solo los roles correspondientes pueden verlo y usarlo (comprobado con una cuenta de cada rol).
+3. El flujo completo se probó de principio a fin, con sus errores comunes (validaciones, 401, 403, 409).
+4. Hay pruebas automáticas y la documentación de la API está actualizada.
+
+### 9.5 Pendientes de información
+
+- Llaves y cuenta de pruebas (sandbox) de Wompi.
+- Confirmar el reparto de los bloques 7 a 10.
 
 ## 10. Convenciones
 
@@ -152,6 +195,7 @@ Parentesco permitido (migración 008): `Madre`, `Padre`, `Abuelo`, `Tia`, `Tio`,
 - Toda migración se prueba primero en un proyecto de prueba de Supabase y se aplica en la real con backup. Una migración ya aplicada no se edita: se crea una nueva.
 - Las pruebas corren con `.\mvnw.cmd test` desde `backend\` (Docker abierto) y no tocan la base real.
 - Cada bloque termina con este archivo actualizado.
+- Ninguna pantalla muestra datos de ejemplo en la entrega final: lo que no esté conectado a la API se oculta del menú.
 
 ## 11. Registro de cambios
 
@@ -160,3 +204,4 @@ Parentesco permitido (migración 008): `Madre`, `Padre`, `Abuelo`, `Tia`, `Tio`,
 | 2026-11-01 | Se crea el documento. Bloque 1 (migración 007) en `develop` y aplicada en Supabase. 9 categorías, 7 tipos de documento, 30 franjas. |
 | 2026-11-01 | Se congela el PPI; este archivo pasa a ser la fuente de verdad. |
 | 2026-11-01 | Decisiones: la inscripción queda pendiente hasta que el administrador valide los documentos; parentesco = Madre, Padre, Abuelo, Tia, Tio, Otro; el backend es de Omar y el frontend de Felipe. |
+| 2026-11-01 | Versión 2. Entrega final: sábado 7 de noviembre. Son **cuatro roles** (se agrega tesorero). Categoría calculada al leer. `grupo` pasa a la base de datos (migración 008). Inscripción pendiente calculada, con deportista activo. Parentesco incluye Abuela. Se agrega Wompi y los bloques 6 a 10 (pagos, grupos y asistencia, torneos, reportes y avisos, dashboard y respaldo). Se agrega la protección de pantallas por sesión y rol. |
