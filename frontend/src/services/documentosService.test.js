@@ -1,0 +1,161 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// El servicio guarda los datos en memoria a nivel de módulo: cada prueba carga una copia nueva.
+let servicio
+beforeEach(async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 22, 12, 0))
+  vi.resetModules()
+  servicio = await import('./documentosService.js')
+})
+afterEach(() => vi.useRealTimers())
+
+const resolver = async (promesa) => {
+  const resultado = promesa.then((v) => ({ v }), (e) => ({ e }))
+  await vi.runAllTimersAsync()
+  const { v, e } = await resultado
+  if (e) throw e
+  return v
+}
+
+const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
+const otroAdmin = { rol: 'administrador', correo: 'otro.admin@pradofc.co' }
+const archivo = (extra = {}) => ({ name: 'ficha.pdf', type: 'application/pdf', size: 100 * 1024, ...extra })
+const datos = (extra = {}) => ({ tipo: 'FICHA_MEDICA', archivo: archivo(), ...extra })
+
+describe('listarDocumentos', () => {
+  it('trae los de ejemplo de cada deportista y vacío para los demás', async () => {
+    expect((await resolver(servicio.listarDocumentos(1))).map((x) => x.estado).sort()).toEqual(['APROBADO', 'PENDIENTE'])
+    expect((await resolver(servicio.listarDocumentos('2')))).toMatchObject([{ estado: 'RECHAZADO', comentario: expect.stringContaining('borrosa') }])
+    expect(await resolver(servicio.listarDocumentos(6))).toHaveLength(1)
+    expect(await resolver(servicio.listarDocumentos(3))).toEqual([])
+  })
+
+  it('devuelve copias: cambiarlas no cambia el servicio', async () => {
+    const [primero] = await resolver(servicio.listarDocumentos(2))
+    primero.estado = 'APROBADO'
+    expect((await resolver(servicio.listarDocumentos(2)))[0].estado).toBe('RECHAZADO')
+  })
+
+  it('los datos de ejemplo cumplen los límites del backend', async () => {
+    const todos = (await Promise.all([1, 2, 6].map((id) => resolver(servicio.listarDocumentos(id))))).flat()
+    for (const x of todos) {
+      expect(servicio.TIPOS_DOCUMENTO_JUGADOR).toContain(x.tipo)
+      expect(['application/pdf', 'image/jpeg', 'image/png']).toContain(x.tipoContenido)
+      expect(x.tamanoBytes).toBeGreaterThan(0)
+      expect(x.tamanoBytes).toBeLessThanOrEqual(5 * 1024 * 1024)
+    }
+  })
+})
+
+describe('subirDocumento', () => {
+  it('sube uno válido: queda PENDIENTE, con quién lo cargó, y aparece primero en la lista', async () => {
+    const r = await resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2027-01-15' }), admin))
+    expect(r).toMatchObject({
+      idDeportista: 3, tipo: 'FICHA_MEDICA', nombreOriginal: 'ficha.pdf', tipoContenido: 'application/pdf', tamanoBytes: 102400,
+      estado: 'PENDIENTE', comentario: null, fechaVencimiento: '2027-01-15', cargadoPor: 'administrador@pradofc.co', revisadoPor: null, revisadoEn: null,
+    })
+    expect(Number.isNaN(Date.parse(r.cargadoEn))).toBe(false)
+    expect((await resolver(servicio.listarDocumentos(3)))[0].id).toBe(r.id)
+  })
+
+  it('el vencimiento es opcional y la fecha de hoy se permite', async () => {
+    expect((await resolver(servicio.subirDocumento(3, datos(), admin))).fechaVencimiento).toBeNull()
+    expect((await resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '' }), admin))).fechaVencimiento).toBeNull()
+    expect((await resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2026-10-22' }), admin))).fechaVencimiento).toBe('2026-10-22')
+  })
+
+  it('acepta JPG y PNG, no GIF', async () => {
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ name: 'a.jpg', type: 'image/jpeg' }) }), admin))).resolves.toBeTruthy()
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ name: 'a.png', type: 'image/png' }) }), admin))).resolves.toBeTruthy()
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ name: 'a.gif', type: 'image/gif' }) }), admin))).rejects.toMatchObject({ codigo: 'ARCHIVO_INVALIDO' })
+  })
+
+  it('tipo de documento inválido o vacío: VALIDACION por campo y no guarda nada', async () => {
+    for (const tipo of ['', 'CEDULA', undefined]) {
+      await expect(resolver(servicio.subirDocumento(3, datos({ tipo }), admin))).rejects.toMatchObject({
+        codigo: 'VALIDACION', errores: { tipo: 'Selecciona qué tipo de documento es.' },
+      })
+    }
+    expect(await resolver(servicio.listarDocumentos(3))).toEqual([])
+  })
+
+  it('archivo de más de 5 MB: ARCHIVO_INVALIDO con el motivo', async () => {
+    const falla = await resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ size: 6 * 1024 * 1024 }) }), admin)).catch((e) => e)
+    expect(falla).toMatchObject({ codigo: 'ARCHIVO_INVALIDO', message: 'El archivo pesa 6 MB; el máximo es 5 MB.', errores: { archivo: 'El archivo pesa 6 MB; el máximo es 5 MB.' } })
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ size: 5 * 1024 * 1024 }) }), admin))).resolves.toBeTruthy()
+  })
+
+  it('sin archivo o archivo vacío: ARCHIVO_INVALIDO', async () => {
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: null }), admin))).rejects.toMatchObject({ codigo: 'ARCHIVO_INVALIDO' })
+    await expect(resolver(servicio.subirDocumento(3, datos({ archivo: archivo({ size: 0 }) }), admin))).rejects.toMatchObject({ codigo: 'ARCHIVO_INVALIDO' })
+  })
+
+  it('vencimiento pasado (ayer) o inexistente: VALIDACION en ese campo', async () => {
+    await expect(resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2026-10-21' }), admin))).rejects.toMatchObject({
+      codigo: 'VALIDACION', errores: { fechaVencimiento: 'La fecha de vencimiento no puede ser pasada.' },
+    })
+    await expect(resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2027-02-30' }), admin))).rejects.toMatchObject({
+      errores: { fechaVencimiento: 'La fecha de vencimiento no es válida.' },
+    })
+    await expect(resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: 'mañana' }), admin))).rejects.toMatchObject({ codigo: 'VALIDACION' })
+  })
+
+  it('varios campos mal: VALIDACION con todos los errores', async () => {
+    const falla = await resolver(servicio.subirDocumento(3, { tipo: '', archivo: null, fechaVencimiento: '2020-01-01' }, admin)).catch((e) => e)
+    expect(falla.codigo).toBe('VALIDACION')
+    expect(Object.keys(falla.errores).sort()).toEqual(['archivo', 'fechaVencimiento', 'tipo'])
+  })
+
+  it('solo el administrador sube', async () => {
+    for (const actor of [{ rol: 'entrenador' }, { rol: 'acudiente' }, null]) {
+      await expect(resolver(servicio.subirDocumento(3, datos(), actor))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+    }
+    expect(await resolver(servicio.listarDocumentos(3))).toEqual([])
+  })
+})
+
+describe('revisarDocumento', () => {
+  it('aprobar cambia el estado y guarda quién y cuándo revisó', async () => {
+    const r = await resolver(servicio.revisarDocumento(2, { estado: 'APROBADO' }, otroAdmin))
+    expect(r).toMatchObject({ id: 2, estado: 'APROBADO', comentario: null, revisadoPor: 'otro.admin@pradofc.co' })
+    expect(Number.isNaN(Date.parse(r.revisadoEn))).toBe(false)
+    expect((await resolver(servicio.listarDocumentos(1))).find((x) => x.id === 2).estado).toBe('APROBADO')
+  })
+
+  it('rechazar con comentario lo guarda sin espacios en los bordes', async () => {
+    const r = await resolver(servicio.revisarDocumento(2, { estado: 'RECHAZADO', comentario: '  Falta la firma del médico ' }, admin))
+    expect(r).toMatchObject({ estado: 'RECHAZADO', comentario: 'Falta la firma del médico', revisadoPor: 'administrador@pradofc.co' })
+  })
+
+  it('rechazar sin comentario (o solo espacios): VALIDACION en el campo comentario y no cambia nada', async () => {
+    for (const comentario of [undefined, '', '   ']) {
+      await expect(resolver(servicio.revisarDocumento(2, { estado: 'RECHAZADO', comentario }, admin))).rejects.toMatchObject({
+        codigo: 'VALIDACION', errores: { comentario: 'Escribe el motivo del rechazo.' },
+      })
+    }
+    expect((await resolver(servicio.listarDocumentos(1))).find((x) => x.id === 2)).toMatchObject({ estado: 'PENDIENTE', revisadoPor: null })
+  })
+
+  it('el comentario tiene un máximo de 300 caracteres', async () => {
+    await expect(resolver(servicio.revisarDocumento(2, { estado: 'RECHAZADO', comentario: 'a'.repeat(301) }, admin))).rejects.toMatchObject({ codigo: 'VALIDACION' })
+    await expect(resolver(servicio.revisarDocumento(2, { estado: 'RECHAZADO', comentario: 'a'.repeat(300) }, admin))).resolves.toBeTruthy()
+  })
+
+  it('un estado distinto de APROBADO o RECHAZADO es VALIDACION', async () => {
+    for (const estado of ['PENDIENTE', 'OTRO', undefined]) {
+      await expect(resolver(servicio.revisarDocumento(2, { estado }, admin))).rejects.toMatchObject({ codigo: 'VALIDACION', errores: { estado: expect.any(String) } })
+    }
+  })
+
+  it('documento inexistente: DOCUMENTO_NO_EXISTE', async () => {
+    await expect(resolver(servicio.revisarDocumento(999, { estado: 'APROBADO' }, admin))).rejects.toMatchObject({ codigo: 'DOCUMENTO_NO_EXISTE' })
+  })
+
+  it('solo el administrador revisa (el permiso se comprueba antes que la existencia)', async () => {
+    for (const actor of [{ rol: 'entrenador' }, { rol: 'acudiente' }, null]) {
+      await expect(resolver(servicio.revisarDocumento(2, { estado: 'APROBADO' }, actor))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+    }
+    await expect(resolver(servicio.revisarDocumento(999, { estado: 'APROBADO' }, { rol: 'entrenador' }))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+  })
+})

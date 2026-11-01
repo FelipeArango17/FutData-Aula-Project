@@ -36,7 +36,7 @@ export default function Documentos() {
         ))}
       </ul>
       <p className="text-body text-secondary">
-        Formatos PDF o JPG, máximo 5 MB por archivo. Un administrador revisa cada documento.
+        Formatos PDF, JPG o PNG, máximo 5 MB por archivo. Un administrador revisa cada documento.
       </p>
     </Page>
   )

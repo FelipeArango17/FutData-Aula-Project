@@ -6,14 +6,18 @@ import Button from '../../components/ui/Button.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import HistorialCambios from '../../components/ui/HistorialCambios.jsx'
 import Icon from '../../components/Icon.jsx'
+import DocumentosDeportista from '../../components/deportistas/DocumentosDeportista.jsx'
+import SubidaFoto from '../../components/ui/SubidaFoto.jsx'
 import EstadoDeportista from '../../components/deportistas/EstadoDeportista.jsx'
 import FormularioDeportista from '../../components/deportistas/FormularioDeportista.jsx'
 import { useActor } from '../../context/useActor.js'
 import { actualizarDeportista, calcularEdad, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
+import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
 
 // Ficha del deportista (HU-010, tarea 319): lectura y edición. Ruta /administrador/deportistas/:id. Solo el administrador.
 // Figma no tiene una ficha del administrador (la del acudiente es otra pantalla), así que usa los componentes del proyecto.
+// En lectura tiene la foto (arriba) y los documentos (debajo de los datos personales); el formulario de edición no cambia.
 // PENDIENTE: pasar al deportista a activo/inactivo desde la ficha no se hizo (se decide con Juan). Permisos: el servicio simula
 // RF008; en producción lo valida el backend con el JWT.
 const VOLVER = '/administrador/deportistas'
@@ -57,6 +61,7 @@ function Ficha({ id }) {
   const [sesionEdicion, setSesionEdicion] = useState(0)
   const [exito, setExito] = useState(null)
   const [foco, setFoco] = useState(null)
+  const [foto, setFoto] = useState(null) // URL de la foto guardada (en memoria por ahora); si no carga, se muestra sin foto
 
   useEffect(() => {
     tituloRef.current?.focus()
@@ -71,6 +76,16 @@ function Ficha({ id }) {
       activo = false
     }
   }, [id, actor, intento])
+
+  useEffect(() => {
+    let activo = true
+    obtenerFoto(id)
+      .then((url) => activo && setFoto(url))
+      .catch(() => activo && setFoto(null))
+    return () => {
+      activo = false
+    }
+  }, [id])
 
   useEffect(() => {
     if (foco) document.getElementById(foco.id)?.focus()
@@ -98,6 +113,17 @@ function Ficha({ id }) {
     setCarga((previa) => ({ ...previa, ficha: resultado }))
     setModo('lectura')
     setExito({ texto: 'Ficha actualizada.' })
+  }
+
+  async function guardarLaFoto(archivo) {
+    setFoto(await guardarFoto(id, archivo, actor))
+    setExito({ texto: 'Foto actualizada.' })
+  }
+
+  async function quitarLaFoto() {
+    await quitarFoto(id, actor)
+    setFoto(null)
+    setExito({ texto: 'Foto eliminada.' })
   }
 
   // Historial: más reciente primero, con nombres legibles (la categoría se guarda como id)
@@ -159,6 +185,10 @@ function Ficha({ id }) {
     const registro = deportista.creadoPor && deportista.creadoEn ? partesMomento(deportista.creadoEn) : null
     contenido = (
       <>
+        <Card aria-labelledby="foto-deportista" className="flex w-full max-w-2xl flex-col gap-4">
+          <h2 id="foto-deportista" className="break-words text-h3">Foto</h2>
+          <SubidaFoto nombre={`${deportista.nombre} ${deportista.apellido}`} foto={foto} onGuardar={guardarLaFoto} onQuitar={quitarLaFoto} />
+        </Card>
         <Card aria-labelledby="datos-personales" className="flex w-full max-w-2xl flex-col gap-4">
           <h2 id="datos-personales" className="break-words text-h3">Datos personales</h2>
           <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
@@ -190,6 +220,7 @@ function Ficha({ id }) {
             <Button to={VOLVER} variant="secondary">Volver a deportistas</Button>
           </div>
         </Card>
+        <DocumentosDeportista idDeportista={deportista.id} actor={actor} />
         <div className="w-full max-w-2xl">
           <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
         </div>
