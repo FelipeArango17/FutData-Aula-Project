@@ -3,13 +3,14 @@ import Avatar from './Avatar.jsx'
 import Button from './Button.jsx'
 import DialogoConfirmacion from './DialogoConfirmacion.jsx'
 import Icon from '../Icon.jsx'
-import { TIPOS_FOTO, validarArchivo } from '../../utils/archivos.js'
+import { resolverEleccionDeFoto } from '../../utils/eleccionFoto.js'
 
 // Foto con vista previa. No guarda por sí mismo: llama a onGuardar(archivo) y onQuitar(); si fallan, muestra el mensaje del error.
 // props: nombre (para el alt y las iniciales), foto (URL de la foto guardada o null), onGuardar(archivo), onQuitar() (opcional:
-// sin ella no hay "Quitar foto"), deshabilitado, errorInicial (mensaje con el que arranca, para mostrar o probar el estado de error).
+// sin ella no hay "Quitar foto"), guardarAlElegir (si es true, un archivo válido se entrega a onGuardar apenas se elige, sin el
+// botón "Guardar foto": lo usa el asistente de inscripción; la ficha del deportista no lo usa y sigue con "Guardar foto"), deshabilitado, errorInicial (mensaje con el que arranca, para mostrar o probar el estado de error).
 // La vista previa usa URL.createObjectURL; se revoca al elegir otro archivo y al desmontar.
-export default function SubidaFoto({ nombre, foto = null, onGuardar, onQuitar, deshabilitado = false, errorInicial = null }) {
+export default function SubidaFoto({ nombre, foto = null, onGuardar, onQuitar, guardarAlElegir = false, deshabilitado = false, errorInicial = null }) {
   const id = useId()
   const errorId = `${id}-error`
   const entrada = useRef(null)
@@ -30,12 +31,18 @@ export default function SubidaFoto({ nombre, foto = null, onGuardar, onQuitar, d
     if (entrada.current) entrada.current.value = ''
   }
 
-  function elegir(event) {
+  async function elegir(event) {
     const elegido = event.target.files?.[0]
     if (!elegido) return
-    const motivo = validarArchivo(elegido, { tipos: TIPOS_FOTO })
+    if (guardarAlElegir) setOcupado(true)
+    const { error: motivo, pendiente } = await resolverEleccionDeFoto(elegido, { guardarAlElegir, onGuardar })
     setError(motivo)
-    if (motivo) return limpiar()
+    if (guardarAlElegir) {
+      // Sin segundo botón: ya se entregó (o falló). Quien lo usa muestra la foto con la prop `foto`
+      setOcupado(false)
+      return limpiar()
+    }
+    if (!pendiente) return limpiar()
     setArchivo(elegido)
     setVistaPrevia(URL.createObjectURL(elegido))
   }

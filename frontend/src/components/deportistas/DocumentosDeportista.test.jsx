@@ -120,3 +120,11 @@ describe('PanelDocumentos: lista de verificación', () => {
     expect(dibujar({ documentos: null, error: true })).not.toContain('Lista de verificación')
   })
 })
+
+describe('PanelDocumentos: quién subió cada documento', () => {
+  it('la ficha muestra "Cargado por: Administrador" o "Acudiente"', () => {
+    const html = dibujar({ documentos: [{ ...aprobado, cargadoPor: 'Administrador' }, { ...pendiente, cargadoPor: 'Acudiente' }] })
+    expect(html).toContain('Cargado por: Administrador')
+    expect(html).toContain('Cargado por: Acudiente')
+  })
+})
