@@ -8,6 +8,7 @@ import Field from '../../components/ui/Field.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useAuth } from '../../context/AuthContext.js'
 import { inicioDe } from '../../config/menus.js'
+import { rutaDeRetorno } from '../../utils/accesoRutas.js'
 import { MENSAJES as MENSAJES_VALIDACION, requerido, validarCampos, validarCorreo } from '../../utils/validaciones.js'
 
 function validar(valores) {
@@ -65,9 +66,9 @@ export default function Login() {
     if (intentos > 0) formulario.current?.querySelector('[aria-invalid="true"]')?.focus()
   }, [intentos])
 
-  if (estado === 'verificada') return <Navigate to={inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
+  if (estado === 'verificada') return <Navigate to={rutaDeRetorno(location.state?.desde, usuario.rol) ?? inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
   // Sesión de Supabase restaurada sin 2FA en esta pestaña: se vuelve al paso del código, no se entra directo
-  if (estado === 'pendiente' && retomarCodigo) return <Navigate to="/verificar" replace />
+  if (estado === 'pendiente' && retomarCodigo) return <Navigate to="/verificar" state={{ desde: location.state?.desde }} replace />
 
   function cambiar(campo, valor) {
     setValores({ ...valores, [campo]: valor })
@@ -88,7 +89,7 @@ export default function Login() {
       setAvisoOk(null)
       const resultado = await iniciarSesion(valores.correo, valores.contrasena)
       // Equipo de confianza vigente: la sesión ya queda verificada y la guardia de arriba lleva al panel, sin pedir el código
-      if (resultado === 'pendiente') navigate('/verificar')
+      if (resultado === 'pendiente') navigate('/verificar', { state: { desde: location.state?.desde } })
     } catch (error) {
       const id = Date.now()
       if (error.codigo === 'RED') {

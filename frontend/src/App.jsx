@@ -15,17 +15,19 @@ import { useAuth } from './context/AuthContext.js'
 import EntrenadoresProvider from './context/EntrenadoresProvider.jsx'
 import EntrenamientosProvider from './context/EntrenamientosProvider.jsx'
 import { useRole } from './context/RoleContext.js'
+import EsperaSesion from './components/EsperaSesion.jsx'
 import { roles, menus, getItems } from './config/menus.js'
 
 // Cualquier ruta desconocida va al inicio del rol activo.
 function RedirectToRole() {
   const { role } = useRole()
-  return <Navigate to={`/${role}`} replace />
+  return <Navigate to={role ? `/${role}` : '/login'} replace />
 }
 
 // "/" lleva al panel del rol si la sesión ya está verificada; si no, al inicio de sesión.
 function Inicio() {
-  const { estado, usuario } = useAuth()
+  const { estado, usuario, restaurada } = useAuth()
+  if (!restaurada) return <EsperaSesion />
   return <Navigate to={estado === 'verificada' ? `/${usuario.rol}` : '/login'} replace />
 }
 
@@ -33,8 +35,8 @@ function App() {
   return (
     <BrowserRouter>
       <AccesibilidadProvider>
-        <RoleProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <RoleProvider>
             <EntrenamientosProvider>
               <Routes>
                 {/* Pantallas públicas: fuera del AppShell */}
@@ -65,8 +67,8 @@ function App() {
                 <Route path="*" element={<RedirectToRole />} />
               </Routes>
             </EntrenamientosProvider>
-          </AuthProvider>
-        </RoleProvider>
+          </RoleProvider>
+        </AuthProvider>
       </AccesibilidadProvider>
     </BrowserRouter>
   )

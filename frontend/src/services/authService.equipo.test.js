@@ -221,7 +221,7 @@ describe('localStorage con errores', () => {
 })
 
 describe('cerrarSesion (sesión de este equipo)', () => {
-  it('deja el estado vacío, borra la sesión y NO toca el equipo de confianza ni el rol de desarrollo', async () => {
+  it('deja el estado vacío, borra la sesión y borra el rol de desarrollo y NO toca el equipo de confianza', async () => {
     const sesion = await import('../context/sesion.js')
     almacen.setItem('futdata.rol', 'administrador')
     await recordar()
@@ -234,7 +234,7 @@ describe('cerrarSesion (sesión de este equipo)', () => {
     expect(sessionStorage.getItem(sesion.CLAVE_SESION)).toBe(null)
     expect(sesion.leerSesion()).toEqual({ estado: 'sin-sesion', usuario: null })
     expect(guardados()).toHaveLength(1)
-    expect(almacen.getItem('futdata.rol')).toBe('administrador')
+    expect(almacen.getItem('futdata.rol')).toBe(null) // el rol de desarrollo se borra al cerrar sesión
   })
 
   it('limpiarSesion no lanza si sessionStorage falla', async () => {

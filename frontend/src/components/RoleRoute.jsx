@@ -1,9 +1,12 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { useRole } from '../context/RoleContext.js'
+import { Outlet } from 'react-router-dom'
+import Guardia from './Guardia.jsx'
 
-// Deja pasar solo si el rol activo es el de la ruta; si no, manda al inicio del rol activo.
+// Deja pasar solo con la sesión verificada y si el rol de la sesión es el de la ruta. Sin sesión va a /login (y vuelve
+// después); con otro rol, al inicio del rol de la persona.
 export default function RoleRoute({ role }) {
-  const { role: activeRole } = useRole()
-  if (role !== activeRole) return <Navigate to={`/${activeRole}`} replace />
-  return <Outlet />
+  return (
+    <Guardia rolRuta={role}>
+      <Outlet />
+    </Guardia>
+  )
 }

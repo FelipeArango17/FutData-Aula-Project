@@ -28,11 +28,16 @@ export function guardarSesion(sesion) {
   }
 }
 
-// Cierra la sesión de ESTE equipo: borra la clave y devuelve el estado vacío. No toca la marca de equipo de confianza
-// (futdata.equipoConfiable) ni el rol de desarrollo (futdata.rol).
+// Cierra la sesión de ESTE equipo: borra la clave y el rol de desarrollo (futdata.rol) y devuelve el estado vacío. No toca
+// la marca de equipo de confianza (futdata.equipoConfiable).
 export function limpiarSesion() {
   try {
     sessionStorage.removeItem(CLAVE_SESION)
+  } catch {
+    // sin almacenamiento
+  }
+  try {
+    localStorage.removeItem('futdata.rol')
   } catch {
     // sin almacenamiento
   }
