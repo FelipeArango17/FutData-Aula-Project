@@ -215,16 +215,20 @@ describe('los inscritos en línea y el resto del sistema', () => {
   it('el campo origen, el contacto y el consentimiento no son editables ni aparecen como cambios en el historial', async () => {
     await resolver(inscripcion.crearInscripcion(datos()))
     const { id } = await porDocumento('1200000001')
-    const r = await resolver(deportistas.actualizarDeportista(id, { telefono: '3000000077', origen: 'Otro', contactoAcudiente: { nombre: 'X' }, consentimiento: { aceptado: false } }, admin))
+    const r = await resolver(deportistas.actualizarDeportista(id, { telefono: '3000000077', grupoEntrenamiento: 'tarde', origen: 'Otro', contactoAcudiente: { nombre: 'X' }, consentimiento: { aceptado: false } }, admin))
     expect(r.deportista.origen).toBe('Inscripción en línea')
     expect(r.deportista.contactoAcudiente.nombre).toBe('Marta')
     expect(r.deportista.consentimiento.aceptado).toBe(true)
     expect(r.deportista.telefono).toBe('3000000077')
-    expect(r.historial[0].cambios).toEqual([{ campo: 'telefono', antes: '3000000099', despues: '3000000077' }])
+    // El inscrito en línea nace sin grupo; al nacer en 2017 (Semillero) el administrador debe elegirlo al editar
+    expect(r.historial[0].cambios).toEqual([
+      { campo: 'telefono', antes: '3000000099', despues: '3000000077' },
+      { campo: 'grupoEntrenamiento', antes: null, despues: 'tarde' },
+    ])
   })
 
   it('los registros del administrador no cambian: no traen origen ni contacto', async () => {
-    const r = await resolver(deportistas.crearDeportista({ ...datos(), idCategoria: '' }, admin))
+    const r = await resolver(deportistas.crearDeportista({ ...datos(), idCategoria: '', grupoEntrenamiento: 'mañana' }, admin))
     expect('origen' in r).toBe(false)
     expect('contactoAcudiente' in r).toBe(false)
     expect(r.creadoPor).toBe('administrador@pradofc.co')

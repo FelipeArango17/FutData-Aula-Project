@@ -2,10 +2,10 @@
 // Franja = { id, idCategoria, dia (1 = lunes … 6 = sábado), horaInicio "HH:mm", horaFin "HH:mm", sede, idEntrenador | null, grupo }
 // (ver services/horarioClubData.js). idEntrenador null = "Por turnos": no genera choque de entrenador.
 import { esHoraValida, sumarDias } from './fechas.js'
-import { NOMBRES_CATEGORIAS } from './categorias.js'
+import { CATEGORIAS_CON_GRUPO, NOMBRES_CATEGORIAS } from './categorias.js'
 
 export const SEDES_CLUB = ['Horizontes', 'UVA El Paraíso']
-export const CATEGORIAS_CON_GRUPO = ['Cachorros', 'Semillero']
+export { CATEGORIAS_CON_GRUPO }
 
 export const MENSAJES_FRANJA = {
   categoria: 'Selecciona la categoría.',

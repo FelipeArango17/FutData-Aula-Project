@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import CamposDeportista from './CamposDeportista.jsx'
 import CampoFechaNacimiento from '../ui/CampoFechaNacimiento.jsx'
-import { TIPOS_DOCUMENTO_DEPORTISTA, aplicarCambio, validarDatosDeportista } from '../../services/deportistasService.js'
+import { POSICIONES, TIPOS_DOCUMENTO_DEPORTISTA, aplicarCambio, validarDatosDeportista } from '../../services/deportistasService.js'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -93,7 +93,7 @@ describe('tipo de documento del deportista', () => {
 })
 
 describe('validación del rango de años y del tipo de documento', () => {
-  const base = { nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento: '2016-05-10', telefono: '3001234567', direccion: 'Calle 50 # 10-20' }
+  const base = { nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento: '2016-05-10', telefono: '3001234567', direccion: 'Calle 50 # 10-20', grupoEntrenamiento: 'mañana' }
 
   it('2010 y 2022 pasan; 2009 y 2023 se rechazan con los años calculados en el mensaje', () => {
     expect(validarDatosDeportista({ ...base, fechaNacimiento: '2010-01-01' })).toEqual({})
@@ -111,5 +111,62 @@ describe('validación del rango de años y del tipo de documento', () => {
 
   it('la cédula de ciudadanía se rechaza con el mensaje de tipo de documento que ya existía', () => {
     expect(validarDatosDeportista({ ...base, tipoDocumento: 'Cédula de ciudadanía' })).toEqual({ tipoDocumento: 'Selecciona el tipo de documento.' })
+  })
+})
+
+describe('Grupo de entrenamiento y posición en el formulario', () => {
+  const base = { nombre: 'Lucas', apellido: 'Pérez', tipoDocumento: 'Tarjeta de identidad', documento: '1200000001', fechaNacimiento: '2016-05-10', telefono: '3001234567', direccion: 'Calle 50 # 10-20', grupoEntrenamiento: '', posicion: '' }
+  const MENSAJE = 'Selecciona el grupo de entrenamiento: mañana o tarde.'
+
+  it('el campo aparece solo si la categoría de la fecha es Cachorros o Semillero', () => {
+    for (const fecha of ['2016-05-10', '2017-12-31', '2018-03-14', '2019-01-01']) {
+      expect(dibujar({ fechaNacimiento: fecha }), fecha).toContain('Grupo de entrenamiento')
+    }
+    for (const fecha of ['', '2021-05-10', '2015-05-10', '2012-05-10', '2010-01-01']) {
+      expect(dibujar({ fechaNacimiento: fecha }), fecha).not.toContain('grupoEntrenamiento')
+    }
+  })
+
+  it('es un select obligatorio con mañana y tarde', () => {
+    const html = dibujar({ fechaNacimiento: '2016-05-10' })
+    expect(html).toMatch(/<label[^>]*>Grupo de entrenamiento<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/label>/)
+    expect(html).toContain('>Mañana</option>')
+    expect(html).toContain('>Tarde</option>')
+  })
+
+  it('la posición es opcional y ofrece las cuatro posiciones; la inscripción en línea no muestra ni grupo ni posición', () => {
+    const html = dibujar({ fechaNacimiento: '2012-05-10' })
+    expect(html).toContain('Posición (opcional)')
+    for (const p of ['Portero', 'Defensor', 'Mediocampista', 'Delantero']) expect(html).toContain(`>${p}</option>`)
+    expect(POSICIONES).toEqual(['Portero', 'Defensor', 'Mediocampista', 'Delantero'])
+    const enLinea = dibujar({ fechaNacimiento: '2016-05-10' }, { mostrarCategoria: false })
+    expect(enLinea).not.toContain('Grupo de entrenamiento')
+    expect(enLinea).not.toContain('Posición')
+  })
+
+  it('el grupo es obligatorio solo en Cachorros y Semillero', () => {
+    for (const fecha of ['2016-05-10', '2017-05-10', '2018-05-10', '2019-05-10']) {
+      expect(validarDatosDeportista({ ...base, fechaNacimiento: fecha }), fecha).toEqual({ grupoEntrenamiento: MENSAJE })
+      expect(validarDatosDeportista({ ...base, fechaNacimiento: fecha, grupoEntrenamiento: 'tarde' }), fecha).toEqual({})
+    }
+    for (const fecha of ['2022-05-10', '2020-05-10', '2015-05-10', '2010-05-10']) expect(validarDatosDeportista({ ...base, fechaNacimiento: fecha }), fecha).toEqual({})
+    expect(validarDatosDeportista({ ...base, grupoEntrenamiento: 'noche' })).toEqual({ grupoEntrenamiento: MENSAJE })
+  })
+
+  it('la inscripción en línea no pide grupo', () => {
+    expect(validarDatosDeportista({ ...base, grupoEntrenamiento: undefined }, undefined, { grupo: false })).toEqual({})
+  })
+
+  it('la posición vacía vale; una que no está en la lista se rechaza', () => {
+    expect(validarDatosDeportista({ ...base, grupoEntrenamiento: 'tarde', posicion: 'Portero' })).toEqual({})
+    expect(validarDatosDeportista({ ...base, grupoEntrenamiento: 'tarde', posicion: 'Árbitro' })).toEqual({ posicion: 'Selecciona una posición de la lista.' })
+  })
+
+  it('al cambiar la fecha a una categoría sin grupo, el grupo se limpia; si sigue con grupo, se conserva', () => {
+    const valores = { ...base, grupoEntrenamiento: 'tarde' }
+    expect(aplicarCambio(valores, 'fechaNacimiento', '2012-05-10').grupoEntrenamiento).toBe('')
+    expect(aplicarCambio(valores, 'fechaNacimiento', '2018-05-10').grupoEntrenamiento).toBe('tarde')
+    expect(aplicarCambio(valores, 'fechaNacimiento', '2017-05-10').grupoEntrenamiento).toBe('tarde')
+    expect(aplicarCambio(valores, 'fechaNacimiento', '').grupoEntrenamiento).toBe('')
   })
 })

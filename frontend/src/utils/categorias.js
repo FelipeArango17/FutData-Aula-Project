@@ -43,11 +43,20 @@ export function idCategoriaAlGuardar(fechaNacimiento, inicial, categorias, hoy =
 // Aviso corto para las listas: la edad que se ve es la cumplida, la categoría sale del año
 export const NOTA_CATEGORIA_POR_ANIO = 'La categoría se define por año de nacimiento, no por edad cumplida.'
 
-// Años de nacimiento de una categoría: "nacidos en 2016", "nacidos en 2018 y 2019" o "nacidos de 2020 a 2022". null si no existe.
-export function textoAniosCategoria(nombre, hoy = hoyLocal()) {
-  const categoria = CATEGORIAS_POR_EDAD.find((c) => c.nombre === nombre)
-  if (!categoria) return null
-  const [desde, hasta] = [anioDe(hoy) - categoria.edadMaxima, anioDe(hoy) - categoria.edadMinima]
-  if (desde === hasta) return `nacidos en ${desde}`
-  return hasta - desde === 1 ? `nacidos en ${desde} y ${hasta}` : `nacidos de ${desde} a ${hasta}`
+// Grupo de entrenamiento: solo Cachorros y Semillero lo tienen (las dos sesiones alternativas de martes y jueves: mañana o tarde,
+// según el horario del colegio). El club decidió que el grupo no se guarda en la base de datos: vive solo en el frontend de ejemplo.
+export const CATEGORIAS_CON_GRUPO = ['Cachorros', 'Semillero']
+export const GRUPOS_ENTRENAMIENTO = ['mañana', 'tarde']
+export const ETIQUETA_GRUPO = 'Grupo de entrenamiento'
+
+// ¿Esta categoría (por nombre) exige grupo?
+export const categoriaRequiereGrupo = (nombreCategoria) => CATEGORIAS_CON_GRUPO.includes(nombreCategoria)
+
+// El grupo que se conserva al cambiar de categoría: el mismo si la nueva categoría lo exige, '' (vacío) si no
+export const grupoSegunCategoria = (grupo, nombreCategoria) => (categoriaRequiereGrupo(nombreCategoria) ? grupo ?? '' : '')
+
+// Texto para listas y fichas: "Semillero · mañana", o solo el nombre ("Sub-12") si no hay grupo; "Sin asignar" sin categoría
+export function textoCategoriaConGrupo(nombreCategoria, grupo) {
+  if (!nombreCategoria) return 'Sin asignar'
+  return categoriaRequiereGrupo(nombreCategoria) && grupo ? `${nombreCategoria} · ${grupo}` : nombreCategoria
 }

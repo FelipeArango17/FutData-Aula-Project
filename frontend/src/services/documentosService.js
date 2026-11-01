@@ -1,11 +1,12 @@
-// Documentos del deportista (documento de identidad, ficha médica...). Por ahora en MEMORIA: no se sube ningún archivo a ningún
+// Documentos del deportista (los 7 tipos del club, en utils/documentosClub.js; la foto tipo documento es la foto de perfil y no se sube aquí). Por ahora en MEMORIA: no se sube ningún archivo a ningún
 // servidor; solo se guardan los datos del archivo (nombre, tipo y tamaño). Las funciones son async y lanzan errores con `codigo`,
 // como deportistasService, para cambiarlas luego por Supabase Storage + endpoints del backend sin tocar las pantallas.
 //
 // Forma de datos (tabla `documento` del backend):
 //   Documento = { id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, estado, comentario, fechaVencimiento,
 //                 cargadoPor, cargadoEn, revisadoPor, revisadoEn }
-//     tipo              'DOCUMENTO_IDENTIDAD' | 'FICHA_MEDICA' | 'PERMISO' | 'CONTRATO' | 'OTRO'
+//     tipo              uno de IDS_TIPOS_DOCUMENTO (utils/documentosClub.js): 'DOCUMENTO_IDENTIDAD' | 'CERTIFICADO_ESTUDIO' |
+//                       'FORMULARIO_INSCRIPCION' | 'AUTORIZACION_HABEAS_DATA' | 'PAZ_Y_SALVO' | 'CARTA_RENUNCIA' | 'TRASPASO_NACIONAL'
 //     tipoContenido     application/pdf, image/jpeg o image/png; tamanoBytes de 1 byte a 5 MB (utils/archivos.js)
 //     estado            'PENDIENTE' | 'APROBADO' | 'RECHAZADO'
 //     comentario        del administrador (obligatorio al rechazar); null si no hay
@@ -22,11 +23,11 @@
 // Solo el administrador sube o revisa documentos (el servicio lo simula; en producción lo valida el backend con el JWT).
 import { TIPOS_DOCUMENTO, validarArchivo } from '../utils/archivos.js'
 import { esFechaValida, hoyLocal } from '../utils/fechas.js'
+import { IDS_TIPOS_DOCUMENTO, NOMBRES_TIPO_DOCUMENTO } from '../utils/documentosClub.js'
 
-export const TIPOS_DOCUMENTO_JUGADOR = ['DOCUMENTO_IDENTIDAD', 'FICHA_MEDICA', 'PERMISO', 'CONTRATO', 'OTRO']
-export const ETIQUETAS_TIPO_DOCUMENTO_JUGADOR = {
-  DOCUMENTO_IDENTIDAD: 'Documento de identidad', FICHA_MEDICA: 'Ficha médica', PERMISO: 'Permiso', CONTRATO: 'Contrato', OTRO: 'Otro',
-}
+// Los tipos y sus nombres cortos viven en utils/documentosClub.js; aquí solo se reexportan para las pantallas y el servicio.
+export const TIPOS_DOCUMENTO_JUGADOR = IDS_TIPOS_DOCUMENTO
+export const ETIQUETAS_TIPO_DOCUMENTO_JUGADOR = NOMBRES_TIPO_DOCUMENTO
 export const ESTADOS_DOCUMENTO = ['PENDIENTE', 'APROBADO', 'RECHAZADO']
 export const ETIQUETAS_ESTADO_DOCUMENTO = { PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', RECHAZADO: 'Rechazado' }
 export const COMENTARIO_MAXIMO = 300
@@ -37,17 +38,23 @@ const d = (id, idDeportista, tipo, nombreOriginal, tipoContenido, tamanoBytes, e
   cargadoPor: ADMIN_DEMO, cargadoEn: '2026-10-05T14:30:00.000Z', revisadoPor: null, revisadoEn: null, ...extra,
 })
 
-// Archivos ficticios (no existen). Santiago (1): identidad aprobada y ficha médica pendiente; Valeria (2): identidad rechazada;
-// Mateo (6): ficha médica aprobada. Los demás no tienen documentos (estado vacío).
+// Archivos ficticios (no existen). Santiago (1): identidad aprobada, certificado pendiente y formulario aprobado;
+// Valeria (2): identidad rechazada y Habeas Data pendiente; Mateo (6): los 4 obligatorios aprobados (identidad, certificado,
+// formulario y Habeas Data) y un paz y salvo pendiente. Los demás no tienen documentos (estado vacío).
+// La foto tipo documento no está aquí: es la foto de perfil (fotosService).
 let documentos = [
   d(1, 1, 'DOCUMENTO_IDENTIDAD', 'registro-civil-ejemplo.pdf', 'application/pdf', 245 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-06T16:00:00.000Z' }),
-  d(2, 1, 'FICHA_MEDICA', 'ficha-medica-ejemplo.jpg', 'image/jpeg', Math.round(1.8 * 1024 * 1024), 'PENDIENTE', { fechaVencimiento: '2027-03-01', cargadoEn: '2026-10-20T15:10:00.000Z' }),
+  d(2, 1, 'CERTIFICADO_ESTUDIO', 'certificado-estudio-ejemplo.jpg', 'image/jpeg', Math.round(1.8 * 1024 * 1024), 'PENDIENTE', { cargadoEn: '2026-10-20T15:10:00.000Z' }),
   d(3, 2, 'DOCUMENTO_IDENTIDAD', 'documento-ejemplo-borroso.png', 'image/png', 890 * 1024, 'RECHAZADO', {
     comentario: 'La imagen está borrosa; sube una foto más clara.', revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-08T13:45:00.000Z',
   }),
-  d(4, 6, 'FICHA_MEDICA', 'ficha-medica-mateo-ejemplo.pdf', 'application/pdf', 512 * 1024, 'APROBADO', {
-    fechaVencimiento: '2027-06-30', revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:20:00.000Z',
-  }),
+  d(4, 6, 'DOCUMENTO_IDENTIDAD', 'tarjeta-identidad-mateo-ejemplo.pdf', 'application/pdf', 512 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:20:00.000Z' }),
+  d(5, 1, 'FORMULARIO_INSCRIPCION', 'formulario-inscripcion-ejemplo.pdf', 'application/pdf', 410 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-10-06T16:10:00.000Z' }),
+  d(6, 2, 'AUTORIZACION_HABEAS_DATA', 'habeas-data-ejemplo.pdf', 'application/pdf', 150 * 1024, 'PENDIENTE', { cargadoEn: '2026-10-21T13:00:00.000Z' }),
+  d(7, 6, 'CERTIFICADO_ESTUDIO', 'certificado-estudio-mateo-ejemplo.pdf', 'application/pdf', 600 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:30:00.000Z' }),
+  d(8, 6, 'FORMULARIO_INSCRIPCION', 'formulario-inscripcion-mateo-ejemplo.pdf', 'application/pdf', 380 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:35:00.000Z' }),
+  d(9, 6, 'AUTORIZACION_HABEAS_DATA', 'habeas-data-mateo-ejemplo.pdf', 'application/pdf', 140 * 1024, 'APROBADO', { revisadoPor: ADMIN_DEMO, revisadoEn: '2026-09-30T17:40:00.000Z' }),
+  d(10, 6, 'PAZ_Y_SALVO', 'paz-y-salvo-mateo-ejemplo.pdf', 'application/pdf', 200 * 1024, 'PENDIENTE', { cargadoEn: '2026-10-21T10:00:00.000Z' }),
 ]
 let siguienteId = documentos.length + 1
 

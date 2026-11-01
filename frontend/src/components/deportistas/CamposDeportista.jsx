@@ -1,13 +1,16 @@
 import Field from '../ui/Field.jsx'
 import CampoFechaNacimiento from '../ui/CampoFechaNacimiento.jsx'
-import { TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad } from '../../services/deportistasService.js'
-import { categoriaPorFecha, rangoAniosNacimiento } from '../../utils/categorias.js'
+import { POSICIONES, TIPOS_DOCUMENTO_DEPORTISTA, calcularEdad } from '../../services/deportistasService.js'
+import { ETIQUETA_GRUPO, GRUPOS_ENTRENAMIENTO, categoriaPorFecha, categoriaRequiereGrupo, rangoAniosNacimiento } from '../../utils/categorias.js'
 import { hoyLocal } from '../../utils/fechas.js'
 import { validarFechaNacimiento } from '../../utils/validaciones.js'
 
 // Campos de los datos personales de un deportista. Los comparten el formulario del administrador (FormularioDeportista)
 // y la inscripción en línea. No guardan nada: reciben texto(campo) -> { value, error, onChange } de quien los usa.
-// props: texto, fechaNacimiento (para la edad y la categoría en vivo) y mostrarCategoria (la inscripción en línea no la muestra)
+// props: texto, fechaNacimiento (para la edad y la categoría en vivo) y mostrarCategoria (la inscripción en línea no la muestra,
+// ni el grupo de entrenamiento ni la posición, que son datos del club).
+// El grupo de entrenamiento solo aparece (y es obligatorio) si la categoría que da la fecha es Cachorros o Semillero. El club decidió
+// que el grupo no se guarda en la base de datos; la posición es opcional.
 // La edad y la categoría NO son datos: se derivan de la fecha de nacimiento (con hoyLocal(), el mismo "hoy" de la validación).
 // La categoría sale del AÑO de nacimiento (utils/categorias.js, regla provisional); quien guarda busca su id por nombre.
 const textoEdad = (fechaNacimiento, hoy) => {
@@ -77,6 +80,18 @@ export default function CamposDeportista({ texto, fechaNacimiento, mostrarCatego
           <Field label="Categoría" id="categoria" readOnly value={categoriaPorFecha(fechaNacimiento, hoy) ?? '—'} describedBy="categoria-ayuda" className={soloLectura} />
           <p id="categoria-ayuda" className="break-words text-small text-secondary">Se asigna automáticamente según el año de nacimiento.</p>
         </div>
+      )}
+      {mostrarCategoria && categoriaRequiereGrupo(categoriaPorFecha(fechaNacimiento, hoy)) && (
+        <Field label={ETIQUETA_GRUPO} id="grupoEntrenamiento" requerido as="select" {...texto('grupoEntrenamiento')}>
+          <option value="">Selecciona el grupo</option>
+          {GRUPOS_ENTRENAMIENTO.map((g) => <option key={g} value={g}>{g[0].toUpperCase() + g.slice(1)}</option>)}
+        </Field>
+      )}
+      {mostrarCategoria && (
+        <Field label="Posición (opcional)" id="posicion" as="select" {...texto('posicion')}>
+          <option value="">Sin definir</option>
+          {POSICIONES.map((p) => <option key={p} value={p}>{p}</option>)}
+        </Field>
       )}
       <Field label="Teléfono de contacto" id="telefono" requerido type="tel" inputMode="numeric" autoComplete="off" {...texto('telefono')} />
       <Field label="Dirección" id="direccion" requerido autoComplete="off" {...texto('direccion')} />

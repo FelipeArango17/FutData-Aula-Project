@@ -7,10 +7,10 @@ import FilterChips from '../../components/ui/FilterChips.jsx'
 
 const filtros = ['Pendientes', 'Aprobados', 'Por vencer']
 const documentos = [
-  { quien: 'Juan Pablo Cano', detalle: 'Ficha médica · subida hoy', estado: 'Por revisar', tone: 'warning' },
-  { quien: 'Mateo Vélez', detalle: 'Registro civil · subido ayer', estado: 'Por revisar', tone: 'warning' },
-  { quien: 'Valeria Ríos', detalle: 'Ficha médica · vence el 05 nov.', estado: 'Por vencer', tone: 'warning' },
-  { quien: 'Tomás Giraldo', detalle: 'Seguro estudiantil · subido hace 2 días', estado: 'Por revisar', tone: 'warning' },
+  { quien: 'Juan Pablo Cano', detalle: 'Certificado de estudio · subido hoy', estado: 'Por revisar', tone: 'warning' },
+  { quien: 'Mateo Vélez', detalle: 'Paz y salvo · subido ayer', estado: 'Por revisar', tone: 'warning' },
+  { quien: 'Valeria Ríos', detalle: 'Certificado de estudio · vence el 05 nov.', estado: 'Por vencer', tone: 'warning' },
+  { quien: 'Tomás Giraldo', detalle: 'Formulario de inscripción · subido hace 2 días', estado: 'Por revisar', tone: 'warning' },
 ]
 
 export default function Documentos() {

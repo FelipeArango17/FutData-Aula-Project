@@ -21,20 +21,22 @@ const resolver = async (promesa) => {
 const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
 const otroAdmin = { rol: 'administrador', correo: 'otro.admin@pradofc.co' }
 const archivo = (extra = {}) => ({ name: 'ficha.pdf', type: 'application/pdf', size: 100 * 1024, ...extra })
-const datos = (extra = {}) => ({ tipo: 'FICHA_MEDICA', archivo: archivo(), ...extra })
+const datos = (extra = {}) => ({ tipo: 'CERTIFICADO_ESTUDIO', archivo: archivo(), ...extra })
 
 describe('listarDocumentos', () => {
   it('trae los de ejemplo de cada deportista y vacío para los demás', async () => {
-    expect((await resolver(servicio.listarDocumentos(1))).map((x) => x.estado).sort()).toEqual(['APROBADO', 'PENDIENTE'])
-    expect((await resolver(servicio.listarDocumentos('2')))).toMatchObject([{ estado: 'RECHAZADO', comentario: expect.stringContaining('borrosa') }])
-    expect(await resolver(servicio.listarDocumentos(6))).toHaveLength(1)
+    expect((await resolver(servicio.listarDocumentos(1))).map((x) => x.estado).sort()).toEqual(['APROBADO', 'APROBADO', 'PENDIENTE'])
+    const valeria = await resolver(servicio.listarDocumentos('2'))
+    expect(valeria).toHaveLength(2)
+    expect(valeria.find((x) => x.estado === 'RECHAZADO')).toMatchObject({ tipo: 'DOCUMENTO_IDENTIDAD', comentario: expect.stringContaining('borrosa') })
+    expect(await resolver(servicio.listarDocumentos(6))).toHaveLength(5)
     expect(await resolver(servicio.listarDocumentos(3))).toEqual([])
   })
 
   it('devuelve copias: cambiarlas no cambia el servicio', async () => {
-    const [primero] = await resolver(servicio.listarDocumentos(2))
-    primero.estado = 'APROBADO'
-    expect((await resolver(servicio.listarDocumentos(2)))[0].estado).toBe('RECHAZADO')
+    const rechazado = (await resolver(servicio.listarDocumentos(2))).find((x) => x.estado === 'RECHAZADO')
+    rechazado.estado = 'APROBADO'
+    expect((await resolver(servicio.listarDocumentos(2))).find((x) => x.id === rechazado.id).estado).toBe('RECHAZADO')
   })
 
   it('los datos de ejemplo cumplen los límites del backend', async () => {
@@ -52,7 +54,7 @@ describe('subirDocumento', () => {
   it('sube uno válido: queda PENDIENTE, con quién lo cargó, y aparece primero en la lista', async () => {
     const r = await resolver(servicio.subirDocumento(3, datos({ fechaVencimiento: '2027-01-15' }), admin))
     expect(r).toMatchObject({
-      idDeportista: 3, tipo: 'FICHA_MEDICA', nombreOriginal: 'ficha.pdf', tipoContenido: 'application/pdf', tamanoBytes: 102400,
+      idDeportista: 3, tipo: 'CERTIFICADO_ESTUDIO', nombreOriginal: 'ficha.pdf', tipoContenido: 'application/pdf', tamanoBytes: 102400,
       estado: 'PENDIENTE', comentario: null, fechaVencimiento: '2027-01-15', cargadoPor: 'administrador@pradofc.co', revisadoPor: null, revisadoEn: null,
     })
     expect(Number.isNaN(Date.parse(r.cargadoEn))).toBe(false)
@@ -157,5 +159,25 @@ describe('revisarDocumento', () => {
       await expect(resolver(servicio.revisarDocumento(2, { estado: 'APROBADO' }, actor))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
     }
     await expect(resolver(servicio.revisarDocumento(999, { estado: 'APROBADO' }, { rol: 'entrenador' }))).rejects.toMatchObject({ codigo: 'SIN_PERMISO' })
+  })
+})
+
+describe('tipos de documento del club', () => {
+  it('son los 7 que se pueden subir, con los identificadores internos, sin Ficha médica y sin Foto tipo documento (es la foto de perfil)', () => {
+    expect(servicio.TIPOS_DOCUMENTO_JUGADOR).toEqual([
+      'DOCUMENTO_IDENTIDAD', 'CERTIFICADO_ESTUDIO', 'FORMULARIO_INSCRIPCION',
+      'AUTORIZACION_HABEAS_DATA', 'PAZ_Y_SALVO', 'CARTA_RENUNCIA', 'TRASPASO_NACIONAL',
+    ])
+    expect(servicio.TIPOS_DOCUMENTO_JUGADOR).not.toContain('FICHA_MEDICA')
+    expect(servicio.TIPOS_DOCUMENTO_JUGADOR).not.toContain('FOTO_DOCUMENTO')
+  })
+
+  it('al subir se acepta cualquiera de los 7 tipos y se rechaza uno viejo o la foto', async () => {
+    for (const tipo of servicio.TIPOS_DOCUMENTO_JUGADOR) {
+      await expect(resolver(servicio.subirDocumento(3, datos({ tipo }), admin)), tipo).resolves.toMatchObject({ tipo, estado: 'PENDIENTE' })
+    }
+    for (const tipo of ['FICHA_MEDICA', 'FOTO_DOCUMENTO']) {
+      await expect(resolver(servicio.subirDocumento(3, datos({ tipo }), admin)), tipo).rejects.toMatchObject({ codigo: 'VALIDACION', errores: { tipo: expect.any(String) } })
+    }
   })
 })
