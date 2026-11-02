@@ -65,6 +65,9 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `SUPABASE_URL` | URL del proyecto de Supabase: [Storage](#almacenamiento-de-comprobantes-supabase-storage) y las llaves públicas para validar los JWT ([Seguridad](#seguridad)) | vacía: la app arranca, pero no guarda comprobantes y rechaza todo token (`401`) | Obligatoria |
 | `SUPABASE_SERVICE_ROLE_KEY` | Llave `service_role` para Storage. **Secreta, solo backend** | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
 | `SUPABASE_BUCKET_COMPROBANTES`, `SUPABASE_VIGENCIA_URL_FIRMADA` | Bucket de comprobantes y vigencia de las URL firmadas | `comprobantes`, `5m` | Igual |
+| `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `WOMPI_INTEGRITY_SECRET` | Llaves de Wompi ([Pagos con Wompi](#pagos-con-wompi)). **Secretas** (menos la pública) | vacías: la app arranca, pero los endpoints de Wompi responden `503 PAGOS_NO_CONFIGURADOS` | Opcionales (sin ellas no hay pagos en línea) |
+| `WOMPI_BASE_URL`, `WOMPI_REDIRECT_URL` | URL de la API de Wompi y a dónde vuelve el usuario tras pagar | sandbox `https://sandbox.wompi.co/v1`; sin redirección | Igual |
+| `FUTDATA_MENSUALIDAD_MONTO`, `FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO`, `FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA` | Cobro mensual: monto en pesos (**pendiente: lo define el club**), día de vencimiento y si se genera solo cada día | `0` (sin configurar), `5`, `false` | Igual |
 | `FOTOS_BUCKET`, `FOTOS_VIGENCIA_URL_FIRMADA` | Bucket de las fotos de los deportistas y vigencia de su URL firmada, de 10 s a 60 min ([Foto](#foto)) | `fotos`, `60m` | Igual |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
@@ -606,7 +609,7 @@ Salen de `futdata.club` (`config.ClubProperties`). Son datos públicos, con valo
 ### Pendientes
 
 - **Diagrama 02-pagos (propuesta, no aplicada).** Cambiar `IGeneradorComprobante +generarPdf(Pago) byte[]` por `+generar(ComprobantePagoDTO) byte[]`. Razón: el generador no debe recibir la entidad `Pago`. Con el DTO no depende de la base de datos (se prueba sin ella) y solo recibe lo que puede ver el acudiente: así no puede imprimir por error quién registró el pago, la nota interna ni la referencia manual, que sí están en el pago.
-- **Consecutivo del comprobante.** El número `FD-AAAA-NNNNNN` lo genera la base de datos con `select siguiente_numero_comprobante()` (secuencia de la migración 004), así es único aunque dos pagos se registren al mismo tiempo. Falta usarlo desde el módulo de pagos.
+- **Consecutivo del comprobante.** El número `FD-AAAA-NNNNNN` lo genera la base de datos con `select siguiente_numero_comprobante()` (secuencia de la migración 004), así es único aunque dos pagos se registren al mismo tiempo. Lo usa `PagoDAOImpl` al aprobar un cobro ([Pagos con Wompi](#pagos-con-wompi)); `GET /api/pagos/{id}/comprobante` genera el PDF al momento, sin pasar por Storage.
 - **`MetodoPago`** está dentro de `ComprobantePagoDTO` (`util.reports`). Cuando exista el módulo de pagos, pasarlo a `domain.entities`: es un concepto del dominio (columna `pago.metodo`), no del PDF.
 - **Texto del pie, por confirmar con el tesorero:** "Este comprobante es un soporte del pago recibido por el club. No es una factura electrónica."
 - **Logo.** No hay un PNG en el repositorio, así que el comprobante sale sin logo. Cuando haya uno, se agrega en `PlantillaReportePdf`.
@@ -728,6 +731,116 @@ Lee las variables del sistema, no `backend/.env`. `SUPABASE_BUCKET_COMPROBANTES`
 - **Módulo de pagos:** la columna `pago.recibo_ruta` (migración 004) guarda la ruta. `PagoServiceImpl` llamará a `generarYGuardar` al registrar o aprobar un pago (`// TODO` en `ComprobanteServiceImpl`).
 - **Endpoint `GET /api/pagos/{id}/comprobante`** (ver arriba), con el módulo de pagos.
 
+## Pagos con Wompi
+
+Cobros del club (mensualidad, inscripción, torneo y uniforme) y pagos en línea con [Wompi](https://docs.wompi.co) (sandbox por ahora). Capas: `PagoController` y `WompiWebhookController` → `IPagoService` / `IPagoWompiService` → `IPagoDAO` (JDBC) y `IWompiClient`. Migración [`009_pagos_wompi.sql`](../supabase/migrations/009_pagos_wompi.sql).
+
+**Reglas que no se negocian:** el monto sale siempre de la base de datos (el cliente nunca lo envía); el webhook solo aprueba si `amount_in_cents` es igual a `monto × 100`; ninguna llave sale en logs, respuestas ni errores; un acudiente que consulta o inicia el pago de un deportista que no es suyo recibe `404`, no `403`.
+
+### Variables de entorno
+
+Ver la tabla de [Variables de entorno](#variables-de-entorno) y `backend/.env.example`. Sandbox: llaves `pub_test_`, `prv_test_`, `test_events_`, `test_integrity_` con `https://sandbox.wompi.co/v1`. Producción: llaves `_prod_` con `https://production.wompi.co/v1`. **Nunca se mezclan**: si las llaves no son del ambiente de `WOMPI_BASE_URL`, los endpoints responden `503` como si faltaran. Sin llaves la aplicación arranca igual y los endpoints de Wompi responden:
+
+```json
+{ "estado": 503, "mensaje": "Los pagos en línea no están configurados. Contacta al administrador.", "codigo": "PAGOS_NO_CONFIGURADOS", ... }
+```
+
+### Endpoints
+
+| Método y ruta | Quién | Qué hace |
+| :--- | :--- | :--- |
+| `POST /api/pagos` | `ADMINISTRADOR` | Crea un cobro `PENDIENTE`. Una mensualidad repetida del mismo deportista y periodo: `409` |
+| `GET /api/pagos` | `ADMINISTRADOR`, `TESORERO` | Paginado: `page` (desde 0), `size` (1 a 100), `sort` (`vencimiento`, `monto`, `creadoEn` o `estado`, con `,asc` o `,desc`); filtros `estado`, `tipo`, `idDeportista`, `periodo` (`AAAA-MM`). Respuesta `{ content, totalElements, number, size }`; cada cobro trae `vencido` |
+| `GET /api/pagos/mis-pagos` | `ACUDIENTE` | Los cobros de sus deportistas, con estado y `tieneComprobante`; sin nota interna ni datos de Wompi |
+| `POST /api/pagos/{id}/iniciar-wompi` | `ACUDIENTE` dueño | Solo `PENDIENTE`. Referencia `FD-<id del pago>`, **reutilizada** si el cobro ya la tiene |
+| `POST /api/pagos/{id}/reintentar` | `ACUDIENTE` dueño | Solo `RECHAZADO`: crea un `PENDIENTE` nuevo con los mismos datos; idempotente |
+| `POST /api/pagos/webhook/wompi` | Wompi (pública) | Ver [Webhook](#webhook) |
+| `POST /api/pagos/{id}/conciliar` | `ADMINISTRADOR`, `TESORERO` | Consulta a Wompi las transacciones de la referencia y aplica **las mismas reglas** del webhook |
+| `POST /api/pagos/{id}/aprobar` | `ADMINISTRADOR`, `TESORERO` | Pago manual: `fechaPago` y `metodo` (`EFECTIVO` o `TRANSFERENCIA`) obligatorios |
+| `POST /api/pagos/{id}/rechazar` | `ADMINISTRADOR`, `TESORERO` | Rechaza un cobro `PENDIENTE` (nota opcional) |
+| `GET /api/pagos/{id}/comprobante` | dueño, `ADMINISTRADOR`, `TESORERO` | PDF (`application/pdf`) solo de un cobro `APROBADO` |
+| `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` | `{ "periodo": "2026-11" }`: crea la mensualidad `PENDIENTE` de cada deportista que no la tenga |
+
+```bash
+# Crear una mensualidad (administrador)
+curl -X POST http://localhost:8080/api/pagos -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"idDeportista":"<uuid>","tipo":"MENSUALIDAD","monto":90000,"fechaVencimiento":"2026-11-05","periodo":"2026-11-01"}'
+
+# Datos del checkout (acudiente)
+curl -X POST http://localhost:8080/api/pagos/<id>/iniciar-wompi -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "llavePublica": "pub_test_...",
+  "referencia": "FD-7f0c2a52-6a5d-4f0e-9d5e-0b8d2d9c1a11",
+  "montoEnCentavos": 9000000,
+  "moneda": "COP",
+  "firmaIntegridad": "5e6bc69a...",
+  "urlRedireccion": "http://localhost:5173/acudiente/pagos"
+}
+```
+
+El frontend abre el Web Checkout con esos valores: `https://checkout.wompi.co/p/?public-key=...&currency=COP&amount-in-cents=...&reference=...&signature:integrity=...&redirect-url=...`. La `redirect-url` solo informa al usuario; **el pago se confirma por el webhook**. La firma de integridad es `SHA-256(<referencia><montoEnCentavos><moneda><secretoIntegridad>)` y se calcula siempre en el servidor.
+
+### Webhook
+
+`POST /api/pagos/webhook/wompi` es público (sin JWT, ver `RutasSin2FA`). Orden: (1) revisa la configuración y la firma **antes de abrir la base de datos**; (2) firma inválida, ausente o cuerpo ilegible: `401` y no se toca nada; (3) con firma válida **siempre `200`** (si no, Wompi reintenta a los 30 min, 3 h y 24 h); (4) solo procesa `transaction.updated`; (5) todo cambio de estado ocurre en una transacción con el cobro tomado `FOR UPDATE`.
+
+**Firma.** El servicio lee `signature.properties` del propio evento (rutas dentro de `data`, en ese orden), concatena sus valores, agrega `timestamp` y el secreto de eventos, calcula SHA-256 en hexadecimal y lo compara en tiempo constante (`MessageDigest.isEqual`) con el encabezado `X-Event-Checksum` **y** con `signature.checksum`. La marca de tiempo es el campo `timestamp` del evento (así lo documenta Wompi); si no viniera, usa `signature.timestamp`.
+
+**Máquina de estados** (E = estado del cobro, T = transacción del evento; la implementa `AplicadorTransaccionWompi`, que usan el webhook y la conciliación):
+
+| T | E | Qué pasa |
+| :--- | :--- | :--- |
+| `APPROVED` | `PENDIENTE` | Monto igual: `APROBADO` con `fecha_pago` (hoy en Colombia), método (mapeo de abajo), `id_transaccion_wompi`, número de comprobante `FD-AAAA-NNNNNN` y aviso al acudiente ("Tu pago de {concepto} fue aprobado"). Monto distinto: no se aprueba, queda `PENDIENTE` y se audita `PAGO_MONTO_DISTINTO` |
+| `APPROVED` | `RECHAZADO` | El reintento del checkout aprobó después de un rechazo. Si hay un hermano ya `APROBADO` (mismo deportista y tipo, y mismo periodo o concepto): no cambia nada y se audita `PAGO_POSIBLE_DUPLICADO`. Si no: primero los hermanos `PENDIENTE` pasan a `RECHAZADO` ("Reemplazado: el pago original fue aprobado por reintento", auditoría `PAGO_REEMPLAZADO`) y luego se aprueba como arriba (el índice único de mensualidad exige ese orden) |
+| `APPROVED` | `APROBADO` | Mismo `id_transaccion_wompi`: evento repetido, se ignora. Otro id: auditoría `PAGO_POSIBLE_DUPLICADO`, sin cambios |
+| `DECLINED`, `ERROR`, `VOIDED` | `PENDIENTE` | `RECHAZADO` y aviso ("Tu pago fue rechazado, puedes intentarlo de nuevo"). **No crea** un cobro nuevo: eso lo hace `/reintentar` |
+| `VOIDED` | `APROBADO` (mismo id de transacción) | `RECHAZADO` y auditoría `PAGO_ANULADO_WOMPI` |
+| otro `DECLINED`/`ERROR`/`VOIDED` | `RECHAZADO` o `APROBADO` | Se ignora |
+| `PENDING` | cualquiera | No hace nada |
+
+**Reintento del checkout.** Si el primer intento falla, el checkout de Wompi ofrece 3 minutos para reintentar con otro medio **con la misma referencia**, y notifica cada transacción por separado (cada una con su ID y su medio). Es normal recibir un `DECLINED` y luego un `APPROVED` con la misma referencia: por eso el cobro `RECHAZADO` puede pasar a `APROBADO`.
+
+**Medios de pago** (`payment_method_type` → `pago.metodo`): `CARD` → `TARJETA`, `NEQUI` → `NEQUI`, `PSE` → `PSE`, `BANCOLOMBIA_QR` → `QR`, `BANCOLOMBIA_TRANSFER` → `BOTON_BANCOLOMBIA`, cualquier otro (`DAVIPLATA`, `PCOL`...) → `WOMPI_OTRO`, para no perder nunca un pago aprobado. Todos exigen referencia Wompi cuando el cobro está aprobado; `EFECTIVO` y `TRANSFERENCIA` son manuales.
+
+### Aprobación manual y conciliación
+
+- `aprobar` solo acepta `EFECTIVO` y `TRANSFERENCIA`; los pagos en línea los confirma Wompi (o `conciliar`). Un cobro que **ya se inició en Wompi** (tiene referencia) no se aprueba a mano: `409`, porque un pago en línea posterior quedaría sin cobro al cual aplicarse. Se concilia o se rechaza primero.
+- `conciliar` consulta `GET {WOMPI_BASE_URL}/transactions?reference=...` con `WOMPI_PRIVATE_KEY` **antes** de abrir la transacción (no se mantiene un bloqueo mientras se espera la red) y aplica la máquina de estados a cada transacción de esa referencia. Sirve cuando el webhook no llegó o llegó incompleto. Si Wompi no responde: `503`.
+
+### Cobros mensuales automáticos
+
+`POST /api/pagos/generar-mensualidades` y, si `FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA=true`, un proceso diario a las 6:00 (hora de Colombia) crean la mensualidad `PENDIENTE` del mes de cada deportista que no la tenga (los rechazados no cuentan), con el monto y el día de vencimiento configurados (si el mes es más corto, el último día). Son idempotentes. **Pendiente:** el club debe definir `FUTDATA_MENSUALIDAD_MONTO`; en `0` no se genera nada. Hoy se generan para **todos** los deportistas porque la tabla no tiene un estado activo/inactivo (ver el bloque 2B en `docs/PRESENTACION-TECNICA.md`).
+
+### Probar en sandbox
+
+1. Crea una cuenta en el panel de Wompi y copia las llaves de pruebas a `backend/.env`: `WOMPI_PUBLIC_KEY` (`pub_test_`), `WOMPI_PRIVATE_KEY` (`prv_test_`), `WOMPI_EVENTS_SECRET` (`test_events_`) y `WOMPI_INTEGRITY_SECRET` (`test_integrity_`).
+2. Abre un túnel público hacia el puerto 8080 (por ejemplo `ngrok http 8080` o `cloudflared tunnel --url http://localhost:8080`).
+3. En el panel de Wompi, ambiente de pruebas, *Desarrolladores → Seguimiento de transacciones*, pon como URL de eventos `https://<tu-túnel>/api/pagos/webhook/wompi`. **Cada ambiente tiene su propia URL de eventos.**
+4. Crea un cobro (`POST /api/pagos`), inicia el pago como acudiente (`iniciar-wompi`), abre el checkout y paga con los datos de prueba.
+
+| Medio | Dato de prueba | Resultado |
+| :--- | :--- | :--- |
+| Tarjeta | `4242 4242 4242 4242` | `APPROVED` |
+| Tarjeta | `4111 1111 1111 1111` | `DECLINED` |
+| Tarjeta | cualquier otra | `ERROR` |
+| Nequi | `3991111111` | `APPROVED` |
+| Nequi | `3992222222` | `DECLINED` |
+| PSE | el banco que aprueba / el banco que rechaza | `APPROVED` / `DECLINED` |
+| Bancolombia QR | el estado se elige en el simulador | `APPROVED`, `DECLINED` o `ERROR` |
+
+Las pruebas automáticas **nunca llaman a Wompi**: el cliente se simula y los checksums se calculan en la propia prueba. Los eventos reales se pueden repetir desde el panel de Wompi.
+
+### Pendientes
+
+- **Monto de la mensualidad.** Lo define el club (`FUTDATA_MENSUALIDAD_MONTO`).
+- **Reintento del checkout.** Confirmar en el panel de Wompi si viene activo o hay que activarlo. El backend ya soporta el caso (mismo cobro, otra transacción), pero sin esa opción no se verá un `DECLINED` seguido de un `APPROVED`.
+- **Estado del deportista.** Cuando exista la columna de activo/inactivo (bloque 2B), la generación mensual debe filtrar por ella.
+- **Comprobante en Storage.** El PDF se genera al pedirlo (con la fecha de emisión igual al día del pago, para que no cambie entre descargas). `pago.recibo_ruta` no se usa; si se quiere guardar el PDF, `IComprobanteService.generarYGuardar` ya existe.
+- **Aviso por correo.** Los avisos de pago se guardan en `notificacion_pago`; el envío por n8n queda para el módulo de avisos.
+
 ## Seguridad
 
 Spring Security valida en cada petición el JWT que emite Supabase Auth (RF008, RNF001). Está en `util.security`:
@@ -754,13 +867,17 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 
 | Ruta | Roles |
 | :--- | :--- |
-| `GET /api/health`, `/error`, `OPTIONS` (CORS), `POST /api/pagos/webhook/wompi` (reservado) | Públicas, sin token |
+| `GET /api/health`, `/error`, `OPTIONS` (CORS), `POST /api/pagos/webhook/wompi` | Públicas, sin token (el webhook se autentica con la firma del evento) |
 | Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública **solo con el perfil `dev`**; en los demás perfiles está apagado |
 | `POST /api/auth/2fa/codigo`, `/reenviar`, `/verificar` | Cualquier rol, con el JWT del primer paso y sin haber verificado el código |
 | `POST /api/auth/logout`, `GET /api/usuarios/yo` | Cualquier rol, con la sesión verificada |
 | `/api/usuarios/**` (salvo `/yo`) | `ADMINISTRADOR` |
 | `/api/deportistas/**` (incluidos `PUT` y `/foto`) | `ADMINISTRADOR`; `GET /api/deportistas` (la lista) también `ENTRENADOR`, sin documento, teléfono, dirección ni estado de la inscripción |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
+| `POST /api/pagos`, `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` |
+| `GET /api/pagos`, `POST /api/pagos/{id}/conciliar`, `/aprobar`, `/rechazar` | `ADMINISTRADOR`, `TESORERO` |
+| `GET /api/pagos/mis-pagos`, `POST /api/pagos/{id}/iniciar-wompi`, `/reintentar` | `ACUDIENTE` (solo sus deportistas; de otro, `404`) |
+| `GET /api/pagos/{id}/comprobante` | `ADMINISTRADOR`, `TESORERO`, y el `ACUDIENTE` del deportista |
 | `GET /api/categorias` | `ADMINISTRADOR`, `ENTRENADOR` |
 | Cualquier otra ruta | Exige sesión; cada módulo nuevo declara sus roles |
 
@@ -777,7 +894,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 2. Sin ningún rol en la base de datos (cuenta sin perfil, sin rol o con el acceso revocado): `403`, también en las rutas del 2FA.
 3. Fuera de las rutas sin 2FA, si la sesión del token no está verificada o venció: `403` con `"codigo": "2FA_REQUERIDA"`.
 
-Las rutas sin 2FA están todas en `util.security.RutasSin2FA`, en una sola lista documentada: las tres del segundo paso, el webhook reservado de Wompi, `GET /api/health`, `/error` y `OPTIONS`; con el perfil `dev`, también la documentación. **Agregar una ruta ahí la abre:** hay que justificarla.
+Las rutas sin 2FA están todas en `util.security.RutasSin2FA`, en una sola lista documentada: las tres del segundo paso, el webhook de Wompi, `GET /api/health`, `/error` y `OPTIONS`; con el perfil `dev`, también la documentación. **Agregar una ruta ahí la abre:** hay que justificarla.
 
 `POST /api/auth/logout` borra la sesión del token; el frontend también debe cerrar la sesión en Supabase Auth. Revocar el acceso de un usuario (`POST /api/usuarios/{id}/revocar`) borra todas sus sesiones verificadas: si se le restablece, debe verificar el código otra vez.
 
@@ -813,7 +930,7 @@ Todas las respuestas de error tienen el mismo JSON:
 | `409` | El servicio lanza `ConflictoException` (un dato que ya tiene otro registro, o una regla que depende de otros registros), el archivo ya existe en Storage, o la base de datos rechaza la operación por una restricción que el servicio no tradujo | `documento: ya está registrado en otro entrenador` |
 | `405` / `415` | Método HTTP no permitido o tipo de contenido no soportado | `El método POST no está permitido en esta ruta` |
 | `500` | Cualquier error no controlado, o n8n mal configurado. **Nunca incluye la traza ni el mensaje interno**; el detalle queda en el log del servidor | `Ocurrió un error interno. Intenta de nuevo más tarde.` |
-| `503` | Supabase Storage o n8n no respondieron o no están configurados (mensaje genérico; el detalle va al log). En `/api/health`, la base de datos no responde (su cuerpo es el de salud, no este) | `No se pudo enviar el correo. Intenta de nuevo más tarde.` |
+| `503` | Supabase Storage, n8n o Wompi no respondieron o no están configurados (mensaje genérico; el detalle va al log). Sin llaves de Wompi lleva `"codigo": "PAGOS_NO_CONFIGURADOS"`. En `/api/health`, la base de datos no responde (su cuerpo es el de salud, no este) | `No se pudo enviar el correo. Intenta de nuevo más tarde.` |
 
 En el frontend basta con leer `error.response.data.mensaje` (Axios) para mostrar el error.
 

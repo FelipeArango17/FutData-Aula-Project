@@ -92,6 +92,21 @@ futdata:
     bucket-comprobantes: ${SUPABASE_BUCKET_COMPROBANTES:comprobantes}
     vigencia-url-firmada: ${SUPABASE_VIGENCIA_URL_FIRMADA:5m}
     timeout: 10s
+  wompi:
+    # Pagos en línea con Wompi (sandbox por defecto). Sin llaves la app arranca y los endpoints de Wompi responden
+    # 503 PAGOS_NO_CONFIGURADOS. Las llaves son secretas: solo variables de entorno, nunca en el repositorio ni en logs.
+    public-key: ${WOMPI_PUBLIC_KEY:}
+    private-key: ${WOMPI_PRIVATE_KEY:}
+    events-secret: ${WOMPI_EVENTS_SECRET:}
+    integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
+    base-url: ${WOMPI_BASE_URL:https://sandbox.wompi.co/v1}
+    redirect-url: ${WOMPI_REDIRECT_URL:}
+    timeout: 10s
+  mensualidad:
+    # PENDIENTE: el monto real lo define el club. 0 = sin configurar (no se generan mensualidades).
+    monto: ${FUTDATA_MENSUALIDAD_MONTO:0}
+    dia-vencimiento: ${FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO:5}
+    generacion-automatica: ${FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA:false}
   fotos:
     # Fotos de los deportistas (config.FotosProperties): bucket privado de la migración 007 y vigencia de la URL
     # firmada que va en las respuestas (de 10s a 60m). Separada de la de los comprobantes, que es corta.

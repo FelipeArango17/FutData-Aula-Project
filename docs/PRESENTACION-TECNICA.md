@@ -163,7 +163,7 @@ Estos módulos están en el menú de los cuatro roles y hoy son maquetas. Ningun
 
 | Bloque | Módulo | Quién lo usa | Responsable |
 |---|---|---|---|
-| 6 | **Pagos con Wompi** (cobro, pago en línea, webhook, comprobante PDF, estado de cuenta) | acudiente, tesorero, administrador | Omar (backend) y Felipe (pantallas). **Prioridad alta:** el profesor insistió en este punto; Omar decide si lo adelanta antes del bloque 3 |
+| 6 | **Pagos con Wompi** (cobro, pago en línea, webhook, comprobante PDF, estado de cuenta) | acudiente, tesorero, administrador | Omar (backend) y Felipe (pantallas). **Backend en curso** (rama `feature/back-pagos-wompi`: migración 009, endpoints, webhook y conciliación). **Prioridad alta:** el profesor insistió en este punto; Omar decide si lo adelanta antes del bloque 3 |
 | 7 | Grupos (de entrenamiento) y asistencia | administrador, entrenador | Por definir |
 | 8 | Torneos | administrador, entrenador | Por definir |
 | 9 | Reportes y avisos / notificaciones | tesorero, administrador, acudiente | Por definir |
@@ -208,3 +208,4 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-01 | Decisiones: la inscripción queda pendiente hasta que el administrador valide los documentos; parentesco = Madre, Padre, Abuelo, Tia, Tio, Otro; el backend es de Omar y el frontend de Felipe. |
 | 2026-11-01 | Versión 2. Entrega final: sábado 7 de noviembre. Son **cuatro roles** (se agrega tesorero). Categoría calculada al leer. `grupo` pasa a la base de datos (migración 008). Inscripción pendiente calculada, con deportista activo. Parentesco incluye Abuela. Se agrega Wompi y los bloques 6 a 10 (pagos, grupos y asistencia, torneos, reportes y avisos, dashboard y respaldo). Se agrega la protección de pantallas por sesión y rol. |
 | 2026-11-01 | Bloque 2A (rama `feat/deportistas-api`, pendiente de merge). Migración 008: `parentesco`, `deportista.grupo` y `deportista.activo` (los RETIRADA quedan inactivos). API de deportistas: categoría calculada al leer con el reloj de Bogotá (`id_categoria` y `estado_inscripcion` quedan heredados), `estadoInscripcion` calculado, lista paginada con filtros, `PUT`, foto con URL firmada. El entrenador no ve el número de documento. **624 pruebas, 0 fallos, 6 omitidas.** |
+| 2026-11-01 | Bloque 6 (pagos con Wompi): **backend en curso**. Migración 009 (más medios de pago, tipos TORNEO y UNIFORME, `id_transaccion_wompi`), `/api/pagos`, webhook con firma, reintento y conciliación. El monto de la mensualidad queda configurable y pendiente de que lo defina el club. |
