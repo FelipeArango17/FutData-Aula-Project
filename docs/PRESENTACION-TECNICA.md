@@ -27,13 +27,13 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 ## 3. Arquitectura y stack
 
 - **Backend:** Spring Boot 3.5, Java 21, Maven wrapper (`mvnw`), capas controlador, servicio y DAO con JDBC.
-- **Base de datos:** PostgreSQL en Supabase. Migraciones numeradas en `supabase/migrations/` (hoy 001 a 007).
+- **Base de datos:** PostgreSQL en Supabase. Migraciones numeradas en `supabase/migrations/` (hoy 001 a 008).
 - **Autenticación:** Supabase Auth, con 2FA por correo. El backend exige el rol en cada controlador con `@PreAuthorize`. El frontend solo muestra las rutas de un panel si hay sesión verificada **y** el rol de la sesión coincide con el del panel (no se usa el rol guardado en el navegador).
 - **Pagos en línea:** Wompi (pasarela elegida por el equipo; el profesor la pidió expresamente). Se trabaja con el entorno de pruebas (sandbox). El webhook `POST /api/pagos/webhook/wompi` es público y debe **verificar la firma** del evento.
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
-- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **473 pruebas, 0 fallos, 6 omitidas** (las que necesitan n8n y Supabase reales).
+- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **624 pruebas, 0 fallos, 6 omitidas** (las que necesitan n8n y Supabase reales).
 
 ## 4. Modelo de datos (resumen)
 
@@ -55,7 +55,7 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 
   No se inscribe a nadie fuera de 4–16 años. No existen Sub-8, Sub-9, Sub-10, Formación, Femenino ni Arqueros.
 - **deportista:** tipo de documento TI, RC, CE o PASAPORTE (sin CC). El número de documento es único. Tiene `posicion` (opcional), `foto` y `grupo` (`mañana` o `tarde`, opcional, **migración 008**; solo se permite en Cachorros y Semillero, y el backend lo valida; si el deportista cambia a otra categoría, el grupo se descarta).
-- **acudiente** y **acudiente_deportista:** relación N:M (un acudiente puede tener varios jugadores). Pendiente: columna `parentesco` (migración 008).
+- **acudiente** y **acudiente_deportista:** relación N:M (un acudiente puede tener varios jugadores). `acudiente_deportista.parentesco` ya existe (migración 008, opcional, sin tilde), igual que `deportista.grupo` y `deportista.activo`.
 - **entrenador:** puede tener varias categorías; cada categoría con responsable tiene uno solo.
 - **entrenamiento:** `lugar` es una de las dos sedes. Hay bloqueo de cruce por categoría y por entrenador (no por lugar).
 - **franja_horario:** horario fijo del club, lunes a sábado, con sede, entrenador opcional y grupo opcional.
@@ -121,7 +121,7 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 
 ## 7. Flujos principales
 
-**Inscripción (administrador, 4 pasos: Jugador, Acudiente, Documentos, Confirmar).** Un solo `POST` transaccional que calcula la categoría, crea el deportista, crea o reutiliza al acudiente por correo (con su parentesco), sube la foto y los documentos a Storage, y envía al acudiente el enlace para crear su contraseña. La inscripción queda **pendiente** hasta que el administrador valide los documentos. Si algo falla a mitad, devuelve un error claro (`INSCRIPCION_PARCIAL`).
+**Inscripción (administrador, 4 pasos: Jugador, Acudiente, Documentos, Confirmar).** Un solo `POST` transaccional (la categoría no se guarda: se calcula al leer) que crea el deportista, crea o reutiliza al acudiente por correo (con su parentesco), sube la foto y los documentos a Storage, y envía al acudiente el enlace para crear su contraseña. La inscripción queda **pendiente** hasta que el administrador valide los documentos. Si algo falla a mitad, devuelve un error claro (`INSCRIPCION_PARCIAL`).
 
 **Alta de entrenador.** El administrador lo crea; se genera el usuario con rol ENTRENADOR sin contraseña y n8n envía el enlace. Si el enlace vence, el administrador puede reenviarlo.
 
@@ -134,8 +134,10 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 - `GET/POST/PUT/DELETE /api/horario-club` (filtros `categoria`, `entrenador`, `sede`; 409 si el entrenador se cruza).
 - Pagos: crear el cobro (mensualidad), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
 - Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
-- `GET /api/deportistas` paginado (`page`, `size`, `sort`, total; filtro `activo`).
-- `POST/DELETE /api/deportistas/{id}/foto`.
+- Deportistas (bloque 2A, en la rama `feat/deportistas-api`; detalle en `backend/README.md`):
+  - `GET /api/deportistas`: paginado (`page`, `size` hasta 100, `sort`, filtros `activo` y `categoria`); responde `content`, `page`, `size`, `totalElements` y `totalPages`. ADMINISTRADOR y ENTRENADOR (este último sin documento, teléfono, dirección ni `estadoInscripcion`).
+  - `GET /api/deportistas/{id}`, `POST /api/deportistas` y `PUT /api/deportistas/{id}`: solo ADMINISTRADOR; documento repetido da 409.
+  - `POST` y `DELETE /api/deportistas/{id}/foto`: solo ADMINISTRADOR; JPG o PNG por su contenido, máximo 5 MB; la respuesta trae una URL firmada de 60 minutos.
 - Documentos: subir, aprobar y rechazar.
 - `POST` de inscripción única.
 - Alta de entrenador con enlace y reenvío.
@@ -147,11 +149,11 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 | Bloque | Qué incluye | Responsable | Estado |
 |---|---|---|---|
 | 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | Omar | **Hecho** (en `develop` y en la base real) |
-| 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición | Omar | Pendiente |
+| 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición. Incluye la migración 008 (parentesco, grupo y activo) | Omar | Hecho en la rama `feat/deportistas-api` (pendiente de merge) |
 | 4 | Horario del club y entrenamientos (HU-026) | Omar | Pendiente |
 | 5 | Alta de entrenadores con enlace y reenvío | Omar | Pendiente |
 | 3 | Documentos: subir, aprobar, rechazar, correo | Omar | Pendiente |
-| 2B | Migración 008 (parentesco y `grupo`) e inscripción única | Omar | Pendiente |
+| 2B | Inscripción única (la migración 008 llegó con el 2A) | Omar | Pendiente |
 
 Orden acordado: 2A, 4, 5, 3, 2B.
 
@@ -205,4 +207,5 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-01 | Se congela el PPI; este archivo pasa a ser la fuente de verdad. |
 | 2026-11-01 | Decisiones: la inscripción queda pendiente hasta que el administrador valide los documentos; parentesco = Madre, Padre, Abuelo, Tia, Tio, Otro; el backend es de Omar y el frontend de Felipe. |
 | 2026-11-01 | Versión 2. Entrega final: sábado 7 de noviembre. Son **cuatro roles** (se agrega tesorero). Categoría calculada al leer. `grupo` pasa a la base de datos (migración 008). Inscripción pendiente calculada, con deportista activo. Parentesco incluye Abuela. Se agrega Wompi y los bloques 6 a 10 (pagos, grupos y asistencia, torneos, reportes y avisos, dashboard y respaldo). Se agrega la protección de pantallas por sesión y rol. |
+| 2026-11-01 | Bloque 2A (rama `feat/deportistas-api`, pendiente de merge). Migración 008: `parentesco`, `deportista.grupo` y `deportista.activo` (los RETIRADA quedan inactivos). API de deportistas: categoría calculada al leer con el reloj de Bogotá (`id_categoria` y `estado_inscripcion` quedan heredados), `estadoInscripcion` calculado, lista paginada con filtros, `PUT`, foto con URL firmada. El entrenador no ve el número de documento. **624 pruebas, 0 fallos, 6 omitidas.** |
 | 2026-11-01 | Bloque 6 (pagos con Wompi): **backend en curso**. Migración 009 (más medios de pago, tipos TORNEO y UNIFORME, `id_transaccion_wompi`), `/api/pagos`, webhook con firma, reintento y conciliación. El monto de la mensualidad queda configurable y pendiente de que lo defina el club. |

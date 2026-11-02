@@ -68,6 +68,7 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `WOMPI_INTEGRITY_SECRET` | Llaves de Wompi ([Pagos con Wompi](#pagos-con-wompi)). **Secretas** (menos la pública) | vacías: la app arranca, pero los endpoints de Wompi responden `503 PAGOS_NO_CONFIGURADOS` | Opcionales (sin ellas no hay pagos en línea) |
 | `WOMPI_BASE_URL`, `WOMPI_REDIRECT_URL` | URL de la API de Wompi y a dónde vuelve el usuario tras pagar | sandbox `https://sandbox.wompi.co/v1`; sin redirección | Igual |
 | `FUTDATA_MENSUALIDAD_MONTO`, `FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO`, `FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA` | Cobro mensual: monto en pesos (**pendiente: lo define el club**), día de vencimiento y si se genera solo cada día | `0` (sin configurar), `5`, `false` | Igual |
+| `FOTOS_BUCKET`, `FOTOS_VIGENCIA_URL_FIRMADA` | Bucket de las fotos de los deportistas y vigencia de su URL firmada, de 10 s a 60 min ([Foto](#foto)) | `fotos`, `60m` | Igual |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
 | `DB_POOL_MAX` | Conexiones máximas del pool | `5` | `5` |
@@ -211,28 +212,82 @@ Reglas para todos los módulos:
 - Nombres de clases, métodos y mensajes en español, como en los diagramas del PPI.
 - No registrar en logs datos sensibles (contraseñas, códigos 2FA, tokens, correos completos).
 
-## Deportistas (HU-008)
+## Deportistas (HU-008, bloque 2A)
 
-El registro de deportistas está disponible en `POST /api/deportistas`. La fecha de nacimiento es obligatoria y la edad se calcula en la respuesta; no se persiste. El número de documento debe ser único, sin importar el tipo de documento, y el registro se crea sin categoría.
+La **categoría se calcula al leer** a partir del año de nacimiento (edad por año = año actual − año de nacimiento, con el reloj de Bogotá): no se guarda, y cambia sola cada 1 de enero. El club solo inscribe de 4 a 16 años por año de nacimiento. La edad cumplida (`edad`) también se calcula. El estado de la inscripción (`estadoInscripcion`) se calcula desde los documentos. Detalle en el diccionario de datos (D22).
 
 ### Endpoints
 
-| Método y ruta | Descripción | Respuestas |
-| :--- | :--- | :--- |
-| `POST /api/deportistas` | Registra los datos personales | `201` con `Location`, `400`, `409` |
-| `GET /api/deportistas/{id}` | Consulta un deportista por UUID | `200`, `400`, `404` |
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `GET /api/deportistas` | Lista paginada con filtros | `ADMINISTRADOR`, `ENTRENADOR` | `200`, `400`, `403` |
+| `GET /api/deportistas/{id}` | Consulta un deportista | `ADMINISTRADOR` | `200`, `400`, `403`, `404` |
+| `POST /api/deportistas` | Registra un deportista (queda activo) | `ADMINISTRADOR` | `201` con `Location`, `400`, `403`, `409` |
+| `PUT /api/deportistas/{id}` | Reemplaza los campos editables | `ADMINISTRADOR` | `200`, `400`, `403`, `404`, `409` |
+| `POST /api/deportistas/{id}/foto` | Sube o reemplaza la foto (multipart) | `ADMINISTRADOR` | `200`, `400`, `403`, `404`, `503` |
+| `DELETE /api/deportistas/{id}/foto` | Quita la foto | `ADMINISTRADOR` | `200`, `403`, `404`, `503` |
 
-El request contiene `nombre`, `apellido`, `tipoDocumento` (`CC`, `TI`, `CE` o `PASAPORTE`), `documento`, `fechaNacimiento` (`yyyy-MM-dd`), `telefono` (10 dígitos) y `direccion`. Los errores `400` y `409` incluyen `campos` para identificar los campos que deben corregirse; un documento repetido responde `409` con `campos: ["documento"]`.
+Los errores `400` y `409` traen `campos` con los campos que hay que corregir (formato en [Formato de errores](#formato-de-errores-para-el-frontend)).
 
-Ejemplo:
+### Respuesta
 
-```http
-POST /api/deportistas
-Content-Type: application/json
-
-{"nombre":"Ana","apellido":"Pérez","tipoDocumento":"TI","documento":"12345678",
- "fechaNacimiento":"2012-04-10","telefono":"3001234567","direccion":"Calle 10 # 20-30"}
+```json
+{"id": "6f1c2a9e-…", "nombre": "Ana", "apellido": "Pérez", "tipoDocumento": "TI", "documento": "1098765432",
+ "fechaNacimiento": "2016-08-20", "edad": 10, "telefono": "3001234567", "direccion": "Calle 10 # 20-30",
+ "posicion": "Delantera", "foto": "https://…/storage/v1/object/sign/fotos/…?token=…",
+ "categoria": "Semillero", "idCategoria": "0a0a…", "grupo": "tarde", "activo": true, "estadoInscripcion": "PENDIENTE"}
 ```
+
+- `categoria` e `idCategoria`: la categoría calculada; ambas `null` si el deportista queda fuera de 4 a 16 años (al leer no es error).
+- `grupo`: `mañana` o `tarde`, solo si la categoría calculada es Cachorros o Semillero; en otra categoría sale `null` aunque esté guardado.
+- `foto`: **URL firmada temporal** (60 min, `FOTOS_VIGENCIA_URL_FIRMADA`), nunca la ruta del bucket; `null` si no tiene foto o si Storage no respondió (la respuesta no falla por eso).
+- `estadoInscripcion`: `COMPLETA` si cada uno de los 4 documentos obligatorios (`DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`) tiene al menos uno `APROBADO`; si no, `PENDIENTE`.
+- **Para el `ENTRENADOR`** no vienen `documento` ni `estadoInscripcion` (ni la clave), y `telefono` y `direccion` vienen en `null`. Sí recibe categoría, grupo y la URL de la foto.
+
+### `GET /api/deportistas` (paginado)
+
+Ya **no devuelve un arreglo**: `{"content": [...], "page": 0, "size": 10, "totalElements": 23, "totalPages": 3}`. El frontend que leía la lista como arreglo debe leer `content`.
+
+| Parámetro | Valores | Por defecto |
+| :--- | :--- | :--- |
+| `page` | Desde 0 | `0` |
+| `size` | De 1 a 100 | `10` |
+| `sort` | `campo` o `campo,asc` o `campo,desc`. Campos: `nombre`, `apellido`, `documento`, `fechaNacimiento`, `fechaRegistro`. El `ENTRENADOR` solo puede `nombre`, `apellido` y `fechaNacimiento`. Siempre se desempata por id (orden estable entre páginas) | `apellido,asc` (luego nombre) |
+| `activo` | `true` o `false` | Todos |
+| `categoria` | Nombre exacto de una de las 9 (`Párvulos`, `Cachorros`, `Semillero`, `Sub-11` … `Sub-16`), calculada con el año actual | Todas |
+
+Un valor inválido responde `400` con todos los campos con error a la vez, por ejemplo `size: debe estar entre 1 y 100`. Una página después de la última responde `content` vacío.
+
+### `POST` y `PUT`
+
+Cuerpo:
+
+```json
+{"nombre": "Ana", "apellido": "Pérez", "tipoDocumento": "RC", "documento": "1098765432",
+ "fechaNacimiento": "2018-04-10", "telefono": "3001234567", "direccion": "Calle 10 # 20-30",
+ "posicion": "Delantera", "grupo": "tarde", "activo": true}
+```
+
+- `tipoDocumento`: `TI`, `RC`, `CE` o `PASAPORTE` (sin `CC`). `documento`: de 6 a 40 caracteres, solo dígitos salvo el pasaporte (letras y números, se guarda en mayúsculas). **Único solo por el número**, sin importar el tipo: un repetido responde `409` con `documento: ya está registrado en otro deportista`, sin decir de quién es.
+- `fechaNacimiento` (`yyyy-MM-dd`): en el `POST`, o en el `PUT` si cambia, debe dar de 4 a 16 años por año de nacimiento; si no, `400` (`por año de nacimiento tiene 17 años en 2026; el club solo inscribe de 4 a 16 años`). Si en el `PUT` no cambia, no se valida: se puede editar o desactivar a quien ya se pasó de 16.
+- `telefono`: 10 dígitos. `direccion`: de 5 a 250 caracteres. `posicion`: opcional, máximo 50.
+- `grupo`: opcional, `mañana` o `tarde`. Solo se acepta si la categoría calculada con la fecha que queda guardada es Cachorros o Semillero; si no, `400`. `null` lo deja sin grupo.
+- `activo`: en el `POST` se ignora (el deportista se crea activo); en el `PUT` es **obligatorio**.
+- El `PUT` reemplaza nombre, apellido, tipo y número de documento, fecha de nacimiento, teléfono, dirección, posición, grupo y activo. No toca la foto.
+
+### Foto
+
+`POST /api/deportistas/{id}/foto` con `multipart/form-data` y la parte **`archivo`**:
+
+- **JPG o PNG**, validado por los **bytes iniciales** del archivo, no por la extensión ni por el `Content-Type` del cliente: un PDF renombrado `.jpg` responde `400`.
+- **Máximo 5 MB** (5 242 880 bytes; exactamente 5 MB se acepta). Vacío o más grande: `400` con `campos: ["archivo"]`. Spring deja pasar hasta 10 MB (`spring.servlet.multipart`) para que el mensaje lo dé el servicio; más de 10 MB también responde `400`.
+- Se guarda en el bucket privado `fotos` (`FOTOS_BUCKET`) con la ruta `{idDeportista}/{uuid}.jpg|png` (nunca el nombre del archivo del cliente), y la ruta va a `deportista.foto`.
+- Reemplazo: sube la nueva, actualiza la base y solo después borra la anterior. Si ese borrado falla, se registra y la respuesta igual es `200`.
+- Responde el deportista con `foto` como URL firmada.
+
+`DELETE /api/deportistas/{id}/foto` borra el archivo y deja `foto` en `null`. Si Storage no responde, no cambia nada (`503`) y se puede reintentar.
+
+La lista firma las fotos de toda la página en **una sola** llamada a Storage (`POST /storage/v1/object/sign/{bucket}` con varias rutas).
 
 ## Usuarios y roles (HU-004)
 
@@ -817,7 +872,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 | `POST /api/auth/2fa/codigo`, `/reenviar`, `/verificar` | Cualquier rol, con el JWT del primer paso y sin haber verificado el código |
 | `POST /api/auth/logout`, `GET /api/usuarios/yo` | Cualquier rol, con la sesión verificada |
 | `/api/usuarios/**` (salvo `/yo`) | `ADMINISTRADOR` |
-| `/api/deportistas/**` | `ADMINISTRADOR`; el listado también `ENTRENADOR` sin teléfono ni dirección |
+| `/api/deportistas/**` (incluidos `PUT` y `/foto`) | `ADMINISTRADOR`; `GET /api/deportistas` (la lista) también `ENTRENADOR`, sin documento, teléfono, dirección ni estado de la inscripción |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
 | `POST /api/pagos`, `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` |
 | `GET /api/pagos`, `POST /api/pagos/{id}/conciliar`, `/aprobar`, `/rechazar` | `ADMINISTRADOR`, `TESORERO` |
