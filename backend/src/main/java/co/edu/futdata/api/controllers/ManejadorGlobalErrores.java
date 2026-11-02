@@ -37,6 +37,8 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
@@ -120,6 +122,18 @@ public class ManejadorGlobalErrores {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponseDTO> parametroFaltante(MissingServletRequestParameterException e, HttpServletRequest peticion) {
         return responder(HttpStatus.BAD_REQUEST, "Falta el parámetro '" + e.getParameterName() + "'", peticion);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponseDTO> parteFaltante(MissingServletRequestPartException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, "Falta el archivo en la parte '" + e.getRequestPartName() + "'",
+                List.of(e.getRequestPartName()), peticion);
+    }
+
+    /** Pasa los topes de {@code spring.servlet.multipart} (10 MB): el máximo de una foto o documento es 5 MB. */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponseDTO> archivoDemasiadoGrande(MaxUploadSizeExceededException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, "archivo: pesa más de 5 MB; el máximo es 5 MB", List.of("archivo"), peticion);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

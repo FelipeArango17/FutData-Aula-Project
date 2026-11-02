@@ -40,6 +40,14 @@ spring:
     locale: es
     locale-resolver: fixed
 
+  # Subida de archivos (foto del deportista). El límite de 5 MB lo aplica el servicio con un 400 de mensaje claro;
+  # estos topes son más altos para que un archivo de poco más de 5 MB llegue al servicio. Lo que pase de 10 MB lo
+  # rechaza Spring antes (400 por ManejadorGlobalErrores).
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
 server:
   port: ${PORT:8080}
   shutdown: graceful
@@ -84,6 +92,11 @@ futdata:
     bucket-comprobantes: ${SUPABASE_BUCKET_COMPROBANTES:comprobantes}
     vigencia-url-firmada: ${SUPABASE_VIGENCIA_URL_FIRMADA:5m}
     timeout: 10s
+  fotos:
+    # Fotos de los deportistas (config.FotosProperties): bucket privado de la migración 007 y vigencia de la URL
+    # firmada que va en las respuestas (de 10s a 60m). Separada de la de los comprobantes, que es corta.
+    bucket: ${FOTOS_BUCKET:fotos}
+    vigencia-url-firmada: ${FOTOS_VIGENCIA_URL_FIRMADA:60m}
 
 ---
 # Perfil local: valores por defecto para poder trabajar sin credenciales.

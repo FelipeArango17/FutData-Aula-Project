@@ -22,8 +22,9 @@ public final class ReglasEntrenador {
 
     /** Nombres de las 9 categorías del club en el orden oficial (de menor a mayor edad): Párvulos (4 a 6 años),
      * Cachorros (7 y 8), Semillero (9 y 10) y de Sub-11 a Sub-16, una por cada año. La edad es por año de nacimiento
-     * (migración 007). */
-    public static final List<String> CATEGORIAS = List.of("Párvulos", "Cachorros", "Semillero", "Sub-11", "Sub-12", "Sub-13", "Sub-14", "Sub-15", "Sub-16");
+     * (migración 007). Se derivan de {@link ReglasDeportista#CATEGORIAS}: hay una sola lista de las 9. */
+    public static final List<String> CATEGORIAS = ReglasDeportista.CATEGORIAS.stream()
+            .map(ReglasDeportista.CategoriaClub::nombre).toList();
 
     /**
      * Tipos de documento que se aceptan para un entrenador. La tabla ({@code entrenador_tipo_documento_ck}) también

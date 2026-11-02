@@ -8,6 +8,7 @@ public final class DeportistaMapper {
     private DeportistaMapper() {
     }
 
+    /** {@code activo} nulo queda en {@code true}; el servicio exige que venga en el {@code PUT}. */
     public static Deportista toEntity(DeportistaRequestDTO dto) {
         Deportista d = new Deportista();
         d.setNombre(dto.nombre());
@@ -17,6 +18,9 @@ public final class DeportistaMapper {
         d.setFechaNacimiento(dto.fechaNacimiento());
         d.setTelefono(dto.telefono());
         d.setDireccion(dto.direccion());
+        d.setPosicion(dto.posicion());
+        d.setGrupo(dto.grupo());
+        d.setActivo(dto.activo() == null || dto.activo());
         return d;
     }
 }
