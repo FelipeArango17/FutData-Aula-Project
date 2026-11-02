@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EntrenamientosContext } from './EntrenamientosContext.js'
 import * as servicio from '../services/entrenamientosService.js'
+import { hoy } from '../utils/hoy.js'
 import { lunesDe } from '../utils/fechas.js'
 
 const avisoDe = (accion, notificados) => {
@@ -11,7 +12,7 @@ const avisoDe = (accion, notificados) => {
 export default function EntrenamientosProvider({ children }) {
   const [entrenamientos, setEntrenamientos] = useState([])
   const [cargado, setCargado] = useState(false)
-  const [semana, setSemana] = useState(lunesDe(servicio.HOY_EJEMPLO))
+  const [semana, setSemana] = useState(lunesDe(hoy()))
   // aviso = { id, texto }; el id cambia en cada aviso para que la pantalla lo detecte aunque el texto se repita
   const [aviso, setAviso] = useState(null)
 

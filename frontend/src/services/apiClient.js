@@ -45,7 +45,9 @@ function crearError(estado, mensaje, campos = [], codigo = null, extra = {}) {
 
 export async function apiRequest(ruta, opciones = {}) {
   const { headers: extra, ...resto } = opciones
-  const headers = { ...(resto.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...extra }
+  // FormData: el navegador pone Content-Type con el boundary; JSON: se declara aquí. Quien llama pasa el body ya armado.
+  const esFormData = typeof FormData !== 'undefined' && resto.body instanceof FormData
+  const headers = { ...(resto.body === undefined || esFormData ? {} : { 'Content-Type': 'application/json' }), ...extra }
   const token = await tokenActual()
   if (token) headers.Authorization = `Bearer ${token}`
 
@@ -69,4 +71,36 @@ export async function apiRequest(ruta, opciones = {}) {
     throw crearError(respuesta.status, mensaje, campos, cuerpo.codigo ?? null, extras)
   }
   return respuesta.status === 204 ? null : respuesta.json()
+}
+
+// Sube un archivo como multipart/form-data. `campos` son los demás campos del formulario (los null/undefined se omiten).
+// El nombre del campo del archivo es "archivo" (PENDIENTE: confirmar con el backend).
+export function subirArchivo(ruta, archivo, campos = {}, { metodo = 'POST', nombreCampo = 'archivo' } = {}) {
+  const datos = new FormData()
+  datos.append(nombreCampo, archivo)
+  for (const [clave, valor] of Object.entries(campos)) if (valor !== undefined && valor !== null) datos.append(clave, valor)
+  return apiRequest(ruta, { method: metodo, body: datos })
+}
+
+// Lista paginada: GET ruta?page=&size=&sort=&...filtros. Devuelve { items, total, pagina, tamano } aceptando la forma de
+// Spring Page ({ content, totalElements, number, size }) y la forma { items, total }. Si el contrato final es otro, solo cambia
+// esta función. `page` empieza en 0 (como Spring); `pagina` devuelve el mismo número.
+export function normalizarPagina(cuerpo, { page = 0, size } = {}) {
+  const items = cuerpo?.content ?? cuerpo?.items ?? (Array.isArray(cuerpo) ? cuerpo : [])
+  return {
+    items,
+    total: cuerpo?.totalElements ?? cuerpo?.total ?? items.length,
+    pagina: cuerpo?.number ?? cuerpo?.page ?? cuerpo?.pagina ?? page,
+    tamano: cuerpo?.size ?? cuerpo?.tamano ?? size ?? items.length,
+  }
+}
+
+export async function apiListaPaginada(ruta, { page = 0, size, sort, ...filtros } = {}) {
+  const query = new URLSearchParams()
+  query.set('page', String(page))
+  if (size !== undefined) query.set('size', String(size))
+  if (sort) query.set('sort', sort)
+  for (const [clave, valor] of Object.entries(filtros)) if (valor !== undefined && valor !== null && valor !== '') query.set(clave, String(valor))
+  const cuerpo = await apiRequest(`${ruta}${ruta.includes('?') ? '&' : '?'}${query}`)
+  return normalizarPagina(cuerpo, { page, size })
 }

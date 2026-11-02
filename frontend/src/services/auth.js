@@ -7,3 +7,8 @@ import { autenticacionReal } from './supabaseClient.js'
 
 export const servicio = autenticacionReal ? real : simulado
 export { autenticacionReal }
+
+// En un build de producción (PROD) sin VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY NO se usa el ingreso simulado con cuentas
+// demo: la app muestra un mensaje de configuración. En desarrollo y en pruebas el ingreso simulado sigue igual.
+export const sinConfiguracion = (prod = import.meta.env.PROD, real = autenticacionReal) => Boolean(prod) && !real
+export const MENSAJE_SIN_CONFIGURACION = 'La aplicación no está configurada. Contacta al administrador.'

@@ -44,7 +44,8 @@
 //   cambios: [{ campo, antes, despues }] } con valores crudos (idCategoria como id); el historial nunca se borra.
 //   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
 // - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
-import { CATEGORIAS, HOY_EJEMPLO } from './entrenamientosService.js'
+import { CATEGORIAS } from './entrenamientosService.js'
+import { HOY_EJEMPLO, hoy } from '../utils/hoy.js'
 import { GRUPOS_ENTRENAMIENTO, categoriaPorFecha, categoriaRequiereGrupo, grupoSegunCategoria } from '../utils/categorias.js'
 import { hoyLocal } from '../utils/fechas.js'
 import {
@@ -73,7 +74,7 @@ export const TEXTO_SIN_POSICION = 'Sin definir'
 const TI = 'Tarjeta de identidad'
 // Teléfono y dirección ficticios: 3000000001, 3000000002... y calles inventadas
 // La categoría de cada deportista de ejemplo se calcula con la regla (utils/categorias.js) y el "hoy" de la demo
-const categoriaDeEjemplo = (fechaNacimiento) => categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, HOY_EJEMPLO)).id
+const categoriaDeEjemplo = (fechaNacimiento) => categorias.find((c) => c.nombre === categoriaPorFecha(fechaNacimiento, hoy())).id
 // Grupo de entrenamiento (solo Cachorros y Semillero; mezcla de mañana y tarde) y posición de cada deportista de ejemplo, por id.
 // El grupo no se guarda en la base de datos: es un dato solo del frontend de ejemplo.
 const GRUPO_Y_POSICION = {
@@ -164,9 +165,9 @@ const copiar = (x) => structuredClone(x)
 const normalizar = (t) => String(t ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 
 // Edad en años cumplidos a la fecha `hoy` (por defecto el "hoy" de la demo). Se calcula sobre el texto AAAA-MM-DD.
-export function calcularEdad(fechaNacimiento, hoy = HOY_EJEMPLO) {
+export function calcularEdad(fechaNacimiento, fechaHoy = hoy()) {
   const [a, m, dia] = fechaNacimiento.split('-').map(Number)
-  const [ah, mh, dh] = hoy.split('-').map(Number)
+  const [ah, mh, dh] = fechaHoy.split('-').map(Number)
   return ah - a - (mh < m || (mh === m && dh < dia) ? 1 : 0)
 }
 

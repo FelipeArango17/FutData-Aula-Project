@@ -8,7 +8,8 @@ import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../../components/ui/DialogoConfirmacion.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useActor } from '../../context/useActor.js'
-import { HOY_EJEMPLO, listarDeportistas } from '../../services/deportistasService.js'
+import { hoy } from '../../utils/hoy.js'
+import { listarDeportistas } from '../../services/deportistasService.js'
 import {
   MAX_NOTA, MAX_REFERENCIA, METODOS_PAGO_MANUAL, consultarCobroMensualidad, mesesParaPago, registrarPagoManual, validarDatosPagoManual,
 } from '../../services/pagosService.js'
@@ -22,8 +23,7 @@ import { formatearCOP } from '../../utils/dinero.js'
 // esta tarea, así que no se incluyen. Se agregan buscador de deportista, mes, referencia y nota interna.
 // PENDIENTE: la tarifa de la mensualidad, abonos y anular o corregir un pago (por eso se pide confirmar antes de registrar).
 // Privacidad: la pantalla solo muestra nombre y documento del deportista (nada de teléfono ni dirección).
-const MES_ACTUAL = HOY_EJEMPLO.slice(0, 7)
-const INICIAL = { mes: MES_ACTUAL, monto: '', fechaPago: HOY_EJEMPLO, metodo: '', referencia: '', nota: '' }
+const inicial = () => ({ mes: hoy().slice(0, 7), monto: '', fechaPago: hoy(), metodo: '', referencia: '', nota: '' })
 const MAX_RESULTADOS = 6
 const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
 
@@ -42,7 +42,7 @@ export default function RegistrarPago({ base = '/tesorero' }) {
 
   const [busqueda, setBusqueda] = useState('')
   const [seleccionado, setSeleccionado] = useState(null) // { id, nombre, documento }
-  const [valores, setValores] = useState(INICIAL)
+  const [valores, setValores] = useState(inicial)
   const [errores, setErrores] = useState({})
   const [errorGeneral, setErrorGeneral] = useState(null)
   const [guardando, setGuardando] = useState(false)
@@ -166,13 +166,13 @@ export default function RegistrarPago({ base = '/tesorero' }) {
     setResultado(null)
     setBusqueda('')
     setSeleccionado(null)
-    setValores(INICIAL)
+    setValores(inicial())
     setErrores({})
     setErrorGeneral(null)
     setFormulario((n) => n + 1)
   }
 
-  const hayCambios = seleccionado !== null || busqueda !== '' || JSON.stringify(valores) !== JSON.stringify(INICIAL)
+  const hayCambios = seleccionado !== null || busqueda !== '' || JSON.stringify(valores) !== JSON.stringify(inicial())
   const [confirmarSalir, setConfirmarSalir] = useState(false)
   const cerrarConfirmacion = useCallback(() => setConfirmar(false), [])
   const cerrarSalir = useCallback(() => setConfirmarSalir(false), [])
@@ -313,7 +313,7 @@ export default function RegistrarPago({ base = '/tesorero' }) {
             <p id="monto-ayuda" className="break-words text-small text-secondary">{ayudaMonto}</p>
           </div>
 
-          <Field label="Fecha de pago" id="fechaPago" type="date" max={HOY_EJEMPLO} value={valores.fechaPago} error={errores.fechaPago} onChange={(e) => cambiar('fechaPago', e.target.value)} />
+          <Field label="Fecha de pago" id="fechaPago" type="date" max={hoy()} value={valores.fechaPago} error={errores.fechaPago} onChange={(e) => cambiar('fechaPago', e.target.value)} />
 
           <fieldset aria-describedby={errores.metodo ? 'metodo-error' : undefined} className="flex min-w-0 flex-col gap-2">
             <legend className="mb-1 break-words text-body-medium">Método de pago</legend>

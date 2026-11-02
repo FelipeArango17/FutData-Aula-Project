@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const supabase = vi.hoisted(() => ({ auth: { getSession: vi.fn(), signOut: vi.fn() } }))
 vi.mock('./supabaseClient.js', () => ({ supabase, autenticacionReal: true }))
 
-import { apiRequest, configurarAlNoAutorizado } from './apiClient.js'
+import { apiListaPaginada, apiRequest, configurarAlNoAutorizado, normalizarPagina, subirArchivo } from './apiClient.js'
 
 const respuesta = (estado, cuerpo) =>
   new Response(cuerpo === undefined ? null : JSON.stringify(cuerpo), { status: estado, headers: { 'Content-Type': 'application/json' } })
@@ -111,5 +111,67 @@ describe('apiRequest: errores', () => {
     fetchSimulado.mockRejectedValue(new TypeError('Failed to fetch'))
     const error = await apiRequest('/x').catch((e) => e)
     expect(error).toMatchObject({ estado: 0, codigo: 'RED', campos: [] })
+  })
+})
+
+describe('apiRequest: FormData y JSON', () => {
+  it('con FormData no pone Content-Type (lo pone el navegador con el boundary) ni lo convierte en JSON', async () => {
+    const datos = new FormData()
+    datos.append('archivo', new Blob(['x']), 'a.pdf')
+    await apiRequest('/documentos', { method: 'POST', body: datos })
+    const [, opciones] = ultimaLlamada()
+    expect(opciones.headers['Content-Type']).toBeUndefined()
+    expect(opciones.body).toBe(datos)
+  })
+
+  it('con JSON sigue enviando Content-Type: application/json', async () => {
+    await apiRequest('/entrenadores', { method: 'POST', body: JSON.stringify({ a: 1 }) })
+    expect(ultimaLlamada()[1].headers['Content-Type']).toBe('application/json')
+    expect(ultimaLlamada()[1].body).toBe('{"a":1}')
+  })
+
+  it('subirArchivo arma el FormData con el archivo y los campos (omite null y undefined)', async () => {
+    const archivo = new Blob(['x'], { type: 'application/pdf' })
+    await subirArchivo('/deportistas/3/documentos', archivo, { tipo: 'Registro civil', vencimiento: null, nota: undefined })
+    const [url, opciones] = ultimaLlamada()
+    expect(url).toMatch(/\/api\/deportistas\/3\/documentos$/)
+    expect(opciones.method).toBe('POST')
+    expect(opciones.headers['Content-Type']).toBeUndefined()
+    expect(opciones.body).toBeInstanceOf(FormData)
+    expect([...opciones.body.keys()]).toEqual(['archivo', 'tipo'])
+    expect(opciones.body.get('tipo')).toBe('Registro civil')
+  })
+})
+
+describe('apiListaPaginada', () => {
+  it('arma la query (page, size, sort y filtros; sin los vacíos)', async () => {
+    await apiListaPaginada('/deportistas', { page: 2, size: 10, sort: 'nombre,asc', estado: 'activo', texto: '', categoria: undefined })
+    expect(ultimaLlamada()[0]).toMatch(/\/api\/deportistas\?page=2&size=10&sort=nombre%2Casc&estado=activo$/)
+  })
+
+  it('normaliza la forma de Spring Page', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(200, { content: [{ id: 1 }, { id: 2 }], totalElements: 25, number: 1, size: 2 }))
+    expect(await apiListaPaginada('/x', { page: 1, size: 2 })).toEqual({ items: [{ id: 1 }, { id: 2 }], total: 25, pagina: 1, tamano: 2 })
+  })
+
+  it('normaliza la forma { items, total } usando page y size pedidos', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(200, { items: [{ id: 7 }], total: 11 }))
+    expect(await apiListaPaginada('/x', { page: 3, size: 5 })).toEqual({ items: [{ id: 7 }], total: 11, pagina: 3, tamano: 5 })
+  })
+
+  it('un arreglo simple o un cuerpo vacío no rompen', () => {
+    expect(normalizarPagina([{ id: 1 }])).toEqual({ items: [{ id: 1 }], total: 1, pagina: 0, tamano: 1 })
+    expect(normalizarPagina(null)).toEqual({ items: [], total: 0, pagina: 0, tamano: 0 })
+  })
+
+  it('los errores sin cambios: 401, 403, 409 y red', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(401, {}))
+    expect(await apiListaPaginada('/x').catch((e) => e)).toMatchObject({ estado: 401, codigo: 'SESION' })
+    fetchSimulado.mockResolvedValue(respuesta(403, {}))
+    expect(await apiListaPaginada('/x').catch((e) => e)).toMatchObject({ estado: 403, codigo: 'PERMISOS' })
+    fetchSimulado.mockResolvedValue(respuesta(409, { mensaje: 'Ya existe.', campos: ['documento'], codigo: 'DUPLICADO' }))
+    expect(await apiListaPaginada('/x').catch((e) => e)).toMatchObject({ estado: 409, campos: ['documento'], codigo: 'DUPLICADO' })
+    fetchSimulado.mockRejectedValue(new TypeError('Failed'))
+    expect(await apiListaPaginada('/x').catch((e) => e)).toMatchObject({ estado: 0, codigo: 'RED' })
   })
 })

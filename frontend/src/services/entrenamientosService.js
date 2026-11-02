@@ -23,10 +23,11 @@
 import { NOMBRES_CATEGORIAS } from '../utils/categorias.js'
 import { chocaEntrenador, entrenamientosDeSemana } from '../utils/horarioClub.js'
 import { lunesDe, sumarMinutos } from '../utils/fechas.js'
+import { HOY_EJEMPLO, hoy } from '../utils/hoy.js'
 import { ENTRENADORES_CLUB, FRANJAS_EJEMPLO, SEDES } from './horarioClubData.js'
 
-// Día "de hoy" del mockup de Figma; con él los datos de ejemplo caen en la semana del 19 al 24 de octubre.
-export const HOY_EJEMPLO = '2026-10-22'
+// "Hoy" sale de utils/hoy.js: HOY_EJEMPLO (2026-10-22) en las pruebas y la fecha real en cualquier otro caso.
+export { HOY_EJEMPLO }
 
 // Las categorías son las del club (utils/categorias.js, regla provisional por año de nacimiento).
 // PENDIENTE: confirmar con el modelo de datos del backend (categorías y sedes aún no existen).
@@ -49,9 +50,9 @@ const JUGADORES_POR_CATEGORIA = {
   Párvulos: 10, Cachorros: 14, Semillero: 28, 'Sub-11': 16, 'Sub-12': 17, 'Sub-13': 15, 'Sub-14': 16, 'Sub-15': 14, 'Sub-16': 12,
 }
 
-// Entrenamientos de la semana de HOY_EJEMPLO, sacados de la plantilla semanal. Se calculan una vez para poder compartir ids
+// Entrenamientos de la semana de hoy(), sacados de la plantilla semanal. Se calculan una vez para poder compartir ids
 // (la asistencia de ejemplo se apoya en ellos).
-export const entrenamientosDeEjemplo = () => entrenamientosDeSemana(lunesDe(HOY_EJEMPLO), FRANJAS_EJEMPLO)
+export const entrenamientosDeEjemplo = () => entrenamientosDeSemana(lunesDe(hoy()), FRANJAS_EJEMPLO)
 
 let entrenamientos = entrenamientosDeEjemplo()
 let siguienteId = entrenamientos.length + 1
