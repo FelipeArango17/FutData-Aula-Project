@@ -7,7 +7,8 @@
 **Migraciones 002 y 003 (equipo):** la tabla `AcudienteDeportista`, la asistencia con tres estados, `Usuario.apellido`, la categoría del deportista y la fecha de pago opcionales, y la tabla `CodigoVerificacion` del 2FA. Están marcadas como **Migración 002** o **Migración 003**.  
 **Migración 004:** se agregan las tablas `Documento`, `Venta`, `EquipoConfianza`, `SesionVerificada` y `Auditoria`, y se ajustan `Deportista`, `Entrenador`, `Usuario`, `Pago`, `Asistencia`, `Categoria` y `Entrenamiento`. Lo que cambia está marcado como **Migración 004** y explicado en la sección 6 (decisiones D6 a D16).  
 **Migración 007:** categorías reales del club por año de nacimiento (9: Párvulos, Cachorros, Semillero y de Sub-11 a Sub-16), registro civil como tipo de documento del deportista, los 7 tipos de documento que pide el club, sedes y horario fijo de lunes a sábado (nueva tabla `FranjaHorario`) y buckets de Storage para fotos y documentos. Marcado como **Migración 007** y explicado en la sección 6 (decisiones D18 a D21).  
-El esquema vigente son las migraciones de `supabase/migrations/` aplicadas en orden: `001_schema_inicial.sql`, `002_modelo_datos.sql`, `003_codigo_verificacion_2fa.sql`, `004_ajustes_modelo.sql`, `005_seguridad_sesion_2fa.sql`, `006_sesion_verificada_por_sesion.sql` y `007_categorias_club_y_horario.sql`.
+**Migración 008 (bloque 2A):** `AcudienteDeportista.parentesco`, `Deportista.grupo` y `Deportista.activo`; la categoría del deportista pasa a calcularse al leer (D22). Marcado como **Migración 008**.  
+El esquema vigente son las migraciones de `supabase/migrations/` aplicadas en orden: `001_schema_inicial.sql`, `002_modelo_datos.sql`, `003_codigo_verificacion_2fa.sql`, `004_ajustes_modelo.sql`, `005_seguridad_sesion_2fa.sql`, `006_sesion_verificada_por_sesion.sql`, `007_categorias_club_y_horario.sql` y `008_parentesco_y_grupo.sql`.
 
 ## 1. Convenciones
 
@@ -36,18 +37,22 @@ Registro principal de los jugadores del club.
 | `nombre` | `varchar` | — | Nombres del deportista. |
 | `apellido` | `varchar` | — | Apellidos del deportista. |
 | `tipo_documento` | `varchar` | — | Tipo de documento de identidad: `TI`, `RC` (registro civil), `CE` o `PASAPORTE`. **Migración 007:** se agrega `RC` y sale `CC` (D18). |
-| `documento_identidad` | `varchar` | — | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. |
+| `documento_identidad` | `varchar` | Único | Número del documento de identidad como texto, para conservar ceros iniciales y soportar distintos formatos. **Único solo por el número**, sin importar el tipo (índice `deportista_documento_identidad_uidx`, migración 002): un mismo número con TI y con RC es un duplicado. La API responde `409` sin decir de quién es. |
 | `fecha_nacimiento` | `date` | — | Fecha de nacimiento. |
 | `edad` | `int` | Calculado | Edad calculada a partir de `fecha_nacimiento`. |
-| `posicion` | `varchar` | — | Posición habitual de juego. |
+| `categoria` | — | Calculado | **Bloque 2A (D22).** No es una columna: la categoría se calcula al leer con el año de nacimiento y el año actual (reloj de Bogotá). La API devuelve `categoria` (nombre) e `idCategoria`; ambos `null` si queda fuera de 4 a 16 años. |
+| `estadoInscripcion` | — | Calculado | **Bloque 2A.** No es una columna: `COMPLETA` si cada uno de los 4 documentos obligatorios (`DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`) tiene al menos un `Documento` en estado `APROBADO`; si no, `PENDIENTE`. Un documento `PENDIENTE` o `RECHAZADO` no cuenta, y un tipo con uno rechazado y otro aprobado cuenta como aprobado. Solo lo recibe el administrador. |
+| `posicion` | `varchar` | — | Posición habitual de juego. Opcional, máximo 50 caracteres. |
 | `eps` | `varchar` | — | Entidad promotora de salud. |
 | `telefono` | `varchar` | — | Teléfono de contacto. |
 | `correo` | `varchar` | — | Correo electrónico. |
 | `direccion` | `varchar` | — | Dirección de residencia. |
 | `foto` | `varchar` | — | Ruta de la fotografía en el bucket privado `fotos` de Supabase Storage (JPG o PNG, máximo 5 MB). El backend entrega URL firmadas (D20). |
 | `fecha_registro` | `date` | — | Fecha de registro en el sistema. |
-| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. **Migración 002:** nullable mientras se asigna el grupo. **Migración 004:** obligatoria cuando la inscripción está `ACTIVA` (D9). **Migración 007:** se asigna automáticamente según el año de nacimiento (D18). |
-| `estado_inscripcion` | `varchar` | — | **Migración 004.** `PENDIENTE` (recién inscrito, documentos en revisión), `ACTIVA` (aprobado, con categoría) o `RETIRADA`. Por defecto `PENDIENTE`. Ver decisión D9. |
+| `id_categoria` | `UUID` | FK, nullable | **Nuevo (Sprint 2).** Categoría a la que pertenece el deportista. Referencia `Categoria.id_categoria`. Ver decisión D3. **Migración 002:** nullable mientras se asigna el grupo. **Migración 004:** obligatoria cuando la inscripción está `ACTIVA` (D9). **Migración 007:** se asigna automáticamente según el año de nacimiento (D18). **Valor heredado (bloque 2A):** la 007 la llenó para los deportistas que ya existían; los nuevos quedan con NULL y ningún código la lee ni la escribe, porque la categoría se calcula al leer a partir de la fecha de nacimiento. Conviene eliminarla en una migración futura. |
+| `estado_inscripcion` | `varchar` | — | **Migración 004.** `PENDIENTE` (recién inscrito, documentos en revisión), `ACTIVA` (aprobado, con categoría) o `RETIRADA`. Por defecto `PENDIENTE`. Ver decisión D9. **Valor heredado (migración 008):** ningún código lo lee ni lo escribe; lo reemplazan `activo` y el `estadoInscripcion` calculado desde los documentos. Los nuevos quedan con el valor por defecto. |
+| `grupo` | `varchar` | nullable | **Migración 008.** `mañana` o `tarde` (`deportista_grupo_ck`), opcional. Solo aplica en Cachorros y Semillero: la base solo valida los dos valores y el **backend** rechaza con `400` un grupo en otra categoría. Si el deportista cambia de categoría (cada 1 de enero), el grupo guardado no se devuelve (D22). |
+| `activo` | `boolean` | — | **Migración 008.** Por defecto `true`: el deportista queda activo al inscribirse, aunque su inscripción esté pendiente. La migración deja en `false` a los que tenían `estado_inscripcion = 'RETIRADA'`. El administrador lo cambia con `PUT /api/deportistas/{id}`. |
 
 **Migración 004:** se quita `documentos`; los documentos del deportista están en la tabla `Documento` (D10). Los acudientes se asocian por `AcudienteDeportista` (migración 002).
 
@@ -79,6 +84,7 @@ Personas responsables de uno o varios deportistas. **Migración 002:** un acudie
 | :--- | :--- | :--- | :--- |
 | `id_acudiente` | `UUID` | PK/FK | Acudiente asociado. Referencia `Acudiente.id_acudiente`. |
 | `id_deportista` | `UUID` | PK/FK | Deportista asociado. Referencia `Deportista.id_deportista`. |
+| `parentesco` | `varchar` | nullable | **Migración 008.** Parentesco del acudiente con el deportista: `Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio` u `Otro` (`acudiente_deportista_parentesco_ck`), opcional. Se guarda **sin tilde** (`Tia`, `Tio`); el frontend lo muestra con tilde. |
 
 ### 2.4 `Entrenador`
 
@@ -398,7 +404,7 @@ Se borra una fila al cerrar sesión (`POST /api/auth/logout`, solo la de ese tok
 | `hora_fin` | `time` | — | Hora de fin, posterior a `hora_inicio`. |
 | `sede` | `varchar` | — | `Horizontes` o `UVA El Paraíso`. |
 | `id_entrenador` | `UUID` | FK, nullable | Entrenador de la franja. Referencia `Entrenador.id_entrenador`. NULL significa "por turnos": no hay un entrenador fijo y el club rota quién dirige (Párvulos, Cachorros y Semillero). |
-| `grupo` | `varchar` | nullable | `mañana` o `tarde`. Describe la franja, no al deportista: solo se usa en las franjas de Cachorros y Semillero de martes y jueves, que tienen dos sesiones alternativas el mismo día porque unos niños estudian en la mañana y otros en la tarde. El grupo de cada deportista no se guarda en la base de datos. |
+| `grupo` | `varchar` | nullable | `mañana` o `tarde`. Describe la franja, no al deportista: solo se usa en las franjas de Cachorros y Semillero de martes y jueves, que tienen dos sesiones alternativas el mismo día porque unos niños estudian en la mañana y otros en la tarde. **Migración 008:** el grupo de cada deportista sí se guarda, en `Deportista.grupo`. |
 
 Un mismo entrenador no puede tener dos franjas que se solapen el mismo día (restricción `franja_cruce_entrenador_ex`). Categorías distintas sí pueden coincidir en hora y sede. La plantilla del club (30 franjas, tomadas del Excel oficial del club) está en `supabase/seeds/franjas_club.sql`; no es una migración y se carga a mano.
 
@@ -439,7 +445,7 @@ Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es 
 ## 4. Observaciones para la implementación
 
 1. `UsuarioRol` es la única fuente de verdad para los roles; `Usuario` no almacena un campo `rol`.
-2. Se debe aplicar `UNIQUE` a `correo` en `Usuario`, a (`tipo_documento`, `documento_identidad`) en `Deportista`, `Acudiente` y `Entrenador`, y a `correo` en cada perfil que lo almacene.
+2. Se debe aplicar `UNIQUE` a `correo` en `Usuario`, a (`tipo_documento`, `documento_identidad`) en `Acudiente` y `Entrenador`, solo a `documento_identidad` en `Deportista` (migración 002: un mismo número no puede repetirse aunque cambie el tipo), y a `correo` en cada perfil que lo almacene.
 3. Para evitar duplicados, se debe aplicar `UNIQUE (id_torneo, id_deportista)` en `InscripcionTorneo`.
 4. Para evitar duplicados, se debe aplicar `UNIQUE (id_deportista, id_entrenamiento)` en `Asistencia`.
 5. `documento_identidad` se almacena como `varchar`, no como entero, para conservar ceros iniciales y soportar documentos alfanuméricos.
@@ -479,7 +485,7 @@ La capa `services/entrenamientosService.js` usa esta forma de datos, que debe ca
 | `idEntrenador` | `Entrenamiento.id_entrenador` | — |
 | Jugadores a notificar (por ejemplo, 17) | Conteo de `Deportista` con el mismo `id_categoria` | Hoy es un dato de ejemplo en el frontend. |
 
-## 6. Decisiones de la revisión del modelo (migraciones 002 a 007)
+## 6. Decisiones de la revisión del modelo (migraciones 002 a 008)
 
 Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres estados) y la tabla de códigos de D16 los aplicaron las migraciones 002 y 003 del equipo; el resto está en `supabase/migrations/004_ajustes_modelo.sql`.
 
@@ -501,6 +507,7 @@ Ajustes que salieron de revisar el backend contra el PPI. D6, D11 (los tres esta
 | D19 | `lugar` era texto libre y la restricción de cruce por lugar impedía que varias categorías entrenaran a la misma hora en la misma sede, algo normal en el club. Tampoco había dónde guardar el horario fijo semanal. | **Migración 007.** `Entrenamiento.lugar` pasa a ser `Horizontes` o `UVA El Paraíso`. Se elimina `entrenamiento_cruce_lugar_ex` y se conservan las de categoría y entrenador. Tabla `FranjaHorario` con el horario fijo de lunes a sábado y una restricción de cruce por entrenador. Reemplaza a D2 en lo del lugar. |
 | D20 | Las fotos y los documentos de los deportistas no tenían dónde guardarse. | **Migración 007.** Buckets privados de Supabase Storage: `fotos` (JPG o PNG) y `documentos` (PDF, JPG o PNG), de máximo 5 MB. Sin políticas: solo el backend entra con la llave `service_role` y entrega URL firmadas de corta duración, como el bucket de comprobantes. `Deportista.foto` guarda la ruta. |
 | D21 | Los tipos de `Documento` de la 004 (`FICHA_MEDICA`, `PERMISO`, `CONTRATO`, `OTRO`) no son los que pide el club para inscribir a un deportista. | **Migración 007.** `documento_tipo_ck` con los 7 tipos del club. Obligatorios: `DOCUMENTO_IDENTIDAD` (cédula, tarjeta de identidad o registro civil, según la edad), `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION` y `AUTORIZACION_HABEAS_DATA`. Si aplican: `PAZ_Y_SALVO` (si viene de otro club), `CARTA_RENUNCIA` (si jugaba en otra liga o región) y `TRASPASO_NACIONAL`. La ficha médica sale de la lista. La foto tipo documento no es un tipo: es `Deportista.foto` (bucket `fotos`). La migración se detiene si ya hay documentos con un tipo viejo y dice cuántos hay de cada uno, para migrarlos o borrarlos antes. |
+| D22 | Guardar la categoría en `Deportista.id_categoria` (D18) obliga a recalcularla cada 1 de enero con un proceso programado o una actualización masiva; si no corre, la categoría queda vieja. | **Bloque 2A (migración 008).** **Categoría derivada al leer:** la API la calcula en cada lectura con edad por año = año actual − año de nacimiento, donde el año actual sale del reloj de la aplicación en hora de Bogotá (`America/Bogota`, nunca la fecha del servidor ni `current_date`). La lista la obtiene en la misma consulta con un join por rango contra `Categoria`, y el filtro por categoría usa el rango de fechas de nacimiento de ese año. Así cambia sola el 1 de enero. `Deportista.id_categoria` queda como **valor heredado**: la 007 lo llenó para los existentes, los nuevos quedan con NULL y ningún código lo lee ni lo escribe (conviene eliminarlo en una migración futura). Si el deportista se pasa de 16 años, `categoria` e `idCategoria` salen en `null` (al leer no es error; al crear o al cambiar la fecha de nacimiento sí, `400`), y se le puede seguir editando o desactivando sin cambiar su fecha. Si cambia a una categoría que no admite grupo (por ejemplo, de Semillero a Sub-11), `grupo` sale en `null` sin tocar la base. |
 
 Además, los correos de `Usuario`, `Entrenador`, `Deportista` y `Acudiente` pasan a ser únicos sin distinguir mayúsculas.
 

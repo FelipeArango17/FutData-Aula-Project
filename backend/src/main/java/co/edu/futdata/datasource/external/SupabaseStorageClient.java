@@ -2,6 +2,8 @@ package co.edu.futdata.datasource.external;
 
 import co.edu.futdata.config.SupabaseProperties;
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +29,9 @@ import org.springframework.web.client.RestClientException;
  *       que un archivo existente no se sobrescriba.</li>
  *   <li>URL firmada: {@code POST /object/sign/{bucket}/{ruta}} con {@code {"expiresIn": segundos}}; responde
  *       {@code {"signedURL": "/object/sign/...?token=..."}}, relativa a {@code {url}/storage/v1}.</li>
+ *   <li>URL firmadas por lote: {@code POST /object/sign/{bucket}} con {@code {"expiresIn": s, "paths": [...]}}; una
+ *       sola llamada para toda una página.</li>
+ *   <li>Borrar: {@code DELETE /object/{bucket}/{ruta}}.</li>
  * </ul>
  *
  * <p>Se autentica con la llave {@code service_role} en las cabeceras {@code Authorization: Bearer} y
@@ -81,9 +86,16 @@ public class SupabaseStorageClient implements IAlmacenamientoArchivos {
 
     @Override
     public String subir(String bucket, String ruta, byte[] contenido, String contentType) {
+        return subir(bucket, ruta, contenido, contentType, List.of(PDF));
+    }
+
+    @Override
+    public String subir(String bucket, String ruta, byte[] contenido, String contentType, List<String> tiposPermitidos) {
         validarUbicacion(bucket, ruta);
-        if (contentType == null || !PDF.equalsIgnoreCase(contentType.strip())) {
-            throw new ArchivoInvalidoException("Solo se pueden subir archivos " + PDF, null, null);
+        String tipo = contentType == null ? "" : contentType.strip().toLowerCase(Locale.ROOT);
+        if (tiposPermitidos == null || tiposPermitidos.isEmpty() || !tiposPermitidos.contains(tipo)) {
+            throw new ArchivoInvalidoException("Solo se pueden subir archivos "
+                    + String.join(" o ", tiposPermitidos == null ? List.of() : tiposPermitidos), null, null);
         }
         if (contenido == null || contenido.length == 0) {
             throw new ArchivoInvalidoException("El archivo está vacío", null, null);
@@ -99,7 +111,7 @@ public class SupabaseStorageClient implements IAlmacenamientoArchivos {
         Respuesta respuesta = llamar("subir", destino, inicio, () -> http.post()
                 .uri(base + "/object/" + destino)
                 .headers(this::autenticar)
-                .contentType(MediaType.APPLICATION_PDF)
+                .contentType(MediaType.parseMediaType(tipo))
                 .header("x-upsert", "false")
                 .body(contenido)
                 .exchange((peticion, res) -> new Respuesta(res.getStatusCode().value(), leerCuerpo(res)), true));
@@ -155,13 +167,93 @@ public class SupabaseStorageClient implements IAlmacenamientoArchivos {
         };
     }
 
+    @Override
+    public void eliminar(String bucket, String ruta) {
+        validarUbicacion(bucket, ruta);
+        String base = urlApi("borrar");
+        String destino = bucket + "/" + ruta;
+
+        long inicio = System.nanoTime();
+        Respuesta respuesta = llamar("borrar", destino, inicio, () -> http.delete()
+                .uri(base + "/object/" + destino)
+                .headers(this::autenticar)
+                .exchange((peticion, res) -> new Respuesta(res.getStatusCode().value(), leerCuerpo(res)), true));
+        long ms = milisegundos(inicio);
+
+        int codigo = codigoEfectivo(respuesta);
+        if (codigo == 200 || codigo == 204) {
+            log.info("Archivo borrado de Storage: {}, HTTP {}, {} ms", destino, respuesta.codigo(), ms);
+            return;
+        }
+        log.warn("Storage no borró {}: HTTP {} (efectivo {}), {} ms", destino, respuesta.codigo(), codigo, ms);
+        throw switch (codigo) {
+            case 404 -> new ArchivoNoEncontradoException("No existe el archivo " + destino + " en Supabase Storage", codigo, null);
+            case 401, 403 -> llaveRechazada(codigo);
+            default -> otroCodigo(codigo, "borrar " + destino);
+        };
+    }
+
+    /**
+     * {@code POST /object/sign/{bucket}} con {@code {"expiresIn": s, "paths": [...]}}; responde una lista con
+     * {@code {"path", "signedURL", "error"}} por ruta. Las rutas con {@code error} (por ejemplo, sin archivo) no van
+     * en el resultado.
+     */
+    @Override
+    public Map<String, String> urlsFirmadas(String bucket, List<String> rutas, Duration vigencia) {
+        if (rutas == null || rutas.isEmpty()) return Map.of();
+        rutas.forEach(ruta -> validarUbicacion(bucket, ruta));
+        validarVigencia(vigencia);
+        String base = urlApi("firmar");
+
+        long inicio = System.nanoTime();
+        RespuestaLista respuesta = llamar("firmar", bucket + " (" + rutas.size() + " rutas)", inicio, () -> http.post()
+                .uri(base + "/object/sign/" + bucket)
+                .headers(this::autenticar)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("expiresIn", vigencia.toSeconds(), "paths", rutas))
+                .exchange((peticion, res) -> new RespuestaLista(res.getStatusCode().value(), leerLista(res)), true));
+        long ms = milisegundos(inicio);
+
+        if (respuesta.codigo() == 200) {
+            Map<String, String> urls = new LinkedHashMap<>();
+            for (Map<String, Object> item : respuesta.items()) {
+                if (item.get("error") == null && item.get("path") instanceof String ruta && rutas.contains(ruta)
+                        && item.get("signedURL") instanceof String relativa && relativa.startsWith("/")) {
+                    urls.put(ruta, absoluta(base, relativa));
+                }
+            }
+            // Las URL firmadas no se registran: quien las tenga puede descargar los archivos.
+            log.info("URL firmadas por lote en {}: {} de {} rutas (vigencia {} s), HTTP 200, {} ms", bucket,
+                    urls.size(), rutas.size(), vigencia.toSeconds(), ms);
+            return urls;
+        }
+        log.warn("Storage no firmó por lote en {}: HTTP {}, {} ms", bucket, respuesta.codigo(), ms);
+        throw switch (respuesta.codigo()) {
+            case 404 -> new AlmacenamientoNoConfiguradoException("El bucket " + bucket + " no existe en Supabase Storage", 404, null);
+            case 401, 403 -> llaveRechazada(respuesta.codigo());
+            default -> otroCodigo(respuesta.codigo(), "firmar por lote en " + bucket);
+        };
+    }
+
+    private static void validarVigencia(Duration vigencia) {
+        if (vigencia == null || vigencia.compareTo(VIGENCIA_MINIMA) < 0 || vigencia.compareTo(VIGENCIA_MAXIMA) > 0) {
+            throw new IllegalArgumentException("La vigencia de la URL firmada debe estar entre 10 s y 1 h");
+        }
+    }
+
+    /** {@code signedURL} viene relativa a {@code {url}/storage/v1} (o, en algunas versiones, con {@code /storage/v1}). */
+    private static String absoluta(String base, String relativa) {
+        return relativa.startsWith(RUTA_API + "/") ? base.substring(0, base.length() - RUTA_API.length()) + relativa
+                : base + relativa;
+    }
+
     private void autenticar(HttpHeaders cabeceras) {
         cabeceras.setBearerAuth(propiedades.serviceRoleKey().strip());
         cabeceras.set("apikey", propiedades.serviceRoleKey().strip());
     }
 
     /** Hace la llamada y convierte las fallas de red en {@link AlmacenamientoNoDisponibleException}. */
-    private Respuesta llamar(String operacion, String destino, long inicio, Supplier<Respuesta> llamada) {
+    private <T> T llamar(String operacion, String destino, long inicio, Supplier<T> llamada) {
         try {
             return llamada.get();
         } catch (ResourceAccessException e) {
@@ -264,10 +356,25 @@ public class SupabaseStorageClient implements IAlmacenamientoArchivos {
         }
     }
 
+    /** El cuerpo de la respuesta como lista de objetos; vacía si no es un arreglo JSON. */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> leerLista(RestClient.RequestHeadersSpec.ConvertibleClientHttpResponse res) {
+        try {
+            List<Object> cuerpo = res.bodyTo(List.class);
+            if (cuerpo == null) return List.of();
+            return cuerpo.stream().filter(Map.class::isInstance).map(o -> (Map<String, Object>) o).toList();
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+    }
+
     private static long milisegundos(long inicio) {
         return Duration.ofNanos(System.nanoTime() - inicio).toMillis();
     }
 
     record Respuesta(int codigo, Map<String, Object> cuerpo) {
+    }
+
+    record RespuestaLista(int codigo, List<Map<String, Object>> items) {
     }
 }
