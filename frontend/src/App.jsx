@@ -15,7 +15,6 @@ import Perfil from './pages/perfil/Perfil.jsx'
 import Inscripcion from './pages/inscripcion/Inscripcion.jsx'
 import { useAuth } from './context/AuthContext.js'
 import EntrenadoresProvider from './context/EntrenadoresProvider.jsx'
-import EntrenamientosProvider from './context/EntrenamientosProvider.jsx'
 import { useRole } from './context/RoleContext.js'
 import EsperaSesion from './components/EsperaSesion.jsx'
 import { roles, menus, getItems } from './config/menus.js'
@@ -39,38 +38,36 @@ function App() {
       <AccesibilidadProvider>
         <AuthProvider>
           <RoleProvider>
-            <EntrenamientosProvider>
-              <Routes>
-                {/* Pantallas públicas: fuera del AppShell */}
-                <Route path="/" element={<Inicio />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/verificar" element={<Verificar />} />
-                <Route path="/recuperar" element={<Recuperar />} />
-                <Route path="/restablecer" element={<Restablecer />} />
-                <Route path="/crear-contrasena" element={<CrearContrasena />} />
-                <Route path="/inscripcion" element={<Inscripcion />} />
-                <Route element={<AppShell />}>
-                  {/* Perfil: dentro del AppShell, para los 4 roles */}
-                  <Route path="/perfil" element={<Perfil />} />
-                  {roles.map((role) => (
-                    <Route key={role} path={`/${role}`} element={role === 'administrador' ? <EntrenadoresProvider><RoleRoute role={role} /></EntrenadoresProvider> : <RoleRoute role={role} />}>
-                      <Route index element={<Navigate to={menus[role][0].items[0].to} replace />} />
-                      {getItems(role).map((item) => {
-                        const Screen = screens[item.to]
-                        return (
-                          <Route key={item.to} path={item.to} element={Screen ? <Screen /> : <PlaceholderPage title={item.label} />} />
-                        )
-                      })}
-                      {(extraScreens[role] ?? []).map(({ path, Screen }) => (
-                        <Route key={path} path={path} element={<Screen />} />
-                      ))}
-                      <Route path="*" element={<Navigate to={`/${role}`} replace />} />
-                    </Route>
-                  ))}
-                </Route>
-                <Route path="*" element={<RedirectToRole />} />
-              </Routes>
-            </EntrenamientosProvider>
+            <Routes>
+              {/* Pantallas públicas: fuera del AppShell */}
+              <Route path="/" element={<Inicio />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/verificar" element={<Verificar />} />
+              <Route path="/recuperar" element={<Recuperar />} />
+              <Route path="/restablecer" element={<Restablecer />} />
+              <Route path="/crear-contrasena" element={<CrearContrasena />} />
+              <Route path="/inscripcion" element={<Inscripcion />} />
+              <Route element={<AppShell />}>
+                {/* Perfil: dentro del AppShell, para los 4 roles */}
+                <Route path="/perfil" element={<Perfil />} />
+                {roles.map((role) => (
+                  <Route key={role} path={`/${role}`} element={role === 'administrador' ? <EntrenadoresProvider><RoleRoute role={role} /></EntrenadoresProvider> : <RoleRoute role={role} />}>
+                    <Route index element={<Navigate to={menus[role][0].items[0].to} replace />} />
+                    {getItems(role).map((item) => {
+                      const Screen = screens[item.to]
+                      return (
+                        <Route key={item.to} path={item.to} element={Screen ? <Screen /> : <PlaceholderPage title={item.label} />} />
+                      )
+                    })}
+                    {(extraScreens[role] ?? []).map(({ path, Screen }) => (
+                      <Route key={path} path={path} element={<Screen />} />
+                    ))}
+                    <Route path="*" element={<Navigate to={`/${role}`} replace />} />
+                  </Route>
+                ))}
+              </Route>
+              <Route path="*" element={<RedirectToRole />} />
+            </Routes>
           </RoleProvider>
         </AuthProvider>
       </AccesibilidadProvider>

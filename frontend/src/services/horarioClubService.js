@@ -6,8 +6,19 @@
 // Las reglas están en utils/horarioClub.js (validarFranja). El mismo entrenador no puede tener dos franjas que se crucen el
 // mismo día; dos categorías distintas sí pueden coincidir.
 // PENDIENTE (backend): permisos (solo el administrador edita la plantilla; lo valida el backend con el JWT).
+//
+// Modo API (VITE_API_MODULOS con "horarioclub"): ver el final del archivo. Habla con /api/horario-club; los ids son UUID y las
+// franjas traen el nombre de la categoría y del entrenador. Sin el interruptor (y siempre en las pruebas) todo sigue con los
+// datos de ejemplo de arriba, con ids numéricos: los dos modos no se mezclan.
 import { FRANJAS_EJEMPLO } from './horarioClubData.js'
 import { validarFranja } from '../utils/horarioClub.js'
+import { erroresPorCampo } from '../utils/erroresApi.js'
+import { adaptarFranja, consultaFranjas, cuerpoFranja } from '../utils/franjasApi.js'
+import { apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+
+const usarApi = usarApiDe('horarioclub')
+export const horarioClubPorApi = () => usarApi
 
 let franjas = FRANJAS_EJEMPLO.map((f) => ({ ...f }))
 let siguienteId = franjas.length + 1
@@ -32,12 +43,14 @@ function exigirValida(datos, ignorarId) {
   if (Object.keys(errores).length > 0) throw error('VALIDACION', 'Hay datos que corregir.', { errores })
 }
 
-export async function listar() {
+export async function listar(filtros = {}) {
+  if (usarApi) return api.listar(filtros)
   await simularRed()
   return franjas.map(copiar)
 }
 
 export async function crear(datos) {
+  if (usarApi) return api.crear(datos)
   await simularRed()
   exigirValida(datos, null)
   const nueva = { id: siguienteId++, ...limpia(datos) }
@@ -46,6 +59,7 @@ export async function crear(datos) {
 }
 
 export async function editar(id, datos) {
+  if (usarApi) return api.editar(id, datos)
   await simularRed()
   const actual = franjas.find((f) => f.id === Number(id))
   if (!actual) throw error('FRANJA_NO_EXISTE', 'La franja no existe.')
@@ -56,9 +70,43 @@ export async function editar(id, datos) {
 }
 
 export async function eliminar(id) {
+  if (usarApi) return api.eliminar(id)
   await simularRed()
   const actual = franjas.find((f) => f.id === Number(id))
   if (!actual) throw error('FRANJA_NO_EXISTE', 'La franja no existe.')
   franjas = franjas.filter((f) => f.id !== actual.id)
   return { id: actual.id }
+}
+
+// ---- API real ----
+// Los errores de la API (400, 403, 404, 409) llegan con `estado`, `mensaje` (el del backend, en español) y `campos`. Si traen
+// campos se agrega `errores` ({ campo: texto }), que es lo que ya muestra el formulario; el 409 de cruce cae en `idEntrenador`.
+function conErrores(error) {
+  if (Array.isArray(error?.campos) && error.campos.length > 0) error.errores = erroresPorCampo(error)
+  return error
+}
+const rutaDe = (id) => `/horario-club/${encodeURIComponent(id)}`
+
+const api = {
+  async listar(filtros) {
+    return (await apiRequest(`/horario-club${consultaFranjas(filtros)}`)).map(adaptarFranja)
+  },
+  async crear(datos) {
+    try {
+      return adaptarFranja(await apiRequest('/horario-club', { method: 'POST', body: JSON.stringify(cuerpoFranja(datos)) }))
+    } catch (error) {
+      throw conErrores(error)
+    }
+  },
+  async editar(id, datos) {
+    try {
+      return adaptarFranja(await apiRequest(rutaDe(id), { method: 'PUT', body: JSON.stringify(cuerpoFranja(datos)) }))
+    } catch (error) {
+      throw conErrores(error)
+    }
+  },
+  async eliminar(id) {
+    await apiRequest(rutaDe(id), { method: 'DELETE' }) // 204 sin cuerpo
+    return { id }
+  },
 }

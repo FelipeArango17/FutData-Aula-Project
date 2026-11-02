@@ -252,3 +252,29 @@ describe('chocaEntrenador', () => {
     expect(chocaEntrenador(prueba({ idEntrenador: '' }), existentes)).toBe(false)
   })
 })
+
+describe('validarFranja con ids UUID (modo API)', () => {
+  const CAT = '6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b'
+  const SEMILLERO = '0b6c3f1e-9d2a-4c8b-a1e7-5f4d3c2b1a09'
+  const ENT = 'e0a1e0a1-0000-4000-8000-000000000001'
+  const categorias = [{ id: CAT, nombre: 'Sub-12' }, { id: SEMILLERO, nombre: 'Semillero' }]
+  const base = { idCategoria: CAT, dia: '1', horaInicio: '19:00', horaFin: '20:00', sede: 'Horizontes', idEntrenador: ENT, grupo: '' }
+
+  it('reconoce la categoría por su UUID', () => {
+    expect(validarFranja(base, [], null, categorias)).toEqual({})
+    expect(validarFranja({ ...base, idCategoria: 'otro' }, [], null, categorias).idCategoria).toBe(MENSAJES_FRANJA.categoria)
+  })
+
+  it('el grupo solo aplica a Cachorros y Semillero según el nombre de la categoría', () => {
+    expect(validarFranja({ ...base, grupo: 'tarde' }, [], null, categorias).grupo).toBe(MENSAJES_FRANJA.grupo)
+    expect(validarFranja({ ...base, idCategoria: SEMILLERO, grupo: 'tarde' }, [], null, categorias)).toEqual({})
+  })
+
+  it('detecta el cruce del mismo entrenador con UUID y no el de una franja contigua ni el de la propia', () => {
+    const existente = { id: 'f1', idCategoria: SEMILLERO, dia: 1, horaInicio: '18:30', horaFin: '19:30', sede: 'Horizontes', idEntrenador: ENT }
+    expect(validarFranja(base, [existente], null, categorias).idEntrenador).toBe(MENSAJES_FRANJA.entrenadorOcupado)
+    expect(validarFranja(base, [existente], 'f1', categorias)).toEqual({})
+    expect(validarFranja(base, [{ ...existente, horaInicio: '18:00', horaFin: '19:00' }], null, categorias)).toEqual({})
+    expect(validarFranja(base, [{ ...existente, idEntrenador: null }], null, categorias)).toEqual({})
+  })
+})
