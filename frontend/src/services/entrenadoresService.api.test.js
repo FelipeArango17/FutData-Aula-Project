@@ -151,3 +151,49 @@ describe('categorías y estado', () => {
     expect(resultado.activo).toBe(false)
   })
 })
+
+describe('alta con enlace por correo', () => {
+  it('crearDatos pasa correoEnviado true y false; si el backend no lo manda, no se da por enviado', async () => {
+    rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi({ correoEnviado: true }))
+    expect((await servicio.crearDatos(formulario())).correoEnviado).toBe(true)
+    rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi({ correoEnviado: false }))
+    expect((await servicio.crearDatos(formulario())).correoEnviado).toBe(false)
+    rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi())
+    expect((await servicio.crearDatos(formulario())).correoEnviado).toBe(false)
+  })
+
+  it('crear (datos + categorías) conserva correoEnviado', async () => {
+    rutas['POST /entrenadores'] = () => respuesta(201, entrenadorApi({ correoEnviado: true }))
+    rutas[`PUT /entrenadores/${ID}/categorias`] = () => respuesta(200, entrenadorApi({ categorias: ['Cachorros'] }))
+    expect((await servicio.crear(formulario())).correoEnviado).toBe(true)
+  })
+
+  it('crearContrasena: POST público con { token, contrasena }, sin Authorization ni consultar la sesión', async () => {
+    rutas['POST /auth/crear-contrasena'] = () => respuesta(204)
+    await servicio.crearContrasena('tok-123', 'Clave2026x')
+    const [llamada] = llamadas()
+    expect(llamada).toMatchObject({ metodo: 'POST', ruta: '/auth/crear-contrasena', cuerpo: { token: 'tok-123', contrasena: 'Clave2026x' } })
+    expect(llamada.headers.Authorization).toBeUndefined()
+    expect(supabase.auth.getSession).not.toHaveBeenCalled()
+  })
+
+  it('crearContrasena: un 400 sube con estado 400 y un 401 no cierra la sesión', async () => {
+    rutas['POST /auth/crear-contrasena'] = () => respuesta(400, { mensaje: 'Token inválido.' })
+    expect(await rechazo(servicio.crearContrasena('x', 'Clave2026x'))).toMatchObject({ estado: 400 })
+    rutas['POST /auth/crear-contrasena'] = () => respuesta(401, { mensaje: 'No autorizado.' })
+    expect(await rechazo(servicio.crearContrasena('x', 'Clave2026x'))).toMatchObject({ estado: 401 })
+    expect(supabase.auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('reenviarEnlace: POST /entrenadores/{id}/reenviar-enlace con el token del administrador', async () => {
+    rutas[`POST /entrenadores/${ID}/reenviar-enlace`] = () => respuesta(204)
+    await servicio.reenviarEnlace(ID)
+    expect(llamadas()[0]).toMatchObject({ metodo: 'POST', ruta: `/entrenadores/${ID}/reenviar-enlace` })
+    expect(llamadas()[0].headers.Authorization).toBe('Bearer token-de-prueba')
+  })
+
+  it('reenviarEnlace: el 409 sube con el mensaje del backend', async () => {
+    rutas[`POST /entrenadores/${ID}/reenviar-enlace`] = () => respuesta(409, { mensaje: 'El entrenador ya creó su contraseña.' })
+    expect(await rechazo(servicio.reenviarEnlace(ID))).toMatchObject({ estado: 409, mensaje: 'El entrenador ya creó su contraseña.' })
+  })
+})

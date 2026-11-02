@@ -45,11 +45,12 @@ function crearError(estado, mensaje, campos = [], codigo = null, extra = {}) {
 
 export async function apiRequest(ruta, opciones = {}) {
   // respuesta: 'blob' devuelve el cuerpo binario (por ejemplo un PDF); por defecto se lee JSON
-  const { headers: extra, respuesta: tipoRespuesta, ...resto } = opciones
+  // publica: true es para rutas sin sesión (por ejemplo /auth/crear-contrasena): no manda Authorization y un 401 NO cierra la sesión
+  const { headers: extra, respuesta: tipoRespuesta, publica = false, ...resto } = opciones
   // FormData: el navegador pone Content-Type con el boundary; JSON: se declara aquí. Quien llama pasa el body ya armado.
   const esFormData = typeof FormData !== 'undefined' && resto.body instanceof FormData
   const headers = { ...(resto.body === undefined || esFormData ? {} : { 'Content-Type': 'application/json' }), ...extra }
-  const token = await tokenActual()
+  const token = publica ? null : await tokenActual()
   if (token) headers.Authorization = `Bearer ${token}`
 
   let respuesta
@@ -63,7 +64,7 @@ export async function apiRequest(ruta, opciones = {}) {
     const cuerpo = await respuesta.json().catch(() => ({}))
     const mensaje = cuerpo.mensaje ?? MENSAJE_GENERICO
     const campos = Array.isArray(cuerpo.campos) ? cuerpo.campos : []
-    if (respuesta.status === 401) {
+    if (respuesta.status === 401 && !publica) {
       await sesionVencida()
       throw crearError(401, mensaje, campos, cuerpo.codigo ?? 'SESION')
     }

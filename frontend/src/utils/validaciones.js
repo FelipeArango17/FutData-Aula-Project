@@ -27,6 +27,9 @@ export const MENSAJES = {
   loginCorreoObligatorio: 'Escribe tu correo electrónico.',
   loginCorreoFormato: 'El correo no es válido. Ejemplo: nombre@correo.com.',
   loginContrasenaObligatoria: 'Escribe tu contraseña.',
+  contrasenaPolitica: 'La contraseña debe tener entre 8 y 72 caracteres, con al menos una letra y un número.',
+  contrasenaConfirmar: 'Repite la contraseña.',
+  contrasenaNoCoincide: 'Las contraseñas no coinciden.',
   // Entrenamientos
   entrenamientoCategoria: 'Selecciona una categoría.',
   entrenamientoEntrenador: 'Selecciona el entrenador.',
@@ -216,6 +219,15 @@ export function validarHoraFinEntrenamiento(valor, hora) {
   if (!valor) return MENSAJES.entrenamientoHoraFinObligatoria
   if (!esHoraValida(valor)) return MENSAJES.entrenamientoHoraInvalida
   return hora && esHoraValida(hora) && valor <= hora ? MENSAJES.entrenamientoHoraFinAnterior : null
+}
+
+// Política ÚNICA de contraseña (crear contraseña, restablecer y el backend, con el mismo mensaje): entre 8 y 72 caracteres,
+// con al menos una letra y un número. Los espacios cuentan (no se recorta).
+export const CONTRASENA_MINIMO = 8
+export const CONTRASENA_MAXIMO = 72
+export const cumplePoliticaContrasena = (valor) => {
+  const t = String(valor ?? '')
+  return t.length >= CONTRASENA_MINIMO && t.length <= CONTRASENA_MAXIMO && /\p{L}/u.test(t) && /\d/.test(t)
 }
 
 // Reglas genéricas para armar validarCampos. Cada una devuelve (valor, todos) => mensaje | null.

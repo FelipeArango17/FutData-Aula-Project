@@ -12,8 +12,12 @@
 // - Los errores del 2FA traen { codigo, msRestantes, campos: ['codigo'] }. Se conserva el mapeo por texto para
 //   compatibilidad con instalaciones anteriores del backend.
 // - PENDIENTE backend: "Recordar este equipo" (cookie HttpOnly de equipo de confianza). No se envía nada.
+import { urlInicial } from './urlInicial.js'
 import { apiRequest } from './apiClient.js'
 import { supabase } from './supabaseClient.js'
+import {
+  ESPERA_VERIFICACION_MS, codigoDeErrorSupabase, decidirRecuperacion, esRecuperacionEnCurso, urlEsDeRecuperacion,
+} from '../utils/recuperacion.js'
 
 export const VIGENCIA_CODIGO_MS = 10 * 60 * 1000
 export const MAX_INTENTOS = 5
@@ -298,6 +302,9 @@ async function perfilVerificado(sesion) {
 // Al cargar la página: ¿hay sesión de Supabase? Devuelve null si no. Si la hay y esta pestaña no completó el 2FA
 // (`verificada` es false), deja lista la solicitud del código y devuelve el usuario con estado 'pendiente'.
 export async function restaurarSesion({ verificada }) {
+  // La sesión de recuperación de contraseña es una sesión normal de Supabase, pero NO es un ingreso: no se restaura como
+  // sesión de la app (ni se pide el código 2FA, ni se redirige al panel). Ver "Recuperar contraseña" al final del archivo.
+  if (esRecuperacionEnCurso({ pathname: globalThis.location?.pathname, url: urlInicial, marcada: recuperacionActiva })) return null
   const { data } = await supabase.auth.getSession()
   const sesion = data?.session
   if (!sesion) {
@@ -327,4 +334,85 @@ export function alCerrarSesionExterna(funcion) {
     if (evento === 'SIGNED_OUT') funcion()
   })
   return () => data.subscription.unsubscribe()
+}
+
+// ---- Recuperar contraseña (Supabase Auth nativo, sin backend) ----
+// Flujo: solicitarRecuperacion(correo) -> correo de Supabase -> /restablecer con la sesión de recuperación (esperarRecuperacion)
+// -> restablecerContrasena(nueva), que cierra la sesión local -> /login. Errores con `codigo`: LIMITE, RED, POLITICA,
+// IGUAL_ANTERIOR, ENLACE_INVALIDO, DESCONOCIDO.
+// `recuperacionActiva` es la marca explícita de que la sesión de Supabase actual es de recuperación y no un ingreso.
+let recuperacionActiva = urlEsDeRecuperacion(urlInicial)
+
+const errorRecuperacion = (error) => fallo(codigoDeErrorSupabase(error))
+
+// Pide el correo con el enlace. Supabase responde igual exista o no la cuenta. redirectTo debe estar en la lista de
+// "Redirect URLs" de Supabase (Authentication > URL Configuration).
+export async function solicitarRecuperacion(correo) {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizar(correo), { redirectTo: `${globalThis.location.origin}/restablecer` })
+    if (error) throw error
+  } catch (error) {
+    throw errorRecuperacion(error)
+  }
+}
+
+// Espera a que supabase-js procese el enlace. Resuelve 'listo' (hay sesión de recuperación) o 'invalido' (error en la URL,
+// sin sesión o se acabó el tiempo). Al quedar 'listo' marca la recuperación como activa.
+export function esperarRecuperacion({ tiempoMs = ESPERA_VERIFICACION_MS } = {}) {
+  return new Promise((resolve) => {
+    let evento = null
+    let terminado = false
+    let temporizador = null
+    let suscripcion = null
+    const terminar = (decision) => {
+      terminado = true
+      clearTimeout(temporizador)
+      suscripcion?.unsubscribe()
+      if (decision === 'listo') recuperacionActiva = true
+      resolve(decision)
+    }
+    const evaluar = async (agotado = false) => {
+      if (terminado) return
+      let haySesion = false
+      try {
+        haySesion = Boolean((await supabase.auth.getSession()).data?.session)
+      } catch {
+        // se evalúa sin sesión
+      }
+      if (terminado) return
+      const decision = decidirRecuperacion({ url: urlInicial, evento, haySesion, agotado })
+      if (decision !== 'verificando') terminar(decision)
+    }
+    // No se llama a Supabase dentro del callback del evento (puede bloquearse): se evalúa en el siguiente turno
+    const { data } = supabase.auth.onAuthStateChange((nombre) => {
+      if (nombre === 'PASSWORD_RECOVERY') evento = nombre
+      setTimeout(() => evaluar(), 0)
+    })
+    suscripcion = data.subscription
+    temporizador = setTimeout(() => evaluar(true), tiempoMs)
+    evaluar()
+  })
+}
+
+// Guarda la contraseña nueva y cierra la sesión local: el ingreso siempre pasa por Login + 2FA. Solo vale con la sesión de
+// recuperación marcada (una sesión normal no puede cambiar la contraseña desde aquí).
+export async function restablecerContrasena(nueva) {
+  if (!recuperacionActiva) throw fallo('ENLACE_INVALIDO')
+  try {
+    const { error } = await supabase.auth.updateUser({ password: nueva })
+    if (error) throw error
+  } catch (error) {
+    throw errorRecuperacion(error)
+  }
+  recuperacionActiva = false
+  guardar(null)
+  await cerrarSupabase({ scope: 'local' })
+}
+
+// Salir de /restablecer sin terminar: la sesión de recuperación no debe quedar abierta.
+export async function descartarRecuperacion() {
+  if (!recuperacionActiva) return
+  recuperacionActiva = false
+  guardar(null)
+  await cerrarSupabase({ scope: 'local' })
 }

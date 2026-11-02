@@ -7,6 +7,7 @@ import Avatar from '../../components/ui/Avatar.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../../components/ui/DialogoConfirmacion.jsx'
 import Mensaje from '../../components/usuarios/Mensaje.jsx'
+import { reenviarConAviso } from '../../utils/avisosEntrenadores.js'
 import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 
 // Lista de entrenadores (HU-025), con la API: activos primero y los inactivos aparte, con su estado en texto e ícono.
@@ -14,7 +15,7 @@ import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 // PENDIENTE: un usuario con rol 'entrenador' (usuariosService) aún no está ligado a un entrenador de esta lista.
 const NUEVO = '/administrador/usuarios/entrenadores/nuevo'
 
-function TarjetaEntrenador({ entrenador: e, ocupado, onDesactivar, onActivar }) {
+function TarjetaEntrenador({ entrenador: e, ocupado, onDesactivar, onActivar, onReenviar }) {
   const nombre = `${e.nombre} ${e.apellido}`
   return (
     <Card as="li" className="flex flex-col gap-3">
@@ -38,6 +39,12 @@ function TarjetaEntrenador({ entrenador: e, ocupado, onDesactivar, onActivar }) 
         <Button to={`/administrador/usuarios/entrenadores/${e.id}/editar`} variant="secondary" aria-label={`Editar a ${nombre}`}>
           Editar
         </Button>
+        {/* El DTO del backend no dice si ya creó su contraseña: se ofrece a todos los activos */}
+        {e.activo && (
+          <Button variant="secondary" disabled={ocupado} onClick={() => onReenviar(e)} aria-label={`Reenviar enlace a ${nombre}`}>
+            Reenviar enlace
+          </Button>
+        )}
         {e.activo ? (
           <Button variant="secondary" disabled={ocupado} onClick={() => onDesactivar(e)} aria-label={`Desactivar a ${nombre}`}>
             Desactivar
@@ -53,7 +60,7 @@ function TarjetaEntrenador({ entrenador: e, ocupado, onDesactivar, onActivar }) 
 }
 
 export default function Entrenadores() {
-  const { entrenadores, estadoCarga, errorCarga, reintentar, aviso, avisar, cerrarAviso, cambiarEstado } = useEntrenadores()
+  const { entrenadores, estadoCarga, errorCarga, reintentar, aviso, avisar, cerrarAviso, cambiarEstado, reenviarEnlace } = useEntrenadores()
   const titulo = useRef(null)
   const enVuelo = useRef(false)
   const [porDesactivar, setPorDesactivar] = useState(null)
@@ -78,6 +85,22 @@ export default function Entrenadores() {
         : `${nombre} está inactivo. Sus categorías quedaron sin entrenador.`)
     } catch (error) {
       setFallo({ id: Date.now(), texto: error.mensaje ?? error.message })
+    } finally {
+      enVuelo.current = false
+      setOcupado(null)
+    }
+  }
+
+  async function reenviar(entrenador) {
+    if (enVuelo.current) return
+    enVuelo.current = true
+    setOcupado(entrenador.id)
+    setFallo(null)
+    cerrarAviso()
+    try {
+      const resultado = await reenviarConAviso(entrenador, reenviarEnlace)
+      if (resultado.ok) avisar(resultado.texto)
+      else setFallo({ id: Date.now(), texto: resultado.texto })
     } finally {
       enVuelo.current = false
       setOcupado(null)
@@ -129,7 +152,7 @@ export default function Entrenadores() {
           {activos.length > 0 ? (
             <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {activos.map((e) => (
-                <TarjetaEntrenador key={`entrenador-${e.id}`} entrenador={e} ocupado={ocupado === e.id} onDesactivar={setPorDesactivar} onActivar={(x) => cambiar(x, true)} />
+                <TarjetaEntrenador key={`entrenador-${e.id}`} entrenador={e} ocupado={ocupado === e.id} onDesactivar={setPorDesactivar} onActivar={(x) => cambiar(x, true)} onReenviar={reenviar} />
               ))}
             </ul>
           ) : (
@@ -141,7 +164,7 @@ export default function Entrenadores() {
             <h2 id="entrenadores-inactivos" className="text-h3">Inactivos ({inactivos.length})</h2>
             <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {inactivos.map((e) => (
-                <TarjetaEntrenador key={`entrenador-${e.id}`} entrenador={e} ocupado={ocupado === e.id} onDesactivar={setPorDesactivar} onActivar={(x) => cambiar(x, true)} />
+                <TarjetaEntrenador key={`entrenador-${e.id}`} entrenador={e} ocupado={ocupado === e.id} onDesactivar={setPorDesactivar} onActivar={(x) => cambiar(x, true)} onReenviar={reenviar} />
               ))}
             </ul>
           </section>
@@ -157,7 +180,7 @@ export default function Entrenadores() {
 
   return (
     <Page title="Entrenadores" subtitle={subtitulo} tituloRef={titulo}>
-      <AvisoEstado aviso={aviso} onCerrar={cerrarAviso} />
+      <AvisoEstado aviso={aviso} tono={aviso?.tono} onCerrar={cerrarAviso} />
       <AvisoEstado aviso={fallo} onCerrar={() => setFallo(null)} rol="alert" tono="danger" />
       <div className="flex flex-wrap gap-2 md:self-start">
         <Button to={NUEVO} className="grow sm:grow-0">Registrar entrenador</Button>

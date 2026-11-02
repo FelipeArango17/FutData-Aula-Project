@@ -295,3 +295,13 @@ export function cancelarSolicitud() {
   estado.pendiente = null
   guardar()
 }
+
+// ---- Recuperar contraseña (simulado: sin red ni correos) ----
+// Mismo contrato que authServiceReal.js. Siempre responde igual, exista o no la cuenta. En desarrollo la pantalla
+// /restablecer muestra el formulario; en producción sin Supabase configurado no hay enlace posible ('invalido').
+export async function solicitarRecuperacion() {}
+export async function esperarRecuperacion() {
+  return import.meta.env.PROD ? 'invalido' : 'listo'
+}
+export async function restablecerContrasena() {}
+export async function descartarRecuperacion() {}
