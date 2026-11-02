@@ -10,7 +10,8 @@ import Icon from '../../components/Icon.jsx'
 import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
-import { calcularEdad, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { deportistasPorApi, edadDe, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { traeDocumento } from '../../utils/deportistasApi.js'
 import { obtener as obtenerEntrenador } from '../../services/entrenadoresService.js'
 import { ID_ENTRENADOR_EJEMPLO } from '../../services/entrenamientosService.js'
 
@@ -21,11 +22,15 @@ import { ID_ENTRENADOR_EJEMPLO } from '../../services/entrenamientosService.js'
 // categorías del entrenador, que sirve en ambos casos. Además, entrenamientosService.categoriasPorRol.entrenador
 // ahora sale de la plantilla del club (Sub-12, de Nicolás), igual que entrenadoresService.
 // No se muestran datos sensibles (ficha médica, teléfono del menor).
+// Con la API (módulo "deportistas") el ENTRENADOR recibe la lista sin documento, teléfono, dirección ni estado de la inscripción: la
+// pantalla no dibuja lo que no llega (sin columna ni búsqueda por documento). El backend todavía no dice qué categorías tiene
+// asignadas cada entrenador (su usuario no está ligado a un entrenador): con la API ve todos los grupos, igual que el administrador.
+// Las fotos vienen en cada deportista (URL firmada).
 
 const plural = (n) => `${n} ${n === 1 ? 'deportista' : 'deportistas'}`
 
 const nombreCompleto = (d) => `${d.nombre} ${d.apellido}`
-const textoEdad = (d) => `${calcularEdad(d.fechaNacimiento)} años`
+const textoEdad = (d) => `${edadDe(d)} años`
 
 function Mensaje({ icono, children }) {
   return (
@@ -74,7 +79,7 @@ export default function ListaPorGrupo() {
         const [categorias, todos, entrenador] = await Promise.all([
           listarCategorias(),
           listarDeportistas(),
-          role === 'entrenador' ? obtenerEntrenador(ID_ENTRENADOR_EJEMPLO) : null,
+          role === 'entrenador' && !deportistasPorApi() ? obtenerEntrenador(ID_ENTRENADOR_EJEMPLO) : null,
         ])
         const asignadas = entrenador?.categorias
         const grupos = categorias.filter((c) => c.activa && (!asignadas || asignadas.includes(c.nombre)))
@@ -113,12 +118,13 @@ export default function ListaPorGrupo() {
   const error = carga.error || (!actualizando && lista.error)
   // Al buscar se muestra la lista anterior del MISMO grupo mientras llega la nueva; al cambiar de grupo, no
   const items = lista.idGrupo === idGrupo ? lista.items : null
+  const conDocumento = items ? traeDocumento(items) : false
+  const fotosVisibles = { ...fotos, ...Object.fromEntries((items ?? []).filter((d) => d.foto).map((d) => [d.id, d.foto])) }
 
   function cambiarGrupo(e) {
-    const id = Number(e.target.value)
-    setElegido(id)
-    const nuevo = grupos.find((g) => g.id === id)
-    setAnuncio(`${plural(carga.conteos[id])} en ${nuevo.nombre}`)
+    const nuevo = grupos.find((g) => String(g.id) === e.target.value) // los ids reales son UUID: no se convierten a número
+    setElegido(nuevo.id)
+    setAnuncio(`${plural(carga.conteos[nuevo.id])} en ${nuevo.nombre}`)
   }
 
   const aviso = error ? { texto: 'No se pudo cargar la lista de deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } } : null
@@ -165,7 +171,7 @@ export default function ListaPorGrupo() {
               <tr className="border-b bg-app">
                 <th scope="col" className="p-3 text-body-medium">Deportista</th>
                 <th scope="col" className="w-[5.5rem] p-3 text-body-medium">Edad</th>
-                <th scope="col" className="w-[8.5rem] p-3 text-body-medium">Documento</th>
+                {conDocumento && <th scope="col" className="w-[8.5rem] p-3 text-body-medium">Documento</th>}
                 <th scope="col" className="w-[7.5rem] p-3 text-body-medium">Estado</th>
               </tr>
             </thead>
@@ -174,12 +180,12 @@ export default function ListaPorGrupo() {
                 <tr key={d.id} className="border-b last:border-b-0">
                   <th scope="row" className="p-3 font-normal">
                     <div className="flex min-w-0 items-center gap-3">
-                      <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
+                      <Avatar name={nombreCompleto(d)} foto={fotosVisibles[d.id]} />
                       <span className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</span>
                     </div>
                   </th>
                   <td className="p-3">{textoEdad(d)}</td>
-                  <td className="break-words p-3">{d.documento}</td>
+                  {conDocumento && <td className="break-words p-3">{d.documento}</td>}
                   <td className="p-3"><EstadoDeportista activo={d.activo} /></td>
                 </tr>
               ))}
@@ -190,10 +196,10 @@ export default function ListaPorGrupo() {
           {items.map((d) => (
             <Card as="li" key={d.id} className="flex flex-col gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <Avatar name={nombreCompleto(d)} foto={fotos[d.id]} />
+                <Avatar name={nombreCompleto(d)} foto={fotosVisibles[d.id]} />
                 <p className="min-w-0 break-words text-body-medium">{nombreCompleto(d)}</p>
               </div>
-              <p className="break-words text-small text-secondary">{textoEdad(d)} · Documento: {d.documento}</p>
+              <p className="break-words text-small text-secondary">{textoEdad(d)}{conDocumento && ` · Documento: ${d.documento}`}</p>
               <div className="flex flex-wrap"><EstadoDeportista activo={d.activo} /></div>
             </Card>
           ))}
@@ -219,7 +225,7 @@ export default function ListaPorGrupo() {
             ))}
           </Field>
           <Field
-            label="Buscar por nombre o documento"
+            label={role === 'entrenador' && deportistasPorApi() ? 'Buscar por nombre' : 'Buscar por nombre o documento'}
             id="buscar"
             type="search"
             autoComplete="off"

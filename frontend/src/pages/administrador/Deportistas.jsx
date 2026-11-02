@@ -7,15 +7,15 @@ import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import Paginacion from '../../components/ui/Paginacion.jsx'
 import { TablaDeportistas, TarjetasDeportistas } from '../../components/deportistas/ListaDeportistas.jsx'
-import { SIN_CATEGORIA, listarCategorias, listarDeportistas } from '../../services/deportistasService.js'
+import { SIN_CATEGORIA, contarDeportistas, listarCategorias, listarPaginaDeportistas } from '../../services/deportistasService.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
-import { paginar } from '../../utils/paginacion.js'
 
 // Consulta de deportistas (HU-010, tarea 319): busca por nombre o documento en TODOS los deportistas (activos e inactivos),
 // filtra por estado y por categoría (se combinan con AND) y lleva a la ficha. Reemplaza la maqueta con datos fijos; Figma no tiene una pantalla de esta lista.
-// Paginación: del lado del cliente, sobre la lista ya filtrada. GET /api/deportistas hoy devuelve la lista completa (sin
-// parámetros de página), así que al conectarlo seguirá siendo del cliente hasta que el backend añada paginación.
+// Paginación: con la API (módulo "deportistas") la hace el backend (estado y categoría son filtros del servidor); con texto o «sin
+// asignar» el servicio recorre las páginas y filtra aquí (la API no busca por texto). Con los datos de ejemplo es del cliente.
+// La foto de cada fila viene en el propio deportista (URL firmada); el administrador siempre recibe el documento.
 // Privacidad: la lista no muestra teléfono ni dirección; esos datos solo están en la ficha.
 const FILTROS = { Todos: 'todos', Activos: 'activos', Inactivos: 'inactivos' }
 const TODAS = '' // valor del selector de categoría para «Todas las categorías»
@@ -44,7 +44,7 @@ export default function Deportistas() {
   const [categorias, setCategorias] = useState([])
   // Resultados con la clave de la petición que los produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
   const [base, setBase] = useState({ intento: -1, total: 0, activos: 0, error: false })
-  const [lista, setLista] = useState({ clave: null, items: null, error: false })
+  const [lista, setLista] = useState({ clave: null, resultado: null, error: false })
 
   useEffect(() => {
     tituloRef.current?.focus()
@@ -75,8 +75,8 @@ export default function Deportistas() {
   // Totales reales (para el subtítulo)
   useEffect(() => {
     let activo = true
-    listarDeportistas()
-      .then((todos) => activo && setBase({ intento, total: todos.length, activos: todos.filter((d) => d.activo).length, error: false }))
+    contarDeportistas()
+      .then(({ total, activos }) => activo && setBase({ intento, total, activos, error: false }))
       .catch(() => activo && setBase({ intento, total: 0, activos: 0, error: true }))
     return () => {
       activo = false
@@ -85,25 +85,27 @@ export default function Deportistas() {
 
   const busqueda = texto.trim()
   const estado = FILTROS[filtro]
-  const clave = `${intento}|${estado}|${categoria}|${busqueda}`
+  const filtros = `${estado}|${categoria}|${busqueda}`
+  const pagina = elegida.filtros === filtros ? elegida.pagina : 1
+  const clave = `${intento}|${filtros}|${pagina}`
 
-  // Resultados de la búsqueda; mientras llegan los nuevos se conservan los anteriores
+  // Resultados de la página; mientras llegan los nuevos se conservan los anteriores
   useEffect(() => {
     let activo = true
-    listarDeportistas({ texto: busqueda, estado, idCategoria: categoria })
-      .then((items) => activo && setLista({ clave, items, error: false }))
-      .catch(() => activo && setLista({ clave, items: null, error: true }))
+    listarPaginaDeportistas({ texto: busqueda, estado, idCategoria: categoria, pagina })
+      .then((resultado) => activo && setLista({ clave, resultado, error: false }))
+      .catch((falla) => activo && setLista({ clave, resultado: null, error: true, mensaje: falla?.estado ? falla.mensaje : null }))
     return () => {
       activo = false
     }
-  }, [busqueda, estado, categoria, clave])
+  }, [busqueda, estado, categoria, pagina, clave])
 
   const cargandoBase = base.intento !== intento
   const actualizando = lista.clave !== clave
   const error = base.error || (!actualizando && lista.error)
-  const items = lista.items
-  const filtros = `${estado}|${categoria}|${busqueda}`
-  const vista = items ? paginar(items, elegida.filtros === filtros ? elegida.pagina : 1) : null
+  const vista = lista.resultado
+  const items = vista?.items ?? null
+  const fotosDeLaPagina = { ...fotos, ...Object.fromEntries((items ?? []).filter((d) => d.foto).map((d) => [d.id, d.foto])) }
   const nombresCategoria = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]))
   // «Sin asignar» o el nombre de la categoría elegida (vacío si el filtro es «Todas las categorías»)
   const nombreFiltro = categoria === SIN_CATEGORIA ? 'Sin asignar' : nombresCategoria[categoria] ?? ''
@@ -113,9 +115,10 @@ export default function Deportistas() {
   const detalleEstado = filtro === 'Todos' ? '' : filtro.toLowerCase()
   const detalleCategoria = !categoria ? '' : categoria === SIN_CATEGORIA ? 'sin categoría asignada' : `de la categoría ${nombreFiltro}`
 
-  const aviso = error ? { texto: 'No se pudo cargar la lista de deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } } : null
+  // Con la API, los 400/403 del backend se muestran con su mensaje
+  const aviso = error ? { texto: lista.mensaje ?? 'No se pudo cargar la lista de deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } } : null
   // Mientras llegan resultados nuevos no se cuenta: el total anterior no corresponde a la categoría ya elegida
-  const cuenta = items === null || error || actualizando ? '' : items.length === 0 ? `Sin resultados${sufijoCategoria}` : `${items.length} ${items.length === 1 ? 'resultado' : 'resultados'}${sufijoCategoria}`
+  const cuenta = vista === null || error || actualizando ? '' : vista.total === 0 ? `Sin resultados${sufijoCategoria}` : `${vista.total} ${vista.total === 1 ? 'resultado' : 'resultados'}${sufijoCategoria}`
   const subtitulo = cargandoBase || base.error ? 'Consulta y edita la ficha de cada deportista.' : `${base.total} ${base.total === 1 ? 'deportista registrado' : 'deportistas registrados'} · ${base.activos} ${base.activos === 1 ? 'activo' : 'activos'}`
 
   let contenido
@@ -127,7 +130,7 @@ export default function Deportistas() {
         <p role="status">Cargando deportistas…</p>
       </Mensaje>
     )
-  } else if (items.length === 0) {
+  } else if (vista.total === 0) {
     contenido = (
       <Mensaje>
         <p>
@@ -141,9 +144,9 @@ export default function Deportistas() {
       </Mensaje>
     )
   } else if (conTabla) {
-    contenido = <TablaDeportistas deportistas={vista.items} fotos={fotos} nombresCategoria={nombresCategoria} actualizando={actualizando} />
+    contenido = <TablaDeportistas deportistas={vista.items} fotos={fotosDeLaPagina} nombresCategoria={nombresCategoria} actualizando={actualizando} />
   } else {
-    contenido = <TarjetasDeportistas deportistas={vista.items} fotos={fotos} nombresCategoria={nombresCategoria} actualizando={actualizando} />
+    contenido = <TarjetasDeportistas deportistas={vista.items} fotos={fotosDeLaPagina} nombresCategoria={nombresCategoria} actualizando={actualizando} />
   }
 
   return (
@@ -168,7 +171,7 @@ export default function Deportistas() {
         <p className="break-words text-small text-secondary">{NOTA_CATEGORIA_POR_ANIO}</p>
       </div>
       <div ref={zonaLista} className="min-w-0">{contenido}</div>
-      {vista && !error && items.length > 0 && (
+      {vista && !error && vista.total > 0 && (
         <Paginacion {...vista} onCambiar={(pagina) => setElegida({ filtros, pagina })} />
       )}
     </Page>

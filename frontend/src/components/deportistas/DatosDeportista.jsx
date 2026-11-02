@@ -1,7 +1,8 @@
 import EstadoDeportista from './EstadoDeportista.jsx'
-import { TEXTO_SIN_POSICION, calcularEdad } from '../../services/deportistasService.js'
+import { TEXTO_SIN_POSICION, edadDe } from '../../services/deportistasService.js'
 import { ETIQUETA_GRUPO, categoriaRequiereGrupo } from '../../utils/categorias.js'
 import { fechaLargaConAnio } from '../../utils/fechas.js'
+import { ETIQUETA_ESTADO_INSCRIPCION } from '../../utils/deportistasApi.js'
 
 // Datos personales de la ficha del deportista (solo lectura). `categoria` es el NOMBRE de la categoría (o null si no tiene):
 // se muestra solo el nombre, sin textos de años de nacimiento. El grupo de entrenamiento solo aparece en Cachorros y Semillero;
@@ -16,7 +17,7 @@ function Dato({ etiqueta, children }) {
 }
 
 export default function DatosDeportista({ deportista, categoria }) {
-  const edad = calcularEdad(deportista.fechaNacimiento)
+  const edad = edadDe(deportista)
   return (
     <dl className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-4">
       <Dato etiqueta="Tipo de documento">{deportista.tipoDocumento}</Dato>
@@ -29,6 +30,8 @@ export default function DatosDeportista({ deportista, categoria }) {
       {categoriaRequiereGrupo(categoria) && <Dato etiqueta={ETIQUETA_GRUPO}>{deportista.grupoEntrenamiento ?? 'Sin definir'}</Dato>}
       <Dato etiqueta="Posición">{deportista.posicion ?? TEXTO_SIN_POSICION}</Dato>
       <Dato etiqueta="Estado"><EstadoDeportista activo={deportista.activo} /></Dato>
+      {/* Solo el administrador lo recibe de la API (se calcula con los 4 documentos obligatorios) */}
+      {deportista.estadoInscripcion && <Dato etiqueta="Inscripción">{ETIQUETA_ESTADO_INSCRIPCION[deportista.estadoInscripcion] ?? deportista.estadoInscripcion}</Dato>}
       {/* Solo los inscritos en línea traen origen y contacto del acudiente (los registros del administrador no) */}
       {deportista.origen && <Dato etiqueta="Origen">{deportista.origen}</Dato>}
       {deportista.contactoAcudiente && (

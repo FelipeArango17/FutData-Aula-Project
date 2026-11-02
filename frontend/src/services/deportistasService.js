@@ -45,6 +45,12 @@
 //   Pasar un deportista a activo/inactivo desde la ficha NO se implementó (queda para decidir con Juan).
 // - El historial lo devuelve en orden cronológico (de la edición más antigua a la más reciente); la pantalla lo muestra al revés.
 import { CATEGORIAS } from './entrenamientosService.js'
+import { apiListaPaginada, apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+import { paginar, TAMANO_PAGINA } from '../utils/paginacion.js'
+import {
+  adaptarDeportista, comoFormulario, cuerpoDeportista, errorDeDeportistas, filtrarPorTexto, paginaDelServidor, parametrosLista,
+} from '../utils/deportistasApi.js'
 import { HOY_EJEMPLO, hoy } from '../utils/hoy.js'
 import { GRUPOS_ENTRENAMIENTO, categoriaPorFecha, categoriaRequiereGrupo, grupoSegunCategoria } from '../utils/categorias.js'
 import { hoyLocal } from '../utils/fechas.js'
@@ -53,6 +59,12 @@ import {
 } from '../utils/validaciones.js'
 
 export { HOY_EJEMPLO }
+
+// Interruptor por módulo (igual que entrenadoresService y pagosService): con "deportistas" en VITE_API_MODULOS las funciones de
+// abajo hablan con /api/deportistas; sin él (y siempre en las pruebas) siguen con los datos de ejemplo EN MEMORIA. No se mezclan:
+// los ids reales son UUID (texto) y los de ejemplo son números. Ver "Modo API" al final de este archivo.
+const usarApi = usarApiDe('deportistas')
+export const deportistasPorApi = () => usarApi
 // Los deportistas son menores. La duplicidad se compara solo por número.
 // No incluye cédula de ciudadanía (no aplica a menores). Los extranjeros usan cédula de extranjería o pasaporte.
 export const TIPO_DOCUMENTO_SUGERIDO = 'Tarjeta de identidad'
@@ -171,7 +183,11 @@ export function calcularEdad(fechaNacimiento, fechaHoy = hoy()) {
   return ah - a - (mh < m || (mh === m && dh < dia) ? 1 : 0)
 }
 
+// Edad para mostrar: la que calcula el backend (`edad`) o, con los datos de ejemplo, la que sale de la fecha de nacimiento
+export const edadDe = (deportista, fechaHoy) => deportista.edad ?? calcularEdad(deportista.fechaNacimiento, fechaHoy)
+
 export async function listarCategorias() {
+  if (usarApi) return listarCategoriasApi()
   await simularRed()
   return categorias.filter((c) => !c.oculta).map(copiar)
 }
@@ -182,6 +198,7 @@ export const SIN_CATEGORIA = 'sin-asignar'
 // idCategoria: solo los de esa categoría (lanza CATEGORIA_NO_EXISTE si no existe) o SIN_CATEGORIA. texto: nombre o documento.
 // estado: 'todos' (por defecto, como siempre: activos e inactivos) | 'activos' | 'inactivos'.
 export async function listarDeportistas({ idCategoria, texto, estado = 'todos' } = {}) {
+  if (usarApi) return listarDeportistasApi({ idCategoria, texto, estado })
   await simularRed()
   let lista = deportistas
   if (estado === 'activos') lista = lista.filter((x) => x.activo)
@@ -200,6 +217,7 @@ export async function listarDeportistas({ idCategoria, texto, estado = 'todos' }
 }
 
 export async function obtenerDeportista(id) {
+  if (usarApi) return obtenerDeportistaApi(id)
   await simularRed()
   const encontrado = deportistas.find((x) => x.id === Number(id))
   if (!encontrado) throw error('DEPORTISTA_NO_EXISTE', 'El deportista no existe.')
@@ -223,6 +241,7 @@ function exigirCategoriaDeLaFecha(categoria, fechaNacimiento) {
 
 // Sin pantalla en esta tarea: queda para reutilizar (por ejemplo al inscribir o cambiar de grupo).
 export async function asignarCategoria(idDeportista, idCategoria) {
+  if (usarApi) throw errorNoDisponible('La categoría la calcula el backend con el año de nacimiento.')
   await simularRed()
   const actual = deportistas.find((x) => x.id === Number(idDeportista))
   if (!actual) throw error('DEPORTISTA_NO_EXISTE', 'El deportista no existe.')
@@ -279,6 +298,7 @@ export const mismoDocumento = (a, b) => soloDocumento(a) !== '' && soloDocumento
 // Registra un deportista nuevo (activo, sin acudiente). Solo el administrador. La categoría es opcional ('' o null = sin asignar).
 // Orden de las comprobaciones: permiso, datos, documento duplicado y categoría vigente; si algo falla no se crea nada.
 export async function crearDeportista(datos, actor) {
+  if (usarApi) return crearDeportistaApi(datos)
   await simularRed()
   if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para registrar deportistas.')
   const errores = validarDatosDeportista(datos)
@@ -319,6 +339,7 @@ export const ORIGEN_INSCRIPCION_EN_LINEA = 'Inscripción en línea'
 // Deja el correo del acudiente en el deportista (`acudiente`), que es lo que usan el estado de cuenta y los documentos del acudiente.
 // El vínculo completo (con el parentesco) está en acudientesService. Solo el administrador.
 export async function vincularAcudiente(idDeportista, correo, actor) {
+  if (usarApi) throw errorNoDisponible('El backend todavía no vincula acudientes.')
   await simularRed()
   exigirAdministrador(actor)
   const actual = buscarDeportista(idDeportista)
@@ -383,6 +404,7 @@ const copiaHistorial = (id) => structuredClone(historiales.get(id) ?? [])
 
 // Ficha completa con su historial de cambios. Lanza SIN_PERMISO (si no es administrador) o DEPORTISTA_NO_EXISTE.
 export async function obtenerFichaDeportista(id, actor) {
+  if (usarApi) return obtenerFichaApi(id)
   await simularRed()
   exigirAdministrador(actor)
   const deportista = buscarDeportista(id)
@@ -390,6 +412,7 @@ export async function obtenerFichaDeportista(id, actor) {
 }
 
 export async function obtenerHistorial(id, actor) {
+  if (usarApi) return [] // el backend todavía no guarda el historial de ediciones
   await simularRed()
   exigirAdministrador(actor)
   return copiaHistorial(buscarDeportista(id).id)
@@ -407,6 +430,7 @@ function valorLimpio(campo, valor) {
 // (en OTRO deportista), categoría vigente (solo si cambia) y, al final, SIN_CAMBIOS. Si algo falla no se guarda nada ni se
 // agrega historial. Devuelve { deportista, historial }.
 export async function actualizarDeportista(id, cambios, actor) {
+  if (usarApi) return actualizarDeportistaApi(id, cambios)
   await simularRed()
   exigirAdministrador(actor)
   const actual = buscarDeportista(id)
@@ -434,4 +458,118 @@ export async function actualizarDeportista(id, cambios, actor) {
   deportistas = deportistas.map((x) => (x.id === actual.id ? actualizado : x))
   historiales.set(actual.id, [...(historiales.get(actual.id) ?? []), { fechaHora: new Date().toISOString(), responsable: actor.correo ?? null, cambios: detalle }])
   return { deportista: copiar(actualizado), historial: copiaHistorial(actual.id) }
+}
+
+// ================================================================================================================
+// Modo API (módulo "deportistas"): GET/POST/PUT /api/deportistas y fotos (ver backend/README.md, "Deportistas").
+// - Los ids son UUID: nunca se convierten a número. Los errores conservan { estado, mensaje, campos } del backend y llevan
+//   además el `codigo` que ya entienden las pantallas (VALIDACION con `errores`, DOCUMENTO_DUPLICADO, SIN_PERMISO, DEPORTISTA_NO_EXISTE).
+// - La categoría y el estado de la inscripción los calcula el backend al leer. La categoría ya no se elige: no se envía.
+// - Permisos: la lista la reciben ADMINISTRADOR y ENTRENADOR (el entrenador, sin documento, teléfono, dirección ni estado de la
+//   inscripción: esos campos simplemente no vienen); lo demás es solo del ADMINISTRADOR. Aquí NO se simulan: los valida el backend.
+// - La lista del backend no tiene búsqueda por texto ni «sin categoría»: solo filtra por estado (activo) y categoría. Con texto o
+//   «sin asignar» se recorren todas las páginas (de 100 en 100) y se filtra aquí.
+// - PENDIENTE: el backend no guarda historial de ediciones, ni acudientes, ni documentos del deportista.
+// ================================================================================================================
+const TAMANO_LOTE = 100
+const MAX_LOTES = 50 // tope de seguridad: 5.000 deportistas
+
+const errorNoDisponible = (mensaje) => Object.assign(new Error(mensaje ?? 'Esta función necesita el módulo de deportistas sin conectar a la API.'), { codigo: 'NO_DISPONIBLE' })
+const rutaDeportista = (id) => `/deportistas/${encodeURIComponent(id)}`
+
+async function peticion(operacion, opciones) {
+  try {
+    return await operacion()
+  } catch (error) {
+    throw errorDeDeportistas(error, opciones)
+  }
+}
+
+async function listarCategoriasApi() {
+  const lista = await peticion(() => apiRequest('/categorias'), { recurso: 'categoria' })
+  return lista.map(({ id, nombre }) => ({ id, nombre, activa: true }))
+}
+
+// Todas las páginas que cumplen los filtros del backend (estado y categoría por nombre)
+async function recorrerTodas({ estado, categoria }) {
+  const todos = []
+  for (let pagina = 0; pagina < MAX_LOTES; pagina += 1) {
+    const resultado = await peticion(() => apiListaPaginada('/deportistas', parametrosLista({ pagina, tamano: TAMANO_LOTE, estado, categoria })))
+    todos.push(...resultado.items.map(adaptarDeportista))
+    if ((pagina + 1) * resultado.tamano >= resultado.total || resultado.items.length === 0) break
+  }
+  return todos
+}
+
+// idCategoria (UUID) -> nombre de la categoría, que es lo que filtra el backend
+async function nombreDeCategoria(idCategoria) {
+  const categoria = (await listarCategoriasApi()).find((c) => String(c.id) === String(idCategoria))
+  if (!categoria) throw Object.assign(new Error('La categoría no existe.'), { codigo: 'CATEGORIA_NO_EXISTE' })
+  return categoria.nombre
+}
+
+async function listarDeportistasApi({ idCategoria, texto, estado = 'todos' } = {}) {
+  const sinCategoria = idCategoria === SIN_CATEGORIA
+  const hayCategoria = idCategoria !== undefined && idCategoria !== null && idCategoria !== '' && !sinCategoria
+  const categoria = hayCategoria ? await nombreDeCategoria(idCategoria) : undefined
+  let lista = await recorrerTodas({ estado, categoria })
+  if (sinCategoria) lista = lista.filter((d) => d.idCategoria === null)
+  return filtrarPorTexto(lista, texto)
+}
+
+async function obtenerDeportistaApi(id) {
+  return adaptarDeportista(await peticion(() => apiRequest(rutaDeportista(id))))
+}
+
+async function obtenerFichaApi(id) {
+  return { deportista: await obtenerDeportistaApi(id), historial: [] }
+}
+
+async function crearDeportistaApi(datos) {
+  const creado = await peticion(() => apiRequest('/deportistas', { method: 'POST', body: JSON.stringify(cuerpoDeportista(datos)) }))
+  return adaptarDeportista(creado)
+}
+
+// PUT reemplaza todos los campos editables y exige `activo`: se manda el actual (la ficha no cambia el estado). Si nada cambió
+// no se llama al backend (SIN_CAMBIOS, como en el modo de ejemplo).
+async function actualizarDeportistaApi(id, cambios) {
+  const actual = await obtenerDeportistaApi(id)
+  const propuesto = { ...comoFormulario(actual), ...Object.fromEntries(Object.entries(cambios ?? {}).filter(([campo]) => CAMPOS_EDITABLES.includes(campo))) }
+  const cuerpo = cuerpoDeportista(propuesto, { activo: actual.activo })
+  if (JSON.stringify(cuerpo) === JSON.stringify(cuerpoDeportista(comoFormulario(actual), { activo: actual.activo }))) {
+    throw Object.assign(new Error('No hiciste ningún cambio.'), { codigo: 'SIN_CAMBIOS' })
+  }
+  const guardado = await peticion(() => apiRequest(rutaDeportista(id), { method: 'PUT', body: JSON.stringify(cuerpo) }))
+  return { deportista: adaptarDeportista(guardado), historial: [] }
+}
+
+// Una página de la lista de la pantalla del administrador: { items, pagina, totalPaginas, desde, hasta, total } (`pagina` desde 1).
+// Con la API y sin texto ni «sin asignar», la paginación y el filtro (estado, categoría) son del backend; en los demás casos, y en el
+// modo de ejemplo, se filtra aquí y se pagina con paginar().
+export async function listarPaginaDeportistas({ pagina = 1, tamano = TAMANO_PAGINA, texto, estado = 'todos', idCategoria } = {}) {
+  const hayTexto = Boolean(String(texto ?? '').trim())
+  if (!usarApi || hayTexto || idCategoria === SIN_CATEGORIA) {
+    return paginar(await listarDeportistas({ idCategoria, texto, estado }), pagina, tamano)
+  }
+  const categoria = idCategoria ? await nombreDeCategoria(idCategoria) : undefined
+  const pedir = (numero) => peticion(() => apiListaPaginada('/deportistas', parametrosLista({ pagina: numero - 1, tamano, estado, categoria })))
+  let resultado = await pedir(pagina)
+  const totalPaginas = Math.max(1, Math.ceil(resultado.total / tamano))
+  let actual = pagina
+  if (resultado.items.length === 0 && resultado.total > 0 && pagina > totalPaginas) {
+    actual = totalPaginas // una página después de la última: se muestra la última
+    resultado = await pedir(actual)
+  }
+  return paginaDelServidor({ items: resultado.items.map(adaptarDeportista), total: resultado.total, pagina: Math.max(1, actual), tamano })
+}
+
+// Totales de la cabecera: { total, activos }. Con la API son dos consultas de una fila (solo se lee totalElements).
+export async function contarDeportistas() {
+  if (!usarApi) {
+    const todos = await listarDeportistas()
+    return { total: todos.length, activos: todos.filter((d) => d.activo).length }
+  }
+  const [todos, activos] = await Promise.all(['todos', 'activos'].map((estado) =>
+    peticion(() => apiListaPaginada('/deportistas', parametrosLista({ pagina: 0, tamano: 1, estado })))))
+  return { total: todos.total, activos: activos.total }
 }
