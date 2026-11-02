@@ -25,22 +25,32 @@ export const seSolapan = (iniA, finA, iniB, finB) => iniA < finB && iniB < finA
 
 export const haySolapamiento = (a, b) => a.dia === b.dia && seSolapan(a.horaInicio, a.horaFin, b.horaInicio, b.horaFin)
 
-const porHora = (a, b) => a.horaInicio.localeCompare(b.horaInicio) || a.idCategoria - b.idCategoria
+// Categorías de los datos de ejemplo: id numérico = posición en el orden oficial (desde 1). En modo API los ids son UUID y
+// la pantalla pasa su propia lista [{ id, nombre }].
+export const CATEGORIAS_EJEMPLO = NOMBRES_CATEGORIAS.map((nombre, i) => ({ id: i + 1, nombre }))
+
+// Orden oficial de la categoría de una franja (por nombre, igual en ejemplo y API). Sin nombre, por id numérico.
+const ordenCategoria = (f) => {
+  const i = NOMBRES_CATEGORIAS.indexOf(f.categoria)
+  return i >= 0 ? i : Number(f.idCategoria) || 0
+}
+const porHora = (a, b) => a.horaInicio.localeCompare(b.horaInicio) || ordenCategoria(a) - ordenCategoria(b)
 
 // { 1: [...], …, 6: [...] } con las franjas de cada día ordenadas por hora
 export function franjasPorDia(franjas) {
   return Object.fromEntries([1, 2, 3, 4, 5, 6].map((dia) => [dia, franjas.filter((f) => f.dia === dia).sort(porHora)]))
 }
 
-export const franjasDeCategoria = (franjas, idCategoria) => franjas.filter((f) => f.idCategoria === Number(idCategoria)).sort((a, b) => a.dia - b.dia || porHora(a, b))
+export const franjasDeCategoria = (franjas, idCategoria) => franjas.filter((f) => String(f.idCategoria) === String(idCategoria)).sort((a, b) => a.dia - b.dia || porHora(a, b))
 
-export const franjasDeEntrenador = (franjas, idEntrenador) => franjas.filter((f) => f.idEntrenador === Number(idEntrenador)).sort((a, b) => a.dia - b.dia || porHora(a, b))
+export const franjasDeEntrenador = (franjas, idEntrenador) => franjas.filter((f) => f.idEntrenador !== null && String(f.idEntrenador) === String(idEntrenador)).sort((a, b) => a.dia - b.dia || porHora(a, b))
 
 // Errores por campo ({ campo: mensaje }, vacío si todo está bien). `existentes`: las demás franjas; `ignorarId`: la que se edita.
 // Dos categorías distintas pueden coincidir en hora; solo el mismo entrenador no puede estar en dos franjas que se cruzan el mismo día.
-export function validarFranja(franja, existentes = [], ignorarId = null) {
+// `categorias`: [{ id, nombre }] (ids numéricos de ejemplo o UUID de la API). Los ids se comparan como texto, así no se mezclan modos.
+export function validarFranja(franja, existentes = [], ignorarId = null, categorias = CATEGORIAS_EJEMPLO) {
   const errores = {}
-  const nombreCategoria = NOMBRES_CATEGORIAS[Number(franja.idCategoria) - 1]
+  const nombreCategoria = categorias.find((c) => String(c.id) === String(franja.idCategoria))?.nombre
   if (!nombreCategoria) errores.idCategoria = MENSAJES_FRANJA.categoria
 
   const dia = Number(franja.dia)
@@ -60,7 +70,7 @@ export function validarFranja(franja, existentes = [], ignorarId = null) {
   const entrenador = franja.idEntrenador === '' || franja.idEntrenador === undefined ? null : franja.idEntrenador
   if (entrenador !== null && !errores.dia && !errores.horaInicio && !errores.horaFin) {
     const candidata = { ...franja, dia }
-    const choque = existentes.some((f) => f.id !== ignorarId && f.idEntrenador === Number(entrenador) && haySolapamiento(f, candidata))
+    const choque = existentes.some((f) => String(f.id) !== String(ignorarId) && f.idEntrenador !== null && f.idEntrenador !== undefined && String(f.idEntrenador) === String(entrenador) && haySolapamiento(f, candidata))
     if (choque) errores.idEntrenador = MENSAJES_FRANJA.entrenadorOcupado
   }
   return errores
@@ -87,8 +97,9 @@ export function entrenamientosDeSemana(lunes, franjas) {
 // Entrenamientos de una fecha que se cruzan con el horario dado y son del mismo entrenador (null no choca). Misma regla que las franjas.
 export function chocaEntrenador(entrenamiento, existentes, ignorarId = null) {
   if (entrenamiento.idEntrenador === null || entrenamiento.idEntrenador === undefined || entrenamiento.idEntrenador === '') return false
+  // Los ids se comparan como texto: valen tanto los numéricos de ejemplo como los UUID de la API
   return existentes.some(
-    (e) => e.id !== ignorarId && e.idEntrenador === Number(entrenamiento.idEntrenador) && e.fecha === entrenamiento.fecha
+    (e) => e.id !== ignorarId && e.idEntrenador !== null && e.idEntrenador !== undefined && String(e.idEntrenador) === String(entrenamiento.idEntrenador) && e.fecha === entrenamiento.fecha
       && seSolapan(e.hora, e.horaFin, entrenamiento.hora, entrenamiento.horaFin),
   )
 }

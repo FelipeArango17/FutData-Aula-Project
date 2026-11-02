@@ -4,6 +4,8 @@ import Card from '../../components/ui/Card.jsx'
 import Badge from '../../components/ui/Badge.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
 import Icon from '../../components/Icon.jsx'
+import HorariosCompartido from '../horarios/Horarios.jsx'
+import { semanaPorApi } from '../../services/semanaService.js'
 
 // Cachorros y Semillero tienen el mismo horario en la plantilla del club: martes y jueves hay dos sesiones el mismo día (grupo
 // mañana y grupo tarde, según el horario del colegio; el niño asiste a la de su grupo) y el sábado una sola, en Horizontes.
@@ -27,7 +29,14 @@ const dias = [
   ...sesiones(jugadores[1], 'Semillero', '8:30 a. m. – 10:00 a. m.'),
 ]
 
+// Con la API (módulo "horarioclub") es la pantalla única de Horarios en solo lectura (semana en curso, filtro por categoría): el
+// grupo de cada niño todavía no existe en el backend, así que no hay "Tu grupo". Sin la API conserva el contenido de ejemplo.
 export default function Horarios() {
+  if (semanaPorApi()) return <HorariosCompartido />
+  return <HorariosEjemplo />
+}
+
+function HorariosEjemplo() {
   const [jugador, setJugador] = useState(jugadores[0])
   const visibles = dias.filter((d) => d.jugador === jugador)
 

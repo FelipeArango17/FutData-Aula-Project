@@ -69,7 +69,6 @@ export const menus = {
       items: [
         { label: 'Asistencia', to: '/administrador/asistencia' },
         { label: 'Horarios', to: '/administrador/horarios' },
-        { label: 'Horario del club', to: '/administrador/horario-club' },
         { label: 'Torneos', to: '/administrador/torneos' },
       ],
     },

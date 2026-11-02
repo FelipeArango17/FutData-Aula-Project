@@ -9,10 +9,10 @@ import EntInicio from './entrenador/Inicio.jsx'
 import EntAsistencia from './entrenador/Asistencia.jsx'
 import ListaPorGrupo from './deportistas/ListaPorGrupo.jsx'
 import RedirigirAInscribir from './RedirigirAInscribir.jsx'
+import RedirigirAHorarios from './RedirigirAHorarios.jsx'
 
 import FichaDeportista from './deportistas/FichaDeportista.jsx'
-import Programacion from './entrenamientos/Programacion.jsx'
-import AdmHorarioClub from './administrador/HorarioClub.jsx'
+import Horarios from './horarios/Horarios.jsx'
 import EntTorneos from './entrenador/Torneos.jsx'
 import TesInicio from './tesorero/Inicio.jsx'
 import TesPagos from './tesorero/Pagos.jsx'
@@ -45,7 +45,7 @@ export const screens = {
   '/entrenador/inicio': EntInicio,
   '/entrenador/grupos': ListaPorGrupo, // misma pantalla para entrenador y administrador (HU-011)
   '/entrenador/asistencia': EntAsistencia,
-  '/entrenador/horarios': Programacion, // misma pantalla para entrenador y administrador (HU-026)
+  '/entrenador/horarios': Horarios, // misma pantalla para acudiente, entrenador y administrador
   '/entrenador/torneos': EntTorneos,
   '/tesorero/inicio': TesInicio,
   '/tesorero/pagos': TesPagos,
@@ -57,8 +57,7 @@ export const screens = {
   '/administrador/usuarios': AdmUsuarios,
   '/administrador/grupos': ListaPorGrupo,
   '/administrador/asistencia': EntAsistencia, // mismo control de asistencia que el entrenador (Figma AD10)
-  '/administrador/horarios': Programacion,
-  '/administrador/horario-club': AdmHorarioClub,
+  '/administrador/horarios': Horarios,
   '/administrador/torneos': AdmTorneos,
   '/administrador/pagos': AdmPagos,
   '/administrador/reportes': AdmReportes,
@@ -68,14 +67,9 @@ export const screens = {
 // Pantallas que no están en el menú (se llega desde un botón).
 export const extraScreens = {
   acudiente: [{ path: '/acudiente/jugadores/:id', Screen: AcuFicha }],
-  entrenador: [
-    { path: '/entrenador/horarios/nuevo', Screen: Programacion },
-    { path: '/entrenador/horarios/:id/editar', Screen: Programacion },
-  ],
   tesorero: [{ path: '/tesorero/pagos/registrar', Screen: TesRegistrar }],
   administrador: [
-    { path: '/administrador/horarios/nuevo', Screen: Programacion },
-    { path: '/administrador/horarios/:id/editar', Screen: Programacion },
+    { path: '/administrador/horario-club', Screen: RedirigirAHorarios }, // enlaces viejos: ahora es una sola pantalla de horarios
     // Rutas fijas de usuarios antes de /:id, para que :id no capture "nuevo" ni "entrenadores"
     { path: '/administrador/usuarios/nuevo', Screen: AdmUsuarioNuevo },
     { path: '/administrador/usuarios/entrenadores', Screen: AdmEntrenadores },
