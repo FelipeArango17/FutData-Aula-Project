@@ -3,8 +3,8 @@ import Card from '../ui/Card.jsx'
 import { formatearCOP } from '../../utils/dinero.js'
 
 // Estado del pago siempre con texto + ícono + color (Badge). Pagado / Pendiente / Vencido.
-const TONO_ESTADO = { pagado: 'success', pendiente: 'warning', vencido: 'danger' }
-const TEXTO_ESTADO = { pagado: 'Pagado', pendiente: 'Pendiente', vencido: 'Vencido' }
+const TONO_ESTADO = { pagado: 'success', pendiente: 'warning', vencido: 'danger', rechazado: 'danger' }
+const TEXTO_ESTADO = { pagado: 'Pagado', pendiente: 'Pendiente', vencido: 'Vencido', rechazado: 'Rechazado' }
 
 export function EstadoPago({ estado }) {
   return <Badge tone={TONO_ESTADO[estado]}>{TEXTO_ESTADO[estado]}</Badge>
@@ -12,7 +12,8 @@ export function EstadoPago({ estado }) {
 
 // Historial de pagos de un deportista. conTabla (escritorio, cuando el contenedor mide ≥ 40 rem): tabla accesible;
 // si no: tarjetas apiladas. fechaLarga convierte "AAAA-MM-DD" en "viernes 31 de octubre de 2026".
-export default function ListaPagos({ pagos, nombre, conTabla, fechaLarga }) {
+// accionesDe (opcional): función pago -> botones de esa fila (pagar, reintentar, descargar comprobante). Sin ella no hay columna de acciones.
+export default function ListaPagos({ pagos, nombre, conTabla, fechaLarga, accionesDe }) {
   if (conTabla) {
     return (
       <table className="w-full border-collapse text-left text-body">
@@ -24,6 +25,7 @@ export default function ListaPagos({ pagos, nombre, conTabla, fechaLarga }) {
             <th scope="col" className="p-3 text-body-medium">Fecha de pago</th>
             <th scope="col" className="p-3 text-right text-body-medium">Monto</th>
             <th scope="col" className="p-3 text-body-medium">Estado</th>
+            {accionesDe && <th scope="col" className="p-3 text-body-medium">Acciones</th>}
           </tr>
         </thead>
         <tbody>
@@ -34,6 +36,7 @@ export default function ListaPagos({ pagos, nombre, conTabla, fechaLarga }) {
               <td className="break-words p-3">{p.fechaPago ? fechaLarga(p.fechaPago) : 'Sin pagar'}</td>
               <td className="break-words p-3 text-right">{formatearCOP(p.monto)}</td>
               <td className="p-3"><EstadoPago estado={p.estado} /></td>
+              {accionesDe && <td className="p-3">{accionesDe(p)}</td>}
             </tr>
           ))}
         </tbody>
@@ -62,6 +65,7 @@ export default function ListaPagos({ pagos, nombre, conTabla, fechaLarga }) {
               <dd className="break-words">{p.fechaPago ? fechaLarga(p.fechaPago) : 'Sin pagar'}</dd>
             </div>
           </dl>
+          {accionesDe && accionesDe(p)}
         </Card>
       ))}
     </ul>

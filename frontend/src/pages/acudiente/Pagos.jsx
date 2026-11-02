@@ -1,63 +1,65 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import Page from '../../components/ui/Page.jsx'
-import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
-import Avatar from '../../components/ui/Avatar.jsx'
-import FilterChips from '../../components/ui/FilterChips.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
-import ListaPagos from '../../components/pagos/ListaPagos.jsx'
+import AccionPago from '../../components/pagos/AccionPago.jsx'
+import ContenidoEstadoCuenta from '../../components/pagos/ContenidoEstadoCuenta.jsx'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { useAuth } from '../../context/AuthContext.js'
-import { obtenerEstadoCuenta, prepararDescargaEstadoCuenta } from '../../services/pagosService.js'
+import {
+  construirUrlCheckout, descargarComprobante, iniciarPagoEnLinea, obtenerEstadoCuenta, pagosPorApi, prepararDescargaEstadoCuenta, reintentarPago,
+} from '../../services/pagosService.js'
 import { ACUDIENTE_DEMO } from '../../services/deportistasService.js'
-import { diaLargo } from '../../utils/fechas.js'
-import { formatearCOP } from '../../utils/dinero.js'
-import { descargarTexto } from '../../utils/descargas.js'
+import { INTERVALO_SONDEO_MS, LIMITE_SONDEO_MS, buscarPago, cumpleFiltro, evaluarSondeo, mensajeDeErrorPagos } from '../../utils/pagosApi.js'
+import { descargarBlob, descargarTexto } from '../../utils/descargas.js'
 
 // Estado de cuenta del acudiente (HU-017: tarea 326 pantalla y tarea 329 descarga). Figma 05 · Pagos (Acudiente) y 21 · Pagos (móvil).
+// Con la API de pagos conectada (VITE_API_MODULOS con "pagos"): cada cobro tiene su acción según el estado
+//   pendiente o vencido -> "Pagar en línea" (pide los datos del checkout y redirige a Wompi),
+//   rechazado -> "Reintentar" y pagado -> "Descargar comprobante".
+// Al volver del checkout (Wompi agrega ?id=... a la URL de redirección) se reconsulta cada 3 s, hasta 30 s, mientras el cobro siga
+// pendiente: el webhook confirma de forma asíncrona. El cobro que se mandó al checkout se recuerda en sessionStorage.
+// Sin la API (datos de ejemplo) no hay acciones y se avisa que el pago en línea llegará después.
 // Decisiones:
-// - Figma trae Pagar, Comprobante y el panel de Wompi: NO se incluyen (el pago en línea no está en esta tarea).
-//   En su lugar va el texto "El pago en línea estará disponible próximamente".
 // - Figma elige un jugador con chips; aquí cada deportista tiene su propia tarjeta con su resumen y su historial, porque la
 //   historia pide el total pendiente POR deportista. Los chips de estado (Todos / Pendientes / Pagados) sí se respetan.
-// - La descarga incluye TODO el estado de cuenta, no solo el filtro activo.
-// PENDIENTE: la descarga es un CSV provisional; la versión final será un PDF generado por el backend
-// (GET /pagos/estado-cuenta?formato=pdf). El acudiente solo ve a sus deportistas (lo valida el backend con el JWT).
+// - La descarga del estado de cuenta incluye TODO, no solo el filtro activo, y es un CSV provisional (PENDIENTE: PDF del backend).
+//   El acudiente solo ve a sus deportistas (lo valida el backend con el JWT).
+const CLAVE_PAGO_EN_CURSO = 'futdata.pagoEnCurso'
 
-const FILTROS = ['Todos', 'Pendientes y vencidos', 'Pagados']
-const cumple = (filtro, pago) =>
-  filtro === 'Todos' || (filtro === 'Pagados' ? pago.estado === 'pagado' : pago.estado !== 'pagado')
-
-// "viernes 31 de octubre de 2026"
-const fechaLarga = (fecha) => `${diaLargo(fecha).toLowerCase()} de ${fecha.slice(0, 4)}`
 const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
 
-function Mensaje({ icono = 'info', children }) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border bg-surface p-4">
-      <Icon name={icono} className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
-      <div className="flex min-w-0 flex-1 flex-col gap-3 break-words text-body">{children}</div>
-    </div>
-  )
+function leerPagoEnCurso() {
+  try {
+    return JSON.parse(sessionStorage.getItem(CLAVE_PAGO_EN_CURSO))?.id ?? null
+  } catch {
+    return null
+  }
 }
-
-// Estado general del deportista: vencido > pendiente > al día (texto + ícono)
-function EstadoDeportista({ d }) {
-  if (d.totalVencido > 0) return <Badge tone="danger">Vencido</Badge>
-  if (d.totalPendiente > 0) return <Badge tone="warning">Pendiente</Badge>
-  return <Badge tone="success">Al día</Badge>
+function guardarPagoEnCurso(id) {
+  try {
+    if (id) sessionStorage.setItem(CLAVE_PAGO_EN_CURSO, JSON.stringify({ id }))
+    else sessionStorage.removeItem(CLAVE_PAGO_EN_CURSO)
+  } catch {
+    // sin almacenamiento: solo se pierde la reconsulta automática
+  }
 }
 
 export default function Pagos() {
   const { role } = useRole()
   const fotos = useFotosDeportistas()
   const { estado: estadoSesion, usuario } = useAuth()
+  const [parametros] = useSearchParams()
+  const conAcciones = pagosPorApi()
   const tituloRef = useRef(null)
   const zonaPagos = useRef(null)
   const enVuelo = useRef(false)
   const [intento, setIntento] = useState(0)
+  const [recarga, setRecarga] = useState(0) // vuelve a pedir los datos sin mostrar "Cargando…" otra vez
   // Resultado con el intento que lo produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
   const [carga, setCarga] = useState({ intento: -1, estado: null, error: null })
   const [filtro, setFiltro] = useState('Todos')
@@ -65,9 +67,12 @@ export default function Pagos() {
   const [conTabla, setConTabla] = useState(false)
   const [descargando, setDescargando] = useState(false)
   const [exito, setExito] = useState(null)
-  const [errorDescarga, setErrorDescarga] = useState(null)
+  const [errorAccion, setErrorAccion] = useState(null)
+  const [ocupado, setOcupado] = useState(null) // id del cobro con una acción en curso
+  // Cobro que se mandó al checkout y se está esperando: solo si se vuelve de Wompi (?id=...)
+  const [esperando, setEsperando] = useState(() => (conAcciones && parametros.has('id') ? { id: leerPagoEnCurso(), desde: Date.now() } : null))
 
-  // Quién consulta: el correo de la sesión verificada (si coincide con el rol activo) o el acudiente de demostración
+  // Quién consulta (datos de ejemplo): el correo de la sesión verificada (si coincide con el rol activo) o el acudiente de demostración
   const correo = estadoSesion === 'verificada' && usuario?.rol === role && usuario.correo ? usuario.correo : ACUDIENTE_DEMO
   const actor = useMemo(() => ({ rol: role, correo }), [role, correo])
 
@@ -83,7 +88,40 @@ export default function Pagos() {
     return () => {
       activo = false
     }
-  }, [actor, intento])
+  }, [actor, intento, recarga])
+
+  // Tras volver del checkout: reconsulta cada 3 s hasta 30 s mientras el cobro siga pendiente
+  useEffect(() => {
+    if (!esperando?.id) return undefined
+    let activo = true
+    const terminar = (resultado) => {
+      setEsperando(null)
+      guardarPagoEnCurso(null)
+      if (resultado === 'aprobado') setExito({ texto: 'Tu pago fue aprobado. Ya puedes descargar el comprobante.' })
+      else if (resultado === 'rechazado') setErrorAccion({ texto: 'Tu pago fue rechazado. Puedes intentarlo de nuevo con "Reintentar".' })
+      else if (resultado === 'agotado') setErrorAccion({ texto: 'Todavía no recibimos la confirmación de tu pago. Revisa de nuevo en unos minutos.' })
+    }
+    ;(async () => {
+      while (activo) {
+        await esperar(INTERVALO_SONDEO_MS)
+        if (!activo) return
+        let estado = null
+        try {
+          estado = await obtenerEstadoCuenta(actor)
+        } catch {
+          // un fallo de red no corta la espera: se vuelve a intentar hasta el límite
+        }
+        if (!activo) return
+        if (estado) setCarga({ intento, estado, error: null })
+        const transcurrido = Date.now() - esperando.desde
+        const resultado = estado ? evaluarSondeo(buscarPago(estado, esperando.id), transcurrido) : (transcurrido >= LIMITE_SONDEO_MS ? 'agotado' : 'esperando')
+        if (resultado !== 'esperando') return terminar(resultado)
+      }
+    })()
+    return () => {
+      activo = false
+    }
+  }, [esperando, actor, intento])
 
   // La tabla necesita unos 40 rem de ancho. Si la zona es más angosta (móvil, tablet vertical, texto grande)
   // se usan tarjetas. Se mide en rem, así que depende del tamaño de letra y no solo de los píxeles.
@@ -100,10 +138,12 @@ export default function Pagos() {
   const cargando = carga.intento !== intento
   const estado = carga.estado
   const deportistas = estado?.deportistas ?? []
+  const pagoEsperado = esperando?.id ? buscarPago(estado, esperando.id) : null
+  const confirmando = pagoEsperado && (pagoEsperado.estado === 'pendiente' || pagoEsperado.estado === 'vencido') ? 'Estamos confirmando tu pago…' : null
 
   function cambiarFiltro(nuevo) {
     setFiltro(nuevo)
-    const total = deportistas.reduce((suma, d) => suma + d.pagos.filter((p) => cumple(nuevo, p)).length, 0)
+    const total = deportistas.reduce((suma, d) => suma + d.pagos.filter((p) => cumpleFiltro(nuevo, p)).length, 0)
     setAnuncio(plural(total, 'pago', 'pagos'))
   }
 
@@ -112,107 +152,72 @@ export default function Pagos() {
     enVuelo.current = true
     setDescargando(true)
     setExito(null)
-    setErrorDescarga(null)
+    setErrorAccion(null)
     try {
       const { nombreArchivo, tipo, contenido } = await prepararDescargaEstadoCuenta(actor)
       descargarTexto(nombreArchivo, contenido, tipo, { conBom: true })
       setExito({ texto: 'Descarga iniciada.' })
     } catch {
-      setErrorDescarga({ texto: 'No se pudo preparar el estado de cuenta.', accion: { texto: 'Reintentar', onClick: descargar } })
+      setErrorAccion({ texto: 'No se pudo preparar el estado de cuenta.', accion: { texto: 'Reintentar', onClick: descargar } })
     } finally {
       enVuelo.current = false
       setDescargando(false)
     }
   }
 
-  const avisoError = errorDescarga
-    ?? (carga.error && !cargando
-      ? {
-          texto: carga.error.codigo === 'SIN_PERMISO' ? 'No tienes permiso para ver este estado de cuenta.' : 'No se pudo cargar tu estado de cuenta.',
-          accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) },
-        }
-      : null)
+  // Corre una acción sobre un cobro: una a la vez, con aviso de éxito o de error
+  const sobreCobro = useCallback(async (pago, accion, textoError) => {
+    if (enVuelo.current) return
+    enVuelo.current = true
+    setOcupado(pago.id)
+    setExito(null)
+    setErrorAccion(null)
+    try {
+      await accion()
+    } catch (error) {
+      setOcupado(null)
+      setErrorAccion({ texto: mensajeDeErrorPagos(error, textoError) })
+    } finally {
+      enVuelo.current = false
+    }
+  }, [])
 
-  let contenido
-  if (cargando) {
-    contenido = (
-      <Mensaje icono="clock">
-        <p role="status">Cargando tu estado de cuenta…</p>
-      </Mensaje>
-    )
-  } else if (carga.error) {
-    contenido = null
-  } else if (deportistas.length === 0) {
-    contenido = (
-      <Mensaje>
-        <p>Todavía no tienes deportistas asociados a tu cuenta, así que no hay pagos que mostrar.</p>
-      </Mensaje>
-    )
-  } else {
-    contenido = (
-      <>
-        <section aria-labelledby="titulo-resumen" className="flex flex-col gap-3 rounded-lg border bg-surface p-4">
-          <h2 id="titulo-resumen" className="text-small font-normal text-secondary">Total pendiente</h2>
-          <p className="break-words text-kpi">{formatearCOP(estado.totalPendiente)}</p>
-          {estado.totalVencido > 0 ? (
-            <p className="flex items-start gap-2 rounded-md bg-danger p-3 text-body-medium text-danger">
-              <Icon name="alert" className="mt-0.5 h-5 w-5 shrink-0" />
-              <span className="min-w-0 break-words">Tienes {formatearCOP(estado.totalVencido)} vencidos.</span>
-            </p>
-          ) : estado.totalPendiente > 0 ? (
-            <p className="flex items-start gap-2 rounded-md bg-warning p-3 text-body-medium text-warning">
-              <Icon name="clock" className="mt-0.5 h-5 w-5 shrink-0" />
-              <span className="min-w-0 break-words">Tienes pagos pendientes, ninguno vencido.</span>
-            </p>
-          ) : (
-            <p className="flex items-start gap-2 rounded-md bg-success p-3 text-body-medium text-success">
-              <Icon name="check" className="mt-0.5 h-5 w-5 shrink-0" />
-              <span className="min-w-0 break-words">Estás al día con todos tus pagos.</span>
-            </p>
-          )}
-          <p className="break-words text-small text-secondary">El pago en línea estará disponible próximamente.</p>
-        </section>
+  const pagar = (pago) => sobreCobro(pago, async () => {
+    const datos = await iniciarPagoEnLinea(pago.id)
+    guardarPagoEnCurso(pago.id)
+    window.location.assign(construirUrlCheckout(datos)) // la página se va a Wompi: el cobro sigue "ocupado" hasta entonces
+  }, 'No se pudo abrir el pago en línea. Intenta de nuevo.')
 
-        <FilterChips label="Estado del pago" options={FILTROS} value={filtro} onChange={cambiarFiltro} />
+  const reintentar = (pago) => sobreCobro(pago, async () => {
+    await reintentarPago(pago.id)
+    setOcupado(null)
+    setExito({ texto: 'Creamos un cobro nuevo para que puedas pagar.' })
+    setRecarga((n) => n + 1)
+  }, 'No se pudo preparar el reintento. Intenta de nuevo.')
 
-        <ul className="grid grid-cols-1 gap-6">
-          {deportistas.map((d) => {
-            const nombre = `${d.deportista.nombre} ${d.deportista.apellido}`
-            const visibles = d.pagos.filter((p) => cumple(filtro, p))
-            return (
-              <li key={d.deportista.id}>
-                <section aria-labelledby={`dep-${d.deportista.id}`} className="flex flex-col gap-4 rounded-lg border bg-surface p-4">
-                  <div className="flex flex-wrap items-start gap-3">
-                    <Avatar name={nombre} foto={fotos[d.deportista.id]} />
-                    <div className="flex min-w-0 grow basis-[12rem] flex-col gap-1">
-                      <h2 id={`dep-${d.deportista.id}`} className="break-words text-h3">{nombre}</h2>
-                      <p className="break-words text-body-medium">Total pendiente: {formatearCOP(d.totalPendiente)}</p>
-                      {d.pendienteDesde && <p className="break-words text-body text-secondary">Pendiente desde: {fechaLarga(d.pendienteDesde)}</p>}
-                      {d.totalVencido > 0 && <p className="break-words text-body text-danger">Vencido: {formatearCOP(d.totalVencido)}</p>}
-                      <div className="flex flex-wrap pt-1"><EstadoDeportista d={d} /></div>
-                    </div>
-                  </div>
-                  {visibles.length === 0 ? (
-                    <p className="text-body text-secondary">No hay pagos con este filtro.</p>
-                  ) : (
-                    <ListaPagos pagos={visibles} nombre={nombre} conTabla={conTabla} fechaLarga={fechaLarga} />
-                  )}
-                </section>
-              </li>
-            )
-          })}
-        </ul>
-      </>
-    )
+  const descargarPdf = (pago) => sobreCobro(pago, async () => {
+    const { nombreArchivo, blob } = await descargarComprobante(pago.id)
+    descargarBlob(nombreArchivo, blob)
+    setOcupado(null)
+    setExito({ texto: 'Descarga del comprobante iniciada.' })
+  }, 'No se pudo descargar el comprobante. Intenta de nuevo.')
+
+  const accionesDe = conAcciones
+    ? (pago) => <AccionPago pago={pago} ocupado={ocupado} onPagar={pagar} onReintentar={reintentar} onDescargar={descargarPdf} />
+    : undefined
+
+  let mensajeError = null
+  if (carga.error && !cargando) {
+    if (conAcciones) mensajeError = mensajeDeErrorPagos(carga.error, 'No se pudo cargar tu estado de cuenta.')
+    else mensajeError = carga.error.codigo === 'SIN_PERMISO' ? 'No tienes permiso para ver este estado de cuenta.' : 'No se pudo cargar tu estado de cuenta.'
   }
-
   const hayDatos = !cargando && !carga.error && deportistas.length > 0
 
   return (
     <Page title="Pagos" subtitle="Estado de cuenta de tus jugadores" tituloRef={tituloRef}>
       <p aria-live="polite" className="sr-only">{anuncio}</p>
       <AvisoEstado aviso={exito} onCerrar={() => setExito(null)} />
-      <AvisoEstado aviso={avisoError} rol="alert" tono="danger" enfocar={false} />
+      <AvisoEstado aviso={errorAccion} rol="alert" tono="danger" enfocar={false} onCerrar={() => setErrorAccion(null)} />
       <div className="flex flex-col gap-2">
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button variant="secondary" onClick={descargar} disabled={!hayDatos || descargando} aria-busy={descargando} aria-describedby="ayuda-descarga" className="gap-2 disabled:opacity-60">
@@ -226,7 +231,20 @@ export default function Pagos() {
             : 'No hay deportistas asociados a tu cuenta, así que no hay nada que descargar.'}
         </p>
       </div>
-      <div ref={zonaPagos} className="flex min-w-0 flex-col gap-4">{contenido}</div>
+      <div ref={zonaPagos} className="flex min-w-0 flex-col gap-4">
+        <ContenidoEstadoCuenta
+          cargando={cargando}
+          mensajeError={mensajeError}
+          onReintentar={() => setIntento((n) => n + 1)}
+          estado={estado}
+          filtro={filtro}
+          onFiltro={cambiarFiltro}
+          conTabla={conTabla}
+          fotos={fotos}
+          accionesDe={accionesDe}
+          confirmando={confirmando}
+        />
+      </div>
     </Page>
   )
 }

@@ -175,3 +175,25 @@ describe('apiListaPaginada', () => {
     expect(await apiListaPaginada('/x').catch((e) => e)).toMatchObject({ estado: 0, codigo: 'RED' })
   })
 })
+
+describe('apiRequest: respuestas binarias', () => {
+  it('con respuesta: "blob" devuelve el cuerpo binario (PDF) y envía el token', async () => {
+    fetchSimulado.mockResolvedValue(new Response('%PDF-1.4', { status: 200, headers: { 'Content-Type': 'application/pdf' } }))
+    const blob = await apiRequest('/pagos/x/comprobante', { respuesta: 'blob' })
+    expect(blob).toBeInstanceOf(Blob)
+    expect(await blob.text()).toBe('%PDF-1.4')
+    expect(ultimaLlamada()[1].headers.Authorization).toBe('Bearer token-de-prueba')
+    expect(ultimaLlamada()[1].respuesta).toBeUndefined() // no viaja a fetch
+  })
+
+  it('un error en una descarga binaria sigue siendo un error de la API (409 con su mensaje)', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(409, { mensaje: 'estado: el comprobante solo existe para pagos aprobados', campos: ['estado'] }))
+    const error = await apiRequest('/pagos/x/comprobante', { respuesta: 'blob' }).catch((e) => e)
+    expect(error).toMatchObject({ estado: 409, campos: ['estado'] })
+  })
+
+  it('sin la opción sigue leyendo JSON', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(200, { ok: 1 }))
+    expect(await apiRequest('/x')).toEqual({ ok: 1 })
+  })
+})

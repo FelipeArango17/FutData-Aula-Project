@@ -19,7 +19,8 @@
 // - "Hoy" es hoy() (utils/hoy.js). "Desde cuándo" = vencimiento más antiguo entre los pagos sin pagar del deportista.
 // - Un acudiente solo ve a SUS deportistas (los que tienen su correo en `acudiente`). Aquí se simula; en producción
 //   lo valida el backend con el JWT.
-// - El pago en línea (Wompi) NO está en esta tarea.
+// - Modo API (VITE_API_MODULOS con "pagos"): ver el final de este archivo. Con el interruptor apagado (y siempre en las pruebas)
+//   todo sigue con los datos de ejemplo de arriba.
 // - HU-016 (registro manual): solo administrador y tesorero. El cobro de la mensualidad de un mes que todavía no existe se CREA al
 //   registrar el pago (PENDIENTE con Juan: el valor de la mensualidad debería salir de una tarifa). No hay abonos: el monto debe
 //   ser igual al del cobro (PENDIENTE). No hay anulación ni corrección de pagos (PENDIENTE); por eso la pantalla pide confirmar.
@@ -30,6 +31,15 @@ import { hoy as hoyDeLaApp } from '../utils/hoy.js'
 import { listarDeportistas, obtenerDeportista } from './deportistasService.js'
 import { MENSAJES, enLista, maximoCaracteres, requerido, requeridoSi, validarCampos, validarFechaPago, validarMes, validarMonto } from '../utils/validaciones.js'
 import { mesEnTexto } from '../utils/fechas.js'
+import { apiListaPaginada, apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+import { adaptarCobro, adaptarMiPago, adaptarMisPagos, construirUrlCheckout } from '../utils/pagosApi.js'
+
+export { construirUrlCheckout }
+
+// Interruptor por módulo (igual que entrenadoresService). Apagado: datos de ejemplo en memoria.
+const usarApi = usarApiDe('pagos')
+export const pagosPorApi = () => usarApi
 
 // Datos de demostración, ficticios. Santiago (1) y Valeria (2) son del acudiente demo; Mateo (6) y Sofía (9) NO,
 // y sirven para comprobar que sus pagos no se filtran.
@@ -78,6 +88,7 @@ const suma = (lista) => lista.reduce((total, p) => total + p.monto, 0)
 
 // Estado de cuenta de TODOS los deportistas del acudiente. Cada deportista trae sus pagos del más reciente al más antiguo.
 export async function obtenerEstadoCuenta(actor) {
+  if (usarApi) return adaptarMisPagos(await apiRequest('/pagos/mis-pagos')) // el backend filtra por el JWT: solo sus deportistas
   await simularRed()
   if (actor?.rol !== 'acudiente' || !actor.correo) throw error('SIN_PERMISO', 'No tienes permiso para ver este estado de cuenta.')
   const correo = actor.correo.trim().toLowerCase()
@@ -110,7 +121,7 @@ export async function obtenerEstadoCuenta(actor) {
 }
 
 const COLUMNAS = ['Deportista', 'Concepto', 'Monto (COP)', 'Vencimiento', 'Fecha de pago', 'Estado']
-const ETIQUETA_ESTADO = { pagado: 'Pagado', pendiente: 'Pendiente', vencido: 'Vencido' }
+const ETIQUETA_ESTADO = { pagado: 'Pagado', pendiente: 'Pendiente', vencido: 'Vencido', rechazado: 'Rechazado' }
 // Separador ';': es el que usa Excel con configuración regional de Colombia (la coma es el separador decimal).
 const SEPARADOR = ';'
 
@@ -236,4 +247,82 @@ export async function registrarPagoManual(datos, actor) {
     pagos = [...pagos, resultado]
   }
   return { pago: { ...resultado, estado: estadoDelPago(resultado, hoy()) }, cobroCreado: !cobro }
+}
+
+// ================================================================================================================
+// Modo API: pagos en línea con Wompi y gestión de cobros (backend: "Pagos con Wompi" en backend/README.md).
+// Los ids son UUID (texto): nunca se convierten a número. Los errores son los de apiClient ({ estado, mensaje, campos, codigo });
+// utils/pagosApi.js (mensajeDeErrorPagos) los convierte en texto para la pantalla.
+// ================================================================================================================
+
+function exigirApi() {
+  if (!usarApi) throw error('NO_DISPONIBLE', 'Esta función necesita el módulo de pagos conectado a la API (VITE_API_MODULOS).')
+}
+
+const rutaPago = (id) => `/pagos/${encodeURIComponent(id)}`
+const cuerpoJson = (datos) => ({ method: 'POST', body: JSON.stringify(datos) })
+
+// ---- Acudiente ----
+
+// POST /api/pagos/{id}/iniciar-wompi -> { llavePublica, referencia, montoEnCentavos, moneda, firmaIntegridad, urlRedireccion }.
+// El monto sale de la base de datos: nunca se envía desde aquí. Para abrir el checkout: construirUrlCheckout(respuesta).
+export async function iniciarPagoEnLinea(idPago) {
+  exigirApi()
+  return apiRequest(`${rutaPago(idPago)}/iniciar-wompi`, { method: 'POST' })
+}
+
+// POST /api/pagos/{id}/reintentar: sobre un cobro rechazado, devuelve el cobro PENDIENTE nuevo (o el que ya existía).
+export async function reintentarPago(idPago) {
+  exigirApi()
+  return adaptarMiPago(await apiRequest(`${rutaPago(idPago)}/reintentar`, { method: 'POST' }))
+}
+
+// GET /api/pagos/{id}/comprobante -> { nombreArchivo, blob } (PDF). Quien llama lo descarga con utils/descargas.js.
+export async function descargarComprobante(idPago) {
+  exigirApi()
+  const blob = await apiRequest(`${rutaPago(idPago)}/comprobante`, { respuesta: 'blob' })
+  return { nombreArchivo: 'comprobante-de-pago.pdf', blob }
+}
+
+// ---- Tesorero y administrador ----
+
+// GET /api/pagos (paginado). Devuelve { items, total, pagina, tamano } con los cobros ya adaptados. `page` empieza en 0.
+// estado: PENDIENTE | APROBADO | RECHAZADO; tipo: MENSUALIDAD | INSCRIPCION | TORNEO | UNIFORME; periodo: "AAAA-MM";
+// sort: "vencimiento,desc" (campos: vencimiento, monto, creadoEn, estado).
+export async function listarCobros({ estado, tipo, periodo, idDeportista, page = 0, size = 20, sort = 'vencimiento,desc' } = {}) {
+  exigirApi()
+  const pagina = await apiListaPaginada('/pagos', { page, size, sort, estado, tipo, periodo, idDeportista })
+  return { ...pagina, items: pagina.items.map(adaptarCobro) }
+}
+
+// POST /api/pagos/{id}/aprobar: pago manual. metodo: EFECTIVO o TRANSFERENCIA. Un cobro ya iniciado en Wompi responde 409.
+export async function aprobarPagoManual(idPago, { fechaPago, metodo, nota } = {}) {
+  exigirApi()
+  return adaptarCobro(await apiRequest(`${rutaPago(idPago)}/aprobar`, cuerpoJson({ fechaPago, metodo, nota: nota?.trim() || undefined })))
+}
+
+// POST /api/pagos/{id}/rechazar: solo un cobro PENDIENTE; la nota es opcional.
+export async function rechazarCobro(idPago, nota) {
+  exigirApi()
+  return adaptarCobro(await apiRequest(`${rutaPago(idPago)}/rechazar`, cuerpoJson({ nota: nota?.trim() || undefined })))
+}
+
+// POST /api/pagos/{id}/conciliar: consulta a Wompi las transacciones de la referencia y aplica las reglas del webhook.
+export async function conciliarCobro(idPago) {
+  exigirApi()
+  return adaptarCobro(await apiRequest(`${rutaPago(idPago)}/conciliar`, { method: 'POST' }))
+}
+
+// ---- Solo administrador ----
+
+// POST /api/pagos: crea un cobro PENDIENTE. monto en pesos enteros; periodo ("AAAA-MM-01") solo en MENSUALIDAD.
+export async function crearCobro({ idDeportista, tipo, concepto, monto, fechaVencimiento, periodo }) {
+  exigirApi()
+  return adaptarCobro(await apiRequest('/pagos', cuerpoJson({ idDeportista, tipo, concepto: concepto?.trim() || undefined, monto: Number(monto), fechaVencimiento, periodo: periodo || undefined })))
+}
+
+// POST /api/pagos/generar-mensualidades: { periodo: "AAAA-MM" } -> { periodo, creadas, yaExistentes }
+export async function generarMensualidades({ periodo }) {
+  exigirApi()
+  return apiRequest('/pagos/generar-mensualidades', cuerpoJson({ periodo }))
 }
