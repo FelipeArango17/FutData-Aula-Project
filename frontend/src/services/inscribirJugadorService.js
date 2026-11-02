@@ -17,7 +17,7 @@
 //
 // PENDIENTE (backend): crear la cuenta de acceso del acudiente y enviarle un correo con un enlace para crear su contraseña, igual que a
 // los entrenadores; subir los archivos a Supabase Storage; y hacer todo en una sola transacción. Hoy la cuenta no se crea.
-import { crearDeportista, listarCategorias, vincularAcudiente as vincularCorreo } from './deportistasService.js'
+import { crearDeportista, deportistasPorApi, listarCategorias, vincularAcudiente as vincularCorreo } from './deportistasService.js'
 import { guardarAcudiente, vincularAcudiente } from './acudientesService.js'
 import { subirDocumento, validarDatosDocumento } from './documentosService.js'
 import { guardarFoto } from './fotosService.js'
@@ -64,6 +64,13 @@ export async function inscribirJugador({ deportista, acudiente, documentos = [],
     if (campo) throw error(e.codigo, e.message, { errores: { [campo]: e.message }, paso: 1 })
     if (e.codigo === 'VALIDACION') throw error('VALIDACION', e.message, { errores: e.errores, paso: 1 })
     throw e
+  }
+
+  // Con la API de deportistas el backend solo guarda al deportista y su foto (todavía no hay endpoints de acudientes ni de
+  // documentos): se guarda eso y se avisa que el resto no se pudo hacer (INSCRIPCION_PARCIAL), en vez de perder esos datos en silencio.
+  if (deportistasPorApi()) {
+    if (foto) await guardarFoto(creado.id, foto, actor).catch(() => {})
+    throw error('INSCRIPCION_PARCIAL', 'El jugador se registró, pero no se pudo terminar la inscripción. Complétala desde su ficha.', { deportista: creado, causa: 'NO_DISPONIBLE' })
   }
 
   // 3. Acudiente, vínculo, documentos y foto: si algo falla, el deportista ya existe

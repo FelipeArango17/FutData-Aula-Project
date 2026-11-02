@@ -11,7 +11,7 @@ import SubidaFoto from '../../components/ui/SubidaFoto.jsx'
 import DatosDeportista from '../../components/deportistas/DatosDeportista.jsx'
 import FormularioDeportista from '../../components/deportistas/FormularioDeportista.jsx'
 import { useActor } from '../../context/useActor.js'
-import { actualizarDeportista, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
+import { actualizarDeportista, deportistasPorApi, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
 import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
 import { ETIQUETA_GRUPO } from '../../utils/categorias.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
@@ -19,6 +19,9 @@ import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '..
 // Ficha del deportista (HU-010, tarea 319): lectura y edición. Ruta /administrador/deportistas/:id. Solo el administrador.
 // Figma no tiene una ficha del administrador (la del acudiente es otra pantalla), así que usa los componentes del proyecto.
 // En lectura tiene la foto (arriba) y los documentos (debajo de los datos personales); el formulario de edición no cambia.
+// Con la API (módulo "deportistas"): la foto y los datos salen de GET /api/deportistas/{id} (la foto es una URL firmada), la foto se
+// sube y se quita con el backend, y NO se muestran los documentos ni el historial de cambios (el backend todavía no los tiene).
+// Los 400/403/404/409 se muestran con el mensaje del backend. La categoría y el estado de la inscripción los calcula el backend.
 // PENDIENTE: pasar al deportista a activo/inactivo desde la ficha no se hizo (se decide con Juan). Permisos: el servicio simula
 // RF008; en producción lo valida el backend con el JWT.
 const VOLVER = '/administrador/deportistas'
@@ -46,6 +49,7 @@ export default function FichaDeportista() {
 
 function Ficha({ id }) {
   const actor = useActor()
+  const porApi = deportistasPorApi()
   const tituloRef = useRef(null)
   const [intento, setIntento] = useState(0)
   // Resultado con la clave de la petición que lo produjo: si no coincide, está cargando
@@ -63,14 +67,19 @@ function Ficha({ id }) {
   useEffect(() => {
     let activo = true
     Promise.all([obtenerFichaDeportista(id, actor), listarCategorias()])
-      .then(([ficha, categorias]) => activo && setCarga({ intento, ficha, categorias, error: null }))
+      .then(([ficha, categorias]) => {
+        if (!activo) return
+        setCarga({ intento, ficha, categorias, error: null })
+        if (porApi) setFoto(ficha.deportista.foto ?? null)
+      })
       .catch((error) => activo && setCarga({ intento, ficha: null, categorias: [], error }))
     return () => {
       activo = false
     }
-  }, [id, actor, intento])
+  }, [id, actor, intento, porApi])
 
   useEffect(() => {
+    if (porApi) return undefined // la foto llega con la ficha
     let activo = true
     obtenerFoto(id)
       .then((url) => activo && setFoto(url))
@@ -78,7 +87,7 @@ function Ficha({ id }) {
     return () => {
       activo = false
     }
-  }, [id])
+  }, [id, porApi])
 
   useEffect(() => {
     if (foco) document.getElementById(foco.id)?.focus()
@@ -145,14 +154,14 @@ function Ficha({ id }) {
   } else if (noExiste || sinPermiso) {
     contenido = (
       <Mensaje icono="alert" rol="alert">
-        <p>{noExiste ? 'No encontramos este deportista.' : 'No tienes permiso para ver esta ficha.'}</p>
+        <p>{carga.error.mensaje ?? (noExiste ? 'No encontramos este deportista.' : 'No tienes permiso para ver esta ficha.')}</p>
         {volver}
       </Mensaje>
     )
   } else if (carga.error) {
     contenido = (
       <AvisoEstado
-        aviso={{ texto: 'No se pudo cargar la ficha del deportista.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } }}
+        aviso={{ texto: carga.error.estado === 400 ? carga.error.mensaje : 'No se pudo cargar la ficha del deportista.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } }}
         rol="alert"
         tono="danger"
         enfocar={false}
@@ -195,10 +204,12 @@ function Ficha({ id }) {
             <Button to={VOLVER} variant="secondary">Volver a deportistas</Button>
           </div>
         </Card>
-        <DocumentosDeportista idDeportista={deportista.id} actor={actor} tieneFoto={Boolean(foto)} />
-        <div className="w-full max-w-2xl">
-          <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
-        </div>
+        {!porApi && <DocumentosDeportista idDeportista={deportista.id} actor={actor} tieneFoto={Boolean(foto)} />}
+        {!porApi && (
+          <div className="w-full max-w-2xl">
+            <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
+          </div>
+        )}
       </>
     )
   }

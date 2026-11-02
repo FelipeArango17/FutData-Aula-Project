@@ -58,7 +58,8 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
         setSinCambios(true)
         return
       } else {
-        setErrorGeneral(error.codigo === 'SIN_PERMISO' ? error.message : 'No se pudo guardar el deportista. Intenta de nuevo.')
+        // Con la API, el 400/403/404/409/503 del backend se muestra con su mensaje (`estado` solo lo traen los errores de la API)
+        setErrorGeneral(error.codigo === 'SIN_PERMISO' || error.estado ? error.message : 'No se pudo guardar el deportista. Intenta de nuevo.')
         return
       }
       setIntentos((n) => n + 1)
