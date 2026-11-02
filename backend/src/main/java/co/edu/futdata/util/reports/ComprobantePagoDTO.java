@@ -50,7 +50,11 @@ public record ComprobantePagoDTO(
         TRANSFERENCIA("Transferencia", false),
         PSE("PSE", true),
         NEQUI("Nequi", true),
-        TARJETA("Tarjeta", true);
+        TARJETA("Tarjeta", true),
+        QR("QR Bancolombia", true),
+        BOTON_BANCOLOMBIA("Botón Bancolombia", true),
+        /** Respaldo para cualquier medio de Wompi que no esté en la tabla de mapeo. */
+        WOMPI_OTRO("Wompi (otro medio)", true);
 
         private final String etiqueta;
         private final boolean enLinea;
@@ -77,7 +81,7 @@ public record ComprobantePagoDTO(
                     return metodo;
                 }
             }
-            throw new ComprobanteInvalidoException(List.of("metodo: debe ser Efectivo, Transferencia, PSE, Nequi o Tarjeta"));
+            throw new ComprobanteInvalidoException(List.of("metodo: debe ser Efectivo, Transferencia, PSE, Nequi, Tarjeta, QR Bancolombia, Botón Bancolombia o Wompi (otro medio)"));
         }
     }
 

@@ -7,10 +7,13 @@ import co.edu.futdata.datasource.external.ArchivoNoEncontradoException;
 import co.edu.futdata.datasource.external.ArchivoYaExisteException;
 import co.edu.futdata.datasource.external.NotificacionException;
 import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
+import co.edu.futdata.datasource.external.WompiNoDisponibleException;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
+import co.edu.futdata.services.facade.FirmaWebhookInvalidaException;
+import co.edu.futdata.services.facade.PagosNoConfiguradosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.util.reports.ComprobanteInvalidoException;
 import co.edu.futdata.util.security.RespuestasSeguridad;
@@ -147,6 +150,23 @@ public class ManejadorGlobalErrores {
     public ResponseEntity<ErrorResponseDTO> codigoNoEnviado(CodigoNoEnviadoException e,
                                                              HttpServletRequest peticion) {
         return responder(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), peticion);
+    }
+
+    /** Faltan las llaves de Wompi: 503 con código para que el frontend sepa que es un tema de configuración. */
+    @ExceptionHandler(PagosNoConfiguradosException.class)
+    public ResponseEntity<ErrorResponseDTO> pagosNoConfigurados(PagosNoConfiguradosException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage(), List.of(), PagosNoConfiguradosException.CODIGO, null, peticion);
+    }
+
+    /** Webhook de Wompi con firma inválida: 401 y no se toca nada. */
+    @ExceptionHandler(FirmaWebhookInvalidaException.class)
+    public ResponseEntity<ErrorResponseDTO> firmaWebhookInvalida(FirmaWebhookInvalidaException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.UNAUTHORIZED, e.getMessage(), peticion);
+    }
+
+    @ExceptionHandler(WompiNoDisponibleException.class)
+    public ResponseEntity<ErrorResponseDTO> wompiNoDisponible(WompiNoDisponibleException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.SERVICE_UNAVAILABLE, "Wompi no está disponible en este momento. Intenta de nuevo más tarde.", peticion);
     }
 
     @ExceptionHandler(ComprobanteInvalidoException.class)

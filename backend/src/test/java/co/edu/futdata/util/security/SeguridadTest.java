@@ -18,11 +18,15 @@ import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.services.facade.ICodigoVerificacionService;
 import co.edu.futdata.services.facade.IDeportistaService;
 import co.edu.futdata.services.facade.IEntrenadorService;
+import co.edu.futdata.services.facade.IPagoService;
+import co.edu.futdata.services.facade.IPagoWompiService;
+import co.edu.futdata.services.facade.FirmaWebhookInvalidaException;
 import co.edu.futdata.services.facade.IUsuarioService;
 import co.edu.futdata.services.facade.ISaludService;
 import co.edu.futdata.api.dto.SaludResponseDTO;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,6 +90,12 @@ class SeguridadTest {
 
     @MockitoBean
     private ICodigoVerificacionService codigos;
+
+    @MockitoBean
+    private IPagoService pagos;
+
+    @MockitoBean
+    private IPagoWompiService pagosWompi;
 
     @BeforeEach
     void prepararTokens() {
@@ -263,12 +273,85 @@ class SeguridadTest {
     }
 
     @Test
-    void elWebhookDeWompiEstaReservadoSinTokenYSin2fa() throws Exception {
-        // Todavía no hay controlador: la seguridad lo deja pasar y responde la API (no 401 ni 403).
-        mvc.perform(post(RutasSin2FA.WEBHOOK_WOMPI))
-                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
-                        .isNotIn(401, 403));
+    void elWebhookDeWompiEsPublicoSinTokenYSin2faPeroExigeLaFirma() throws Exception {
+        // Sin JWT: la seguridad lo deja pasar y es el servicio quien verifica la firma del evento
+        mvc.perform(post(RutasSin2FA.WEBHOOK_WOMPI).contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .header("X-Event-Checksum", "abc"))
+                .andExpect(status().isOk());
+        verify(pagosWompi).procesarEvento("{}", "abc");
         verify(decoder, never()).decode(any());
+
+        org.mockito.Mockito.doThrow(new FirmaWebhookInvalidaException()).when(pagosWompi).procesarEvento(any(), any());
+        mvc.perform(post(RutasSin2FA.WEBHOOK_WOMPI).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.mensaje").value("La firma del evento no es válida."));
+    }
+
+    // --- Pagos: roles por endpoint ------------------------------------------------------------------------
+
+    private static final String ID_PAGO = "00000000-0000-0000-0000-0000000000d1";
+
+    /** (método, ruta, roles que pasan). Los demás roles reciben 403 y el servicio no se toca. */
+    private record RutaPago(String metodo, String ruta, Set<UUID> permitidos) {
+    }
+
+    private ResultActions llamar(String metodo, String ruta, UUID quien) throws Exception {
+        var peticion = switch (metodo) {
+            case "GET" -> get(ruta);
+            default -> post(ruta).contentType(MediaType.APPLICATION_JSON).content("{}");
+        };
+        return mvc.perform(peticion.header(HttpHeaders.AUTHORIZATION, "Bearer token-" + quien));
+    }
+
+    @Test
+    void cadaEndpointDePagosExigeSuRol() throws Exception {
+        UUID tesorero = UUID.fromString("00000000-0000-0000-0000-0000000000ce");
+        token("token-" + tesorero, tesorero.toString(), UUID.randomUUID().toString());
+        when(usuarios.rolesActivos(tesorero)).thenReturn(List.of("TESORERO"));
+        Set<UUID> soloAdmin = Set.of(ADMIN);
+        Set<UUID> adminYTesorero = Set.of(ADMIN, tesorero);
+        Set<UUID> soloAcudiente = Set.of(ACUDIENTE);
+        List<RutaPago> rutas = List.of(
+                new RutaPago("POST", "/api/pagos", soloAdmin),
+                new RutaPago("GET", "/api/pagos", adminYTesorero),
+                new RutaPago("GET", "/api/pagos/mis-pagos", soloAcudiente),
+                new RutaPago("POST", "/api/pagos/" + ID_PAGO + "/iniciar-wompi", soloAcudiente),
+                new RutaPago("POST", "/api/pagos/" + ID_PAGO + "/reintentar", soloAcudiente),
+                new RutaPago("POST", "/api/pagos/" + ID_PAGO + "/conciliar", adminYTesorero),
+                new RutaPago("POST", "/api/pagos/" + ID_PAGO + "/aprobar", adminYTesorero),
+                new RutaPago("POST", "/api/pagos/" + ID_PAGO + "/rechazar", adminYTesorero),
+                new RutaPago("GET", "/api/pagos/" + ID_PAGO + "/comprobante", Set.of(ADMIN, tesorero, ACUDIENTE)),
+                new RutaPago("POST", "/api/pagos/generar-mensualidades", soloAdmin));
+        for (RutaPago r : rutas) {
+            for (UUID quien : List.of(ADMIN, tesorero, ENTRENADOR, ACUDIENTE)) {
+                int estado = llamar(r.metodo(), r.ruta(), quien).andReturn().getResponse().getStatus();
+                if (r.permitidos().contains(quien)) {
+                    org.assertj.core.api.Assertions.assertThat(estado).as("%s %s como %s", r.metodo(), r.ruta(), quien).isNotIn(401, 403);
+                } else {
+                    org.assertj.core.api.Assertions.assertThat(estado).as("%s %s como %s", r.metodo(), r.ruta(), quien).isEqualTo(403);
+                }
+            }
+            // sin token: 401
+            int sinToken = (r.metodo().equals("GET") ? mvc.perform(get(r.ruta())) : mvc.perform(post(r.ruta())))
+                    .andReturn().getResponse().getStatus();
+            org.assertj.core.api.Assertions.assertThat(sinToken).as("%s %s sin token", r.metodo(), r.ruta()).isEqualTo(401);
+        }
+    }
+
+    @Test
+    void losEndpointsDePagosExigenLaSesionVerificada() throws Exception {
+        when(sesiones.estaVerificada(any(), eq(ACUDIENTE), any())).thenReturn(false);
+        pedir("/api/pagos/mis-pagos", "token-" + ACUDIENTE)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"));
+        verify(pagos, never()).misPagos(any());
+    }
+
+    @Test
+    void unAcudienteNoPuedeLlegarAlCobroDeOtroPorLaRutaDeLosPrivilegiados() throws Exception {
+        error(llamar("POST", "/api/pagos/" + ID_PAGO + "/conciliar", ACUDIENTE), 403, RespuestasSeguridad.SIN_PERMISO,
+                "/api/pagos/" + ID_PAGO + "/conciliar");
+        verify(pagos, never()).conciliar(any(), any());
     }
 
     @Test

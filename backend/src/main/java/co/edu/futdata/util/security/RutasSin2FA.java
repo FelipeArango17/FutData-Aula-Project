@@ -21,7 +21,7 @@ public final class RutasSin2FA {
     /** Perfil de Spring en el que se publica la documentación OpenAPI ({@link #DOCUMENTACION}). */
     public static final String PERFIL_DOCUMENTACION = "dev";
 
-    /** Reservada para el webhook de Wompi (todavía no existe el controlador). */
+    /** Webhook de Wompi ({@code WompiWebhookController}). */
     public static final String WEBHOOK_WOMPI = "/api/pagos/webhook/wompi";
 
     /** Cómo se entra a una ruta sin 2FA. */

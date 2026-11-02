@@ -302,7 +302,7 @@ class ComprobantePdfGeneratorTest {
         assertThat(MetodoPago.EFECTIVO.enLinea()).isFalse();
         assertThat(MetodoPago.TARJETA.enLinea()).isTrue();
         assertThat(catchThrowableOfType(ComprobanteInvalidoException.class, () -> MetodoPago.desdeEtiqueta("Bitcoin")).getErrores())
-                .containsExactly("metodo: debe ser Efectivo, Transferencia, PSE, Nequi o Tarjeta");
+                .containsExactly("metodo: debe ser Efectivo, Transferencia, PSE, Nequi, Tarjeta, QR Bancolombia, Botón Bancolombia o Wompi (otro medio)");
     }
 
     // --- Apoyo ---
