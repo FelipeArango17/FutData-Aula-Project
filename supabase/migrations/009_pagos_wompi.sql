@@ -1,9 +1,8 @@
 -- 009_pagos_wompi.sql
 -- Pagos en línea con Wompi: más medios de pago, el ID de la transacción aprobada y los tipos de cobro TORNEO y UNIFORME.
 --
--- OJO con la numeración: la última migración del repositorio es la 007; esta se llama 009 por pedido del equipo
--- (la 008 está reservada y no existe todavía). Las pruebas aplican las migraciones en orden de nombre, así que no
--- importa el hueco.
+-- Se ejecuta UNA vez, después de la 008 (parentesco, grupo y deportista activo), con el SQL Editor de Supabase y una
+-- cuenta administrativa. Haz una copia de seguridad de public.pago antes de correrla en la base del equipo.
 --
 -- Qué cambia:
 --   * pago_metodo_ck y pago_referencia_wompi_ck: se agregan 'QR', 'BOTON_BANCOLOMBIA' y 'WOMPI_OTRO'. WOMPI_OTRO es el
