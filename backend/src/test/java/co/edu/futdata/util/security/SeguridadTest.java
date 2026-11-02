@@ -8,6 +8,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -21,6 +23,8 @@ import co.edu.futdata.services.facade.IEntrenadorService;
 import co.edu.futdata.services.facade.IPagoService;
 import co.edu.futdata.services.facade.IPagoWompiService;
 import co.edu.futdata.services.facade.FirmaWebhookInvalidaException;
+import co.edu.futdata.services.facade.IFranjaHorarioService;
+import co.edu.futdata.api.dto.FranjaHorarioResponseDTO;
 import co.edu.futdata.services.facade.IUsuarioService;
 import co.edu.futdata.services.facade.ISaludService;
 import co.edu.futdata.api.dto.SaludResponseDTO;
@@ -60,6 +64,7 @@ class SeguridadTest {
     private static final UUID ENTRENADOR = UUID.fromString("00000000-0000-0000-0000-00000000000e");
     private static final UUID ACUDIENTE = UUID.fromString("00000000-0000-0000-0000-0000000000ac");
     private static final UUID INACTIVO = UUID.fromString("00000000-0000-0000-0000-0000000000ff");
+    private static final UUID TESORERO = UUID.fromString("00000000-0000-0000-0000-00000000007e");
     /** Dos sesiones del mismo usuario (por ejemplo, celular y computador). */
     private static final UUID SESION_A = UUID.fromString("5e55a000-0000-0000-0000-00000000000a");
     private static final UUID SESION_B = UUID.fromString("5e55b000-0000-0000-0000-00000000000b");
@@ -97,8 +102,13 @@ class SeguridadTest {
     @MockitoBean
     private IPagoWompiService pagosWompi;
 
+    @MockitoBean
+    private IFranjaHorarioService franjas;
+
     @BeforeEach
     void prepararTokens() {
+        when(usuarios.rolesActivos(TESORERO)).thenReturn(List.of("TESORERO"));
+        token("token-" + TESORERO, TESORERO.toString(), UUID.randomUUID().toString());
         for (UUID id : List.of(ADMIN, ENTRENADOR, ACUDIENTE, INACTIVO)) {
             token("token-" + id, id.toString(), UUID.randomUUID().toString());
         }
@@ -385,5 +395,55 @@ class SeguridadTest {
                         .header(HttpHeaders.ORIGIN, "https://sitio-ajeno.example")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
                 .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    /**
+     * El horario del club lo leen los cuatro roles, incluidos TESORERO y ACUDIENTE: ninguna regla por ruta los
+     * frena antes de {@code @PreAuthorize}. Solo el administrador crea, reemplaza y elimina.
+     */
+    @Test
+    void elHorarioDelClubLoLeenLosCuatroRolesYSoloElAdministradorLoEdita() throws Exception {
+        UUID idFranja = UUID.fromString("f0000000-0000-0000-0000-000000000001");
+        FranjaHorarioResponseDTO franja = new FranjaHorarioResponseDTO(idFranja, UUID.randomUUID(), "Sub-12", 1,
+                "19:00", "20:00", "Horizontes", null, null, null, null);
+        when(franjas.listar(any(), any(), any())).thenReturn(List.of(franja));
+        when(franjas.consultar(idFranja)).thenReturn(franja);
+        when(franjas.crear(any())).thenReturn(franja);
+        when(franjas.actualizar(eq(idFranja), any())).thenReturn(franja);
+        String ruta = "/api/horario-club/" + idFranja;
+        String cuerpo = "{\"idCategoria\": \"" + UUID.randomUUID() + "\", \"dia\": 1, \"horaInicio\": \"19:00\", "
+                + "\"horaFin\": \"20:00\", \"sede\": \"Horizontes\"}";
+
+        for (UUID lector : List.of(ADMIN, TESORERO, ENTRENADOR, ACUDIENTE)) {
+            pedir("/api/horario-club", "token-" + lector).andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].horaInicio").value("19:00"));
+            pedir(ruta, "token-" + lector).andExpect(status().isOk());
+        }
+
+        for (UUID sinPermiso : List.of(TESORERO, ENTRENADOR, ACUDIENTE)) {
+            String bearer = "Bearer token-" + sinPermiso;
+            error(mvc.perform(post("/api/horario-club").header(HttpHeaders.AUTHORIZATION, bearer)
+                    .contentType(MediaType.APPLICATION_JSON).content(cuerpo)),
+                    403, RespuestasSeguridad.SIN_PERMISO, "/api/horario-club");
+            error(mvc.perform(put(ruta).header(HttpHeaders.AUTHORIZATION, bearer)
+                    .contentType(MediaType.APPLICATION_JSON).content(cuerpo)),
+                    403, RespuestasSeguridad.SIN_PERMISO, ruta);
+            error(mvc.perform(delete(ruta).header(HttpHeaders.AUTHORIZATION, bearer)),
+                    403, RespuestasSeguridad.SIN_PERMISO, ruta);
+        }
+        verify(franjas, never()).crear(any());
+        verify(franjas, never()).actualizar(any(), any());
+        verify(franjas, never()).eliminar(any());
+
+        String admin = "Bearer token-" + ADMIN;
+        mvc.perform(post("/api/horario-club").header(HttpHeaders.AUTHORIZATION, admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(cuerpo))
+                .andExpect(status().isCreated())
+                .andExpect(header().string(HttpHeaders.LOCATION, org.hamcrest.Matchers.endsWith(ruta)));
+        mvc.perform(put(ruta).header(HttpHeaders.AUTHORIZATION, admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(cuerpo))
+                .andExpect(status().isOk());
+        mvc.perform(delete(ruta).header(HttpHeaders.AUTHORIZATION, admin)).andExpect(status().isNoContent());
+        verify(franjas).eliminar(idFranja);
     }
 }

@@ -289,6 +289,70 @@ Cuerpo:
 
 La lista firma las fotos de toda la página en **una sola** llamada a Storage (`POST /storage/v1/object/sign/{bucket}` con varias rutas).
 
+## Horario del club (bloque 4A)
+
+Plantilla fija de entrenamientos de lunes a sábado (tabla `franja_horario`, migración 007). Cada franja es de una categoría, un día, una hora de inicio y fin, y una sede; el entrenador y el grupo son opcionales. La plantilla real del club (30 franjas) se carga una vez con `supabase/seeds/franjas_club.sql` (ver `docs/GUIA-SUPABASE-EQUIPO.md`).
+
+### Endpoints
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `GET /api/horario-club` | Lista con filtros opcionales | `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR`, `ACUDIENTE` | `200`, `400`, `403` |
+| `GET /api/horario-club/{id}` | Consulta una franja | `ADMINISTRADOR`, `TESORERO`, `ENTRENADOR`, `ACUDIENTE` | `200`, `400`, `403`, `404` |
+| `POST /api/horario-club` | Crea una franja | `ADMINISTRADOR` | `201` con `Location`, `400`, `403`, `409` |
+| `PUT /api/horario-club/{id}` | Reemplaza **todos** los campos | `ADMINISTRADOR` | `200`, `400`, `403`, `404`, `409` |
+| `DELETE /api/horario-club/{id}` | Elimina una franja | `ADMINISTRADOR` | `204` sin cuerpo, `400`, `403`, `404` |
+
+Lectura para los cuatro roles; edición solo para el administrador (los demás reciben `403`). Un `{id}` que no es UUID responde `400`. En `PUT` y `DELETE`, una franja que no existe responde `404` **antes** de validar los datos del cuerpo (un cuerpo que ni siquiera es JSON legible sí responde `400` primero, porque Spring lo lee antes de llegar al controlador).
+
+### Filtros de `GET /api/horario-club`
+
+| Parámetro | Valores | Si es inválido |
+| :--- | :--- | :--- |
+| `categoria` | Nombre exacto de una de las 9 (`Párvulos`, `Cachorros`, `Semillero`, `Sub-11` … `Sub-16`) | `400` (`categoria: debe ser una de Párvulos, …, Sub-16`) |
+| `entrenador` | UUID del entrenador | `400` (`El parámetro 'entrenador' tiene un valor inválido`) |
+| `sede` | `Horizontes` o `UVA El Paraíso` (exacto, con tilde) | `400` (`sede: debe ser Horizontes o UVA El Paraíso`) |
+
+Son combinables; vacíos cuentan como ausentes. `categoria` y `sede` inválidos a la vez salen juntos en un solo `400`. La lista va ordenada por día, hora de inicio, categoría (orden oficial, por edad) e id.
+
+### Cuerpo (`POST` y `PUT`)
+
+```json
+{"idCategoria": "6f1c2a9e-…", "dia": 2, "horaInicio": "16:30", "horaFin": "18:00",
+ "sede": "UVA El Paraíso", "idEntrenador": null, "grupo": "tarde"}
+```
+
+- `idCategoria`: obligatorio; si no existe, `400` en `idCategoria`.
+- `dia`: obligatorio, de 1 (lunes) a 6 (sábado).
+- `horaInicio` y `horaFin`: obligatorias, **`HH:mm` de 24 horas** con dos dígitos (`07:30`, `19:00`). `7:30`, `07:30:00` o `24:00` responden `400` con `debe tener el formato HH:mm de 24 horas, por ejemplo 07:30 o 19:00`. `horaFin` debe ser posterior a `horaInicio`.
+- `sede`: `Horizontes` o `UVA El Paraíso`.
+- `idEntrenador`: opcional. **`null` = "por turnos"** (sin entrenador fijo: el club rota quién dirige, como en Párvulos, Cachorros y Semillero). Si viene, el entrenador debe existir (`400` en `idEntrenador`) y estar **activo**. El estado solo se revisa en el `POST` y en el `PUT` que **cambia** el entrenador: un `PUT` que conserva el mismo entrenador se acepta aunque se haya desactivado después, para poder corregir las horas de esa franja.
+- `grupo`: opcional, `mañana` o `tarde`, y solo en Cachorros y Semillero (en otra categoría, `400`: `solo se asigna en Cachorros y Semillero; la franja es de Sub-12`).
+
+Todos los errores de validación salen juntos en un solo `400`, con `campos`.
+
+**Limitación conocida:** un `dia` decimal (por ejemplo `2.5`) no da error: Jackson lo trunca a `2`. El frontend siempre manda enteros. Un `dia` como texto (`"lunes"`) o un UUID mal formado sí responden `400` nombrando el campo.
+
+### Respuesta
+
+```json
+{"idFranja": "0b8e1f6a-…", "idCategoria": "6f1c2a9e-…", "categoria": "Sub-12", "dia": 1,
+ "horaInicio": "19:00", "horaFin": "20:00", "sede": "Horizontes",
+ "idEntrenador": "e0a1…", "entrenador": "Luis Pérez", "entrenadorActivo": true, "grupo": null}
+```
+
+- Horas siempre en `HH:mm`.
+- Del entrenador solo van su nombre completo y `entrenadorActivo`; ningún otro dato personal. Sin entrenador ("por turnos"), `idEntrenador`, `entrenador` y `entrenadorActivo` son `null`.
+
+### Cruces
+
+- **El mismo entrenador** no puede tener dos franjas que se solapen el mismo día. Lo decide la restricción `franja_cruce_entrenador_ex` de la base (sin consulta previa, así que dos peticiones al mismo tiempo tampoco dejan un cruce): responde **`409`** con el mensaje exacto **`Ese entrenador ya tiene otra franja que se cruza con este horario`** y `campos: ["idEntrenador"]`.
+- **Las franjas contiguas no se cruzan:** una que termina a las 19:00 y otra que empieza a las 19:00 se aceptan.
+- En un `PUT`, la franja no choca consigo misma.
+- **Categorías distintas sí pueden coincidir** en día, hora y sede, y las franjas "por turnos" (`idEntrenador` null) nunca chocan entre sí.
+
+Pendiente (bloque 5): al desactivar un entrenador, sus franjas se conservan con él (salen con `entrenadorActivo: false`); qué hacer con ellas se decide con el alta de entrenadores.
+
 ## Usuarios y roles (HU-004)
 
 La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`, `entrenador` y `acudiente`). Al crear un usuario, el backend crea la cuenta en Supabase Auth mediante la invitación por correo y luego registra su perfil en `public.usuario` y `public.usuario_rol`. La llave `SUPABASE_SERVICE_ROLE_KEY` solo se usa en el backend.

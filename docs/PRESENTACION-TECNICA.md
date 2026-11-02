@@ -3,7 +3,7 @@
 Sistema de gestión deportiva para la Asociación Deportiva Prado Fútbol Club (PPI, sexto semestre).
 
 > **Esta es la fuente de verdad del proyecto.** El documento PPI ya no se modifica: lo que se decida desde el 1 de noviembre de 2026 se registra aquí. Se actualiza con cada cambio (ver el registro de cambios al final).
-> Última actualización: 1 de noviembre de 2026 (versión 2: alcance de la entrega final).
+> Última actualización: 2 de noviembre de 2026 (versión 2: alcance de la entrega final).
 > **Entrega final al jurado: sábado 7 de noviembre de 2026.** Para esa fecha toda la aplicación debe funcionar con datos reales, con los cuatro roles y sin maquetas.
 
 ## 1. Qué es FutData
@@ -27,13 +27,13 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 ## 3. Arquitectura y stack
 
 - **Backend:** Spring Boot 3.5, Java 21, Maven wrapper (`mvnw`), capas controlador, servicio y DAO con JDBC.
-- **Base de datos:** PostgreSQL en Supabase. Migraciones numeradas en `supabase/migrations/` (hoy 001 a 008).
+- **Base de datos:** PostgreSQL en Supabase. Migraciones numeradas en `supabase/migrations/` (hoy 001 a 009).
 - **Autenticación:** Supabase Auth, con 2FA por correo. El backend exige el rol en cada controlador con `@PreAuthorize`. El frontend solo muestra las rutas de un panel si hay sesión verificada **y** el rol de la sesión coincide con el del panel (no se usa el rol guardado en el navegador).
 - **Pagos en línea:** Wompi (pasarela elegida por el equipo; el profesor la pidió expresamente). Se trabaja con el entorno de pruebas (sandbox). El webhook `POST /api/pagos/webhook/wompi` es público y debe **verificar la firma** del evento.
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
-- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **624 pruebas, 0 fallos, 6 omitidas** (las que necesitan n8n y Supabase reales).
+- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **875 pruebas, 0 fallos, 7 omitidas** (las que necesitan n8n y Supabase reales, incluida la de fotos contra Supabase real).
 
 ## 4. Modelo de datos (resumen)
 
@@ -129,18 +129,27 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 
 ## 8. API
 
-Los endpoints existentes están en `backend/README.md` y en la colección Postman (HU-057, pendiente). Endpoints previstos:
+Los endpoints existentes están en `backend/README.md` y en la colección Postman (HU-057, pendiente).
 
-- `GET/POST/PUT/DELETE /api/horario-club` (filtros `categoria`, `entrenador`, `sede`; 409 si el entrenador se cruza).
-- Pagos: crear el cobro (mensualidad), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
-- Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
+**Ya implementados:**
+
 - Deportistas (bloque 2A, en la rama `feat/deportistas-api`; detalle en `backend/README.md`):
   - `GET /api/deportistas`: paginado (`page`, `size` hasta 100, `sort`, filtros `activo` y `categoria`); responde `content`, `page`, `size`, `totalElements` y `totalPages`. ADMINISTRADOR y ENTRENADOR (este último sin documento, teléfono, dirección ni `estadoInscripcion`).
   - `GET /api/deportistas/{id}`, `POST /api/deportistas` y `PUT /api/deportistas/{id}`: solo ADMINISTRADOR; documento repetido da 409.
   - `POST` y `DELETE /api/deportistas/{id}/foto`: solo ADMINISTRADOR; JPG o PNG por su contenido, máximo 5 MB; la respuesta trae una URL firmada de 60 minutos.
+- Horario del club (bloque 4A, en la rama `feat/horario-club`; detalle en `backend/README.md`):
+  - `GET /api/horario-club` y `GET /api/horario-club/{id}`: ADMINISTRADOR, TESORERO, ENTRENADOR y ACUDIENTE. Filtros opcionales `categoria` (nombre exacto), `entrenador` (UUID) y `sede`; ordenado por día, hora de inicio y categoría.
+  - `POST /api/horario-club`, `PUT /api/horario-club/{id}` (reemplaza todo) y `DELETE /api/horario-club/{id}` (`204`): solo ADMINISTRADOR.
+  - Horas en `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo. Grupo solo en Cachorros y Semillero.
+  - El mismo entrenador con dos franjas que se solapan el mismo día: `409` "Ese entrenador ya tiene otra franja que se cruza con este horario". Las contiguas no se cruzan y categorías distintas pueden coincidir en hora y sede.
+
+**Previstos:**
+
 - Documentos: subir, aprobar y rechazar.
 - `POST` de inscripción única.
 - Alta de entrenador con enlace y reenvío.
+- Pagos: crear el cobro (mensualidad), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
+- Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
 
 ## 9. Estado y plan
 
@@ -150,12 +159,13 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 |---|---|---|---|
 | 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | Omar | **Hecho** (en `develop` y en la base real) |
 | 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición. Incluye la migración 008 (parentesco, grupo y activo) | Omar | Hecho en la rama `feat/deportistas-api` (pendiente de merge) |
-| 4 | Horario del club y entrenamientos (HU-026) | Omar | Pendiente |
+| 4A | API del horario fijo del club (`franja_horario`, `/api/horario-club`), sin migración nueva | Omar | Hecho en la rama `feat/horario-club` (pendiente de merge) |
+| 4B | Entrenamientos (HU-026) | Omar | Pendiente |
 | 5 | Alta de entrenadores con enlace y reenvío | Omar | Pendiente |
 | 3 | Documentos: subir, aprobar, rechazar, correo | Omar | Pendiente |
 | 2B | Inscripción única (la migración 008 llegó con el 2A) | Omar | Pendiente |
 
-Orden acordado: 2A, 4, 5, 3, 2B.
+Orden acordado: 2A, 4A, 5, 3, 2B, 4B (4A es el horario del club; 4B, los entrenamientos, HU-026).
 
 ### 9.2 Módulos nuevos para la entrega final
 
@@ -209,3 +219,4 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-01 | Versión 2. Entrega final: sábado 7 de noviembre. Son **cuatro roles** (se agrega tesorero). Categoría calculada al leer. `grupo` pasa a la base de datos (migración 008). Inscripción pendiente calculada, con deportista activo. Parentesco incluye Abuela. Se agrega Wompi y los bloques 6 a 10 (pagos, grupos y asistencia, torneos, reportes y avisos, dashboard y respaldo). Se agrega la protección de pantallas por sesión y rol. |
 | 2026-11-01 | Bloque 2A (rama `feat/deportistas-api`, pendiente de merge). Migración 008: `parentesco`, `deportista.grupo` y `deportista.activo` (los RETIRADA quedan inactivos). API de deportistas: categoría calculada al leer con el reloj de Bogotá (`id_categoria` y `estado_inscripcion` quedan heredados), `estadoInscripcion` calculado, lista paginada con filtros, `PUT`, foto con URL firmada. El entrenador no ve el número de documento. **624 pruebas, 0 fallos, 6 omitidas.** |
 | 2026-11-01 | Bloque 6 (pagos con Wompi): **backend en curso**. Migración 009 (más medios de pago, tipos TORNEO y UNIFORME, `id_transaccion_wompi`), `/api/pagos`, webhook con firma, reintento y conciliación. El monto de la mensualidad queda configurable y pendiente de que lo defina el club. |
+| 2026-11-02 | Bloque 4A (rama `feat/horario-club`, pendiente de merge), sin migración nueva. API `/api/horario-club`: lectura para los cuatro roles y edición solo para el administrador, filtros `categoria`, `entrenador` y `sede`, horas `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo, y la respuesta trae `entrenadorActivo`. El cruce del mismo entrenador lo decide `franja_cruce_entrenador_ex` (`409`); las contiguas no se cruzan. El bloque 4 se divide en 4A (horario) y 4B (entrenamientos). **875 pruebas, 0 fallos, 7 omitidas** (con el bloque 6 de `develop`). |
