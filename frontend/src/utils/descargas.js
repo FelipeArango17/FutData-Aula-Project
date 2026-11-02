@@ -13,3 +13,16 @@ export function descargarTexto(nombreArchivo, contenido, tipo = 'text/plain;char
   // Se libera la URL un poco después del clic: algunos navegadores aún la leen para iniciar la descarga
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+// Descarga un Blob que ya se tiene (por ejemplo un PDF que devolvió la API).
+export function descargarBlob(nombreArchivo, blob) {
+  const url = URL.createObjectURL(blob)
+  const enlace = document.createElement('a')
+  enlace.href = url
+  enlace.download = nombreArchivo
+  enlace.hidden = true
+  document.body.appendChild(enlace)
+  enlace.click()
+  enlace.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

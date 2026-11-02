@@ -7,11 +7,12 @@ import Field from '../../components/ui/Field.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../../components/ui/DialogoConfirmacion.jsx'
 import Icon from '../../components/Icon.jsx'
+import GestionCobros from '../../components/pagos/GestionCobros.jsx'
 import { useActor } from '../../context/useActor.js'
 import { hoy } from '../../utils/hoy.js'
 import { listarDeportistas } from '../../services/deportistasService.js'
 import {
-  MAX_NOTA, MAX_REFERENCIA, METODOS_PAGO_MANUAL, consultarCobroMensualidad, mesesParaPago, registrarPagoManual, validarDatosPagoManual,
+  MAX_NOTA, MAX_REFERENCIA, METODOS_PAGO_MANUAL, consultarCobroMensualidad, mesesParaPago, pagosPorApi, registrarPagoManual, validarDatosPagoManual,
 } from '../../services/pagosService.js'
 import { fechaLargaConAnio, mesEnTexto } from '../../utils/fechas.js'
 import { formatearCOP } from '../../utils/dinero.js'
@@ -32,7 +33,16 @@ const claseChip = (marcado) =>
     marcado ? 'border-transparent bg-brand-primary font-semibold text-on-dark' : 'bg-surface text-primary hover:bg-app'
   }`
 
+// Con la API de pagos conectada el pago manual se registra sobre un cobro existente: se muestran los cobros pendientes con su acción
+// "Registrar pago manual" (GestionCobros). El formulario de abajo es el de los datos de ejemplo.
 export default function RegistrarPago({ base = '/tesorero' }) {
+  if (pagosPorApi()) {
+    return <GestionCobros titulo="Registrar pago" subtitulo="Elige el cobro pendiente que se pagó en efectivo o por transferencia" estadoInicial="Pendientes" />
+  }
+  return <RegistrarPagoDeEjemplo base={base} />
+}
+
+function RegistrarPagoDeEjemplo({ base }) {
   const actor = useActor()
   const navigate = useNavigate()
   const tituloRef = useRef(null)

@@ -44,7 +44,8 @@ function crearError(estado, mensaje, campos = [], codigo = null, extra = {}) {
 }
 
 export async function apiRequest(ruta, opciones = {}) {
-  const { headers: extra, ...resto } = opciones
+  // respuesta: 'blob' devuelve el cuerpo binario (por ejemplo un PDF); por defecto se lee JSON
+  const { headers: extra, respuesta: tipoRespuesta, ...resto } = opciones
   // FormData: el navegador pone Content-Type con el boundary; JSON: se declara aquí. Quien llama pasa el body ya armado.
   const esFormData = typeof FormData !== 'undefined' && resto.body instanceof FormData
   const headers = { ...(resto.body === undefined || esFormData ? {} : { 'Content-Type': 'application/json' }), ...extra }
@@ -70,7 +71,8 @@ export async function apiRequest(ruta, opciones = {}) {
     const extras = cuerpo.msRestantes === undefined ? {} : { msRestantes: cuerpo.msRestantes }
     throw crearError(respuesta.status, mensaje, campos, cuerpo.codigo ?? null, extras)
   }
-  return respuesta.status === 204 ? null : respuesta.json()
+  if (respuesta.status === 204) return null
+  return tipoRespuesta === 'blob' ? respuesta.blob() : respuesta.json()
 }
 
 // Sube un archivo como multipart/form-data. `campos` son los demás campos del formulario (los null/undefined se omiten).

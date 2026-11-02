@@ -4,6 +4,8 @@ import Card from '../../components/ui/Card.jsx'
 import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
 import FilterChips from '../../components/ui/FilterChips.jsx'
+import GestionCobros from '../../components/pagos/GestionCobros.jsx'
+import { pagosPorApi } from '../../services/pagosService.js'
 
 const filtros = ['Todos', 'Vencidos', 'Pendientes', 'Pagados']
 const pagos = [
@@ -15,7 +17,15 @@ const pagos = [
 ]
 
 // `base` permite reutilizar la pantalla en /administrador (mismo contenido que el tesorero).
+// Con la API de pagos conectada (VITE_API_MODULOS con "pagos") muestra los cobros reales (GestionCobros); si no, la maqueta de abajo.
 export default function Pagos({ base = '/tesorero' }) {
+  if (pagosPorApi()) {
+    return <GestionCobros titulo="Pagos y facturación" subtitulo="Cobros del club" esAdministrador={base === '/administrador'} />
+  }
+  return <PagosDeEjemplo base={base} />
+}
+
+function PagosDeEjemplo({ base }) {
   const [filtro, setFiltro] = useState('Todos')
   const visibles = pagos.filter((p) => filtro === 'Todos' || p.estado === filtro)
 
