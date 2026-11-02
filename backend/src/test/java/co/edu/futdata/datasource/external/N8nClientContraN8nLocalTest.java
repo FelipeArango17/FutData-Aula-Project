@@ -37,7 +37,7 @@ class N8nClientContraN8nLocalTest {
     }
 
     @Test
-    void codigo2faResponde200YLlegaUnCorreo() {
+    void codigo2faResponde202YLlegaUnCorreo() {
         assertThatCode(() -> cliente.notificar(INotificador.CODIGO_2FA,
                 Map.of("correo", correo, "nombre", "Prueba backend", "codigo", "123456", "vigenciaMinutos", 10)))
                 .doesNotThrowAnyException();
