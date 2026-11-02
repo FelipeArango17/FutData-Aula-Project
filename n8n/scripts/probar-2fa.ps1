@@ -2,8 +2,9 @@
 # Uso (desde cualquier carpeta):  pwsh -File n8n/scripts/probar-2fa.ps1
 #                          o:     powershell -ExecutionPolicy Bypass -File n8n/scripts/probar-2fa.ps1
 # Lee N8N_BASE_URL, N8N_WEBHOOK_TOKEN y CORREO_PRUEBA de n8n/.env.
-# Con -ProbarFalla (y la credencial SMTP rota a propósito, ver n8n/README.md) cambia el caso
-# válido por uno que espera 502 y revisa que se agregue una línea al registro de fallas.
+# CODIGO_2FA es asíncrono: n8n valida, responde 202 y después envía el correo.
+# Con -ProbarFalla (y la credencial SMTP rota a propósito, ver n8n/README.md) el caso válido
+# sigue esperando 202 y después espera a que aparezca la línea de la falla en el registro.
 param(
     [switch]$ProbarFalla
 )
@@ -37,17 +38,19 @@ function Probar([string]$nombre, [int]$esperado, [hashtable]$cuerpo, [hashtable]
     # Se envían bytes UTF-8 para que Windows PowerShell 5.1 no cambie las tildes.
     $bytes = [System.Text.Encoding]::UTF8.GetBytes(($cuerpo | ConvertTo-Json -Depth 5 -Compress))
     $params = @{
-        Uri         = $url
-        Method      = 'Post'
-        Headers     = $cabeceras
-        ContentType = 'application/json; charset=utf-8'
-        Body        = $bytes
-        TimeoutSec  = $tiempoMax
+        Uri             = $url
+        Method          = 'Post'
+        Headers         = $cabeceras
+        ContentType     = 'application/json; charset=utf-8'
+        Body            = $bytes
+        TimeoutSec      = $tiempoMax
+        UseBasicParsing = $true
     }
     try {
-        $respuesta = Invoke-RestMethod @params
-        $codigo = 200
-        $detalle = $respuesta | ConvertTo-Json -Compress
+        # Invoke-WebRequest (no Invoke-RestMethod) para leer el código real: 202, no un 200 supuesto.
+        $respuesta = Invoke-WebRequest @params
+        $codigo = [int]$respuesta.StatusCode
+        $detalle = $respuesta.Content
     } catch {
         if (-not $_.Exception.Response) {
             # Sin respuesta HTTP: n8n apagado o la petición superó $tiempoMax segundos.
@@ -70,13 +73,21 @@ function Leer-Log {
     if (Test-Path $logFallas) { @(Get-Content $logFallas -Encoding UTF8 | Where-Object { $_.Trim() }) } else { @() }
 }
 
-# Revisa que la última petición haya agregado líneas al log y que no tengan datos sensibles.
-function Revisar-Log([int]$antes) {
-    $nuevas = @(Leer-Log | Select-Object -Skip $antes)
+# Espera hasta $tiempoMax segundos a que aparezca una línea CODIGO_2FA nueva en el log y revisa
+# que no tenga datos sensibles. El envío sigue después del 202 y cada rechazo del SMTP tarda
+# ~20 s con Docker Desktop (hasta 2 min si el host no responde), así que hay que darle tiempo.
+function Revisar-Log([int]$antes, [int]$tiempoMax = 150) {
+    $limite = (Get-Date).AddSeconds($tiempoMax)
+    do {
+        Start-Sleep -Seconds 3
+        $nuevas = @(Leer-Log | Select-Object -Skip $antes | Where-Object { $_ -match '"evento":"CODIGO_2FA"' })
+    } while ($nuevas.Count -eq 0 -and (Get-Date) -lt $limite)
+
     $texto = $nuevas -join "`n"
     $campos = 'fecha', 'evento', 'correoEnmascarado', 'error', 'idEjecucion'
+    $problema = $null
     if ($nuevas.Count -eq 0) {
-        $problema = "no se agregó ninguna línea a $logFallas"
+        $problema = "en $tiempoMax s no llegó ninguna línea CODIGO_2FA a $logFallas"
     } elseif ($texto.Contains('123456') -or $texto.Contains($correo) -or $texto.Contains($token)) {
         $problema = 'la línea nueva tiene el código, el correo completo o el token'
     } else {
@@ -104,15 +115,14 @@ $valido = @{
 }
 
 if (-not $ProbarFalla) {
-    Probar 'Código 2FA válido' 200 $valido @{ 'X-FutData-Token' = $token }
+    Probar 'Código 2FA válido' 202 $valido @{ 'X-FutData-Token' = $token }
 }
 Probar 'Sin token' 401 $valido
 Probar 'Evento inválido' 400 @{ evento = 'EVENTO_INEXISTENTE'; datos = @{ correo = $correo } } @{ 'X-FutData-Token' = $token }
 if ($ProbarFalla) {
     $antes = (Leer-Log).Count
-    # El 502 llega cuando el SMTP se rinde: ~20 s con Docker Desktop y hasta 2 min si el host
-    # no responde (connectionTimeout de nodemailer). Por eso este caso espera más.
-    Probar 'Falla de envío SMTP' 502 $valido @{ 'X-FutData-Token' = $token } 150
+    # n8n responde 202 antes de intentar el envío; la falla solo queda en el registro.
+    Probar 'Falla de envío SMTP (responde 202 igual)' 202 $valido @{ 'X-FutData-Token' = $token }
     Revisar-Log $antes
 }
 

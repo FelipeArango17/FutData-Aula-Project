@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import CamposDeportista from './deportistas/CamposDeportista.jsx'
 import FormularioEntrenador from './entrenadores/FormularioEntrenador.jsx'
-import FormularioEntrenamiento from './entrenamientos/FormularioEntrenamiento.jsx'
+import { FormularioExtra } from './horario/DialogosHorario.jsx'
 import FormularioUsuario from './usuarios/FormularioUsuario.jsx'
 import { hoyLocal, restarAnios } from '../utils/fechas.js'
 
@@ -31,10 +31,10 @@ describe('leyenda "* Campo obligatorio" y asteriscos', () => {
     expect(html).not.toMatch(/id="categoria"[^>]*aria-required/)
   })
 
-  it('FormularioEntrenamiento: leyenda y los cinco campos obligatorios', () => {
-    const inicial = { categoria: '', idEntrenador: '', fecha: '', hora: '', lugar: '' }
+  it('FormularioExtra: leyenda y los cinco campos obligatorios', () => {
+    const inicial = { categoria: '', fecha: '', hora: '', horaFin: '', sede: '', idEntrenador: '', grupo: '', motivo: '' }
     const html = renderToStaticMarkup(
-      <FormularioEntrenamiento inicial={inicial} categorias={['Cachorros']} detectarConflicto={async () => ({ hayConflicto: false })} onGuardar={sin} onCancelar={() => {}} />,
+      <FormularioExtra inicial={inicial} categorias={['Cachorros']} entrenadores={[]} entrenadorFijo={null} hoy="2026-10-22" proponerEntrenador={() => null} detectarConflicto={async () => ({ hayConflicto: false })} onGuardar={sin} onCerrar={() => {}} />,
     )
     expect(html).toContain(LEYENDA)
     expect(html.match(/aria-required="true"/g)).toHaveLength(5)
@@ -59,14 +59,5 @@ describe('límites de las fechas en los formularios', () => {
     expect(anios[0]).toBe(Number(restarAnios(hoyLocal(), 18).slice(0, 4)))
     expect(anios.at(-1)).toBe(hoy - 100)
     expect(anios).toHaveLength(83)
-  })
-
-  it('entrenamiento nuevo: min de la fecha es hoy; al editar uno pasado no hay min', () => {
-    const props = { categorias: ['Cachorros'], detectarConflicto: async () => ({ hayConflicto: false }), onGuardar: sin, onCancelar: () => {} }
-    const base = { categoria: 'Cachorros', idEntrenador: '1', hora: '16:00', horaFin: '17:00', sede: 'Horizontes' }
-    const nuevo = renderToStaticMarkup(<FormularioEntrenamiento {...props} inicial={{ ...base, fecha: '' }} />)
-    expect(nuevo).toContain(`min="${hoyLocal()}"`)
-    const pasado = renderToStaticMarkup(<FormularioEntrenamiento {...props} ignorarId={1} inicial={{ ...base, fecha: '2020-01-01' }} />)
-    expect(pasado).not.toContain('min="')
   })
 })

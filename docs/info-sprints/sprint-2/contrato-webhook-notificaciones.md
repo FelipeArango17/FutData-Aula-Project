@@ -10,7 +10,7 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 
 | Evento | Historia | Respuesta | Para qué |
 | :--- | :--- | :--- | :--- |
-| `CODIGO_2FA` | HU-036 | Síncrona: `200` o `502` | Código de verificación al iniciar sesión |
+| `CODIGO_2FA` | HU-036 | Asíncrona: `202` | Código de verificación al iniciar sesión |
 | `CAMBIO_ENTRENAMIENTO` | HU-026 (CU-05) | Asíncrona: `202` | Aviso al entrenador, los jugadores y los acudientes cuando se crea, modifica o cancela un entrenamiento |
 
 ## Reparto de responsabilidades
@@ -139,19 +139,28 @@ Todas las respuestas son JSON.
 
 | Código | Cuándo | Cuerpo |
 | :--- | :--- | :--- |
-| `200` | El correo se entregó al servidor SMTP | `{"enviado": true}` |
+| `202` | Los datos son válidos. n8n respondió de inmediato y envía el correo después | `{"aceptado": true}` |
 | `400` | Falta `evento` o `datos` | `{"enviado": false, "error": "El cuerpo debe tener evento y datos"}` |
 | `400` | El evento no está soportado | `{"enviado": false, "error": "Evento no soportado"}` |
 | `400` | Faltan campos de `datos` o tienen formato inválido | `{"enviado": false, "error": "Faltan campos o tienen un formato inválido"}` |
 | `401` | Falta la cabecera `X-FutData-Token` o su valor no coincide | `{"enviado": false, "error": "Token inválido"}` |
-| `502` | Falló el envío por SMTP. n8n ya registró la falla (ver [Registro de fallas en n8n](#registro-de-fallas-en-n8n)) | `{"enviado": false, "error": "No se pudo enviar el correo"}` |
 
 Otros códigos posibles que no genera el flujo, sino n8n o la red:
 
 - `404`: el flujo no está publicado (activo) o la ruta está mal escrita.
-- `5xx` distinto de `502` o tiempo de espera agotado: n8n no está disponible.
+- `5xx` o tiempo de espera agotado: n8n no está disponible.
 
-`200` significa que el servidor SMTP aceptó el mensaje, no que haya llegado a la bandeja del usuario.
+**En este evento n8n no responde `502`.** Antes era síncrono (enviaba y después respondía `200` o `502`), pero el envío por SMTP tarda ~3 s y, con el túnel, el 2FA tardaba ~3,7 s de punta a punta contra un tiempo de espera de 5 s del backend. Ahora n8n valida el token, la estructura y los datos (esas fallas siguen respondiendo `401` y `400`), responde `202` y después envía, igual que `CAMBIO_ENTRENAMIENTO`.
+
+> **Para el backend: `202` significa "recibido", no "entregado".** Si el SMTP falla después del `202`:
+>
+> - el backend ya respondió normalmente al front (`202` en `/2fa/codigo`, `200` en `/2fa/reenviar`) y el código **queda guardado**;
+> - el usuario **no recibe el correo** y debe usar "Reenviar código", disponible al minuto (`INTERVALO_REENVIO`);
+> - la falla **solo queda en el [registro de fallas](#registro-de-fallas-en-n8n) de n8n**, con el correo enmascarado y sin el código. El backend no se entera.
+>
+> El front solo recibe un error si n8n no acepta la petición: `503` si n8n no responde, da timeout o responde 5xx; `500` si n8n rechaza la petición (400 o 401: error de configuración o de contrato). En ambos casos el código no queda guardado.
+
+`N8nClient` acepta `200` y `202` y no lee el campo `enviado`, así que funciona con el flujo anterior y con el nuevo: no importa si se despliega primero el backend o el flujo.
 
 ### Respuestas de `CAMBIO_ENTRENAMIENTO`
 
@@ -175,8 +184,10 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
 1. Definir aquí la tabla de campos de `datos` del evento.
 2. En n8n, agregar una regla al nodo Switch `Evento` con el nombre del evento. Cada regla es una salida nueva.
 3. Conectar esa salida a su propia validación de `datos`, su nodo de envío y sus nodos `Respond to Webhook`. Hay dos modelos:
-   - **Síncrono** (como `CODIGO_2FA`, un solo correo): enviar y luego responder `200`; una falla responde `502`.
-   - **Asíncrono** (como `CAMBIO_ENTRENAMIENTO`, varios correos o envíos lentos): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
+   - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; por ejemplo `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. Ningún evento implementado hoy es síncrono.
+   - **Asíncrono** (como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
+
+   Los nodos `¿Responder 502?` y `Responder 502` se conservan aunque hoy ningún evento los use: quedan para los eventos síncronos. `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`.
 
    En ambos casos la salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos. Ese nodo toma el correo del ítem que falló (campo `correo`) o, si no lo tiene, de `datos.correo`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.
@@ -207,11 +218,10 @@ futdata:
 
 | Respuesta | Qué hace el backend |
 | :--- | :--- |
-| `200` | Continúa; responde `VerificacionDTO` con el correo enmascarado |
-| `400` | Error de programación (contrato roto): registrar el evento y el mensaje de error, lanzar excepción interna |
-| `401` | Configuración incorrecta del token: registrar como error de configuración |
-| `502` | Informar al usuario que no se pudo enviar el código y que lo intente de nuevo. n8n ya registró la falla; el backend la registra además en su auditoría (ver abajo) |
-| Timeout u otro error | Igual que `502`. Aquí n8n pudo no registrar nada, así que el registro del backend es el único |
+| `202` (o `200` del flujo anterior) | Continúa y guarda el código; responde `Codigo2FAResponseDTO` con el correo enmascarado. **No** garantiza que el correo llegue (ver [Respuestas de `CODIGO_2FA`](#respuestas-de-codigo_2fa)) |
+| `400` | Error de programación (contrato roto): registrar el evento y el mensaje de error, lanzar excepción interna. El código no queda guardado y el front recibe `500` |
+| `401` | Configuración incorrecta del token: registrar como error de configuración. El código no queda guardado y el front recibe `500` |
+| Timeout, error de red o 5xx | Informar al usuario que no se pudo enviar el código y que lo intente de nuevo (`503`). El código no queda guardado. n8n pudo no registrar nada, así que el registro del backend es el único |
 
 **Manejo de respuestas de `CAMBIO_ENTRENAMIENTO`:**
 
@@ -232,7 +242,7 @@ Se usa el mismo timeout de 5 s: n8n responde `202` en milisegundos porque solo v
 - Tampoco registrar el valor de `X-FutData-Token`.
 - El correo puede registrarse enmascarado (`j***@ejemplo.com`) si hace falta para soporte.
 - En `CAMBIO_ENTRENAMIENTO`, no registrar la lista de `destinatarios` (correos y nombres de deportistas, muchos menores de edad); basta con el id del entrenamiento, `tipoCambio` y el número de destinatarios.
-- **Ante un `502`, registrar también la falla en la auditoría del backend** (`AuditoriaLogger`) cuando exista: evento, `usuarioId`, código HTTP y fecha. El log de n8n no reemplaza esa auditoría. Está en otro equipo, no conoce al usuario y no ve los timeouts ni las fallas de red, que solo ve el backend.
+- **Ante un `502` (eventos síncronos), un timeout o un error de red, registrar también la falla en la auditoría del backend** (`AuditoriaLogger`) cuando exista: evento, `usuarioId`, código HTTP y fecha. El log de n8n no reemplaza esa auditoría. Está en otro equipo, no conoce al usuario y no ve los timeouts ni las fallas de red, que solo ve el backend.
 
 **Pruebas:** con `MockRestServiceServer` (para `RestClient`) o un servidor simulado, verificar la cabecera, el cuerpo y el manejo de cada código de respuesta, y que el código no aparezca en los logs capturados.
 
@@ -242,7 +252,7 @@ El flujo está configurado para no guardar ejecuciones (exitosas, fallidas ni ma
 
 ## Registro de fallas en n8n
 
-Cuando el SMTP falla, el flujo agrega una línea en formato JSON Lines a `/opt/futdata/logs/fallas-notificaciones.jsonl` (en el repo, `n8n/logs/`, ignorado por Git). En `CODIGO_2FA` lo hace antes de responder `502`; en `CAMBIO_ENTRENAMIENTO`, que ya respondió `202`, escribe una línea por cada destinatario al que no se pudo enviar. No depende del backend ni de la base de datos.
+Cuando el SMTP falla, el flujo agrega una línea en formato JSON Lines a `/opt/futdata/logs/fallas-notificaciones.jsonl` (en el repo, `n8n/logs/`, ignorado por Git). En `CODIGO_2FA`, que ya respondió `202`, escribe una línea con el correo enmascarado; en `CAMBIO_ENTRENAMIENTO`, también después del `202`, una línea por cada destinatario al que no se pudo enviar. En un evento síncrono la escribe antes de responder `502`. No depende del backend ni de la base de datos.
 
 ```json
 {"fecha":"2026-10-28T09:42:06.626-05:00","evento":"CODIGO_2FA","correoEnmascarado":"o***3@gmail.com","error":"connect ECONNREFUSED 127.0.0.1:2525","idEjecucion":"4"}
@@ -251,7 +261,7 @@ Cuando el SMTP falla, el flujo agrega una línea en formato JSON Lines a `/opt/f
 
 - Campos: `fecha` (ISO 8601, `America/Bogota`), `evento`, `correoEnmascarado`, `error` (mensaje del SMTP, máximo 500 caracteres, con correos y números de 6 dígitos reemplazados) e `idEjecucion`.
 - **Nunca** contiene el código, el nombre, el correo completo, el token ni el cuerpo de la petición.
-- Si escribir el registro falla, `CODIGO_2FA` responde `502` igual: para el backend, un `502` siempre significa "falló el envío", haya quedado o no la línea.
+- Si escribir el registro falla, un evento síncrono responde `502` igual: para el backend, un `502` siempre significa "falló el envío", haya quedado o no la línea. En los eventos asíncronos la respuesta `202` ya salió y el log no la afecta.
 - El registro de n8n complementa la auditoría del backend; no la reemplaza (ver *Seguridad y registros*).
 
 Detalles, consulta del archivo y propuesta de tabla `fallas_notificacion` para Supabase: [`n8n/README.md`, sección "Registro de fallas"](../../../n8n/README.md#registro-de-fallas).

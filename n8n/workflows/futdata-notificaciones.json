@@ -257,8 +257,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        1100,
-        -20
+        1340,
+        -100
       ],
       "webhookId": "e2a1c0de-2fa0-4036-9a51-f17da7a00036",
       "credentials": {
@@ -272,19 +272,20 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "{\n  \"enviado\": true\n}",
+        "responseBody": "{\n  \"aceptado\": true\n}",
         "options": {
-          "responseCode": 200
+          "responseCode": 202
         }
       },
-      "id": "a1f0c001-0000-4000-8000-000000000006",
-      "name": "Responder 200",
+      "id": "a1f0c001-0000-4000-8000-000000000024",
+      "name": "Responder 202 2FA",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        1340,
-        -100
-      ]
+        1100,
+        -20
+      ],
+      "notes": "Responde antes de enviar: el SMTP tarda ~3 s y el backend espera máximo 5 s. Una falla del envío solo queda en el registro de fallas."
     },
     {
       "parameters": {
@@ -560,6 +561,15 @@
                 "type": "string",
                 "operation": "notEquals"
               }
+            },
+            {
+              "id": "c0000005-0000-4000-8000-000000000002",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "CODIGO_2FA",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -574,7 +584,7 @@
         2220,
         80
       ],
-      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO) ya respondieron 202: solo registran la falla.",
+      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA) ya respondieron 202: solo registran la falla. Este nodo y Responder 502 quedan para los eventos síncronos.",
       "onError": "continueRegularOutput"
     },
     {
@@ -723,7 +733,7 @@
       "main": [
         [
           {
-            "node": "Enviar correo 2FA",
+            "node": "Responder 202 2FA",
             "type": "main",
             "index": 0
           }
@@ -737,15 +747,20 @@
         ]
       ]
     },
-    "Enviar correo 2FA": {
+    "Responder 202 2FA": {
       "main": [
         [
           {
-            "node": "Responder 200",
+            "node": "Enviar correo 2FA",
             "type": "main",
             "index": 0
           }
-        ],
+        ]
+      ]
+    },
+    "Enviar correo 2FA": {
+      "main": [
+        [],
         [
           {
             "node": "Armar registro de falla",
