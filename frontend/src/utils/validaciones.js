@@ -180,7 +180,7 @@ export function validarMonto(valor) {
 // Una fecha "AAAA-MM-DD" que existe. Se revisa mes 01-12 y día 01-31 antes de esFechaValida, que lanza RangeError con un mes 13.
 const fechaReal = (fecha) => /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(fecha) && esFechaValida(fecha)
 
-// Mes "AAAA-MM" que se paga: no puede ser posterior al mes de `hoy` (sin `hoy` se usa hoyLocal(); pagosService pasa HOY_EJEMPLO).
+// Mes "AAAA-MM" que se paga: no puede ser posterior al mes de `hoy` (sin `hoy` se usa hoyLocal(); pagosService pasa hoy()).
 export function validarMes(valor, hoy = hoyLocal()) {
   const mes = texto(valor)
   if (!mes) return MENSAJES.pagoMesObligatorio

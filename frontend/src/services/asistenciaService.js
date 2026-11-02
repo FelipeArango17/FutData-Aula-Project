@@ -22,8 +22,9 @@
 //   Propuesta: `estado` varchar y una tabla `AsistenciaCambio`.
 // - Solo se listan deportistas ACTIVOS del grupo; el historial nunca se borra.
 // - RF008: los permisos se validan aquí solo como simulación. En producción los valida el backend con el JWT.
-// - "Hoy" es HOY_EJEMPLO. La fecha de los registros nuevos usa ese día con la hora real, para que la demo sea coherente.
-import { ENTRENADORES, HOY_EJEMPLO, entrenamientosDeEjemplo, listar as listarEntrenamientos } from './entrenamientosService.js'
+// - "Hoy" es hoy() (utils/hoy.js). La fecha de los registros nuevos usa ese día con la hora real, para que la demo sea coherente.
+import { hoy } from '../utils/hoy.js'
+import { ENTRENADORES, entrenamientosDeEjemplo, listar as listarEntrenamientos } from './entrenamientosService.js'
 import { obtener as obtenerEntrenador } from './entrenadoresService.js'
 import { idsDeEjemploDeCategoria, listarCategorias, listarDeportistas } from './deportistasService.js'
 
@@ -33,13 +34,14 @@ export const MAX_OBSERVACION = 200
 // Registros de ejemplo. El entrenamiento de Sub-12 del martes 20 de octubre (de Nicolás) ya está registrado y
 // tiene un cambio en el historial, para probar la edición sin empezar de cero. Los demás de la semana hasta hoy (22 de
 // octubre) están sin registrar; los del viernes 23 y el sábado 24 son futuros. Los ids salen de la plantilla del club.
-const ID_REGISTRADO = entrenamientosDeEjemplo().find((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-20').id
+const ID_REGISTRADO = entrenamientosDeEjemplo().find((e) => e.categoria === 'Sub-12' && e.fecha === '2026-10-20')?.id
+// Con la fecha real las sesiones de ejemplo caen en otra semana y esa sesión del 20 de octubre ya no existe: no se siembra ningún registro.
 // Los deportistas del registro sembrado son los de ejemplo de Sub-12 (sin ids fijos): el 1.º, 2.º y 5.º presentes, el 3.º ausente
 // sin aviso y el 4.º justificado (cita médica).
 const ID_DEPORTISTAS_REGISTRADO = idsDeEjemploDeCategoria('Sub-12')
 const ESTADOS_SEMBRADOS = [['presente', ''], ['presente', ''], ['ausente', 'Sin aviso'], ['justificado', 'Cita médica'], ['presente', '']]
 const sembrar = () =>
-  new Map([
+  new Map(ID_REGISTRADO === undefined ? [] : [
     [
       ID_REGISTRADO,
       {
@@ -67,7 +69,7 @@ let registros = sembrar()
 // Simulación de red y de reloj: se pueden cambiar (pruebas y verificación manual de errores).
 const ahoraPorDefecto = () => {
   const real = new Date()
-  const [a, m, d] = HOY_EJEMPLO.split('-').map(Number)
+  const [a, m, d] = hoy().split('-').map(Number)
   return new Date(a, m - 1, d, real.getHours(), real.getMinutes(), real.getSeconds())
 }
 let retardoMs = 200
@@ -95,7 +97,7 @@ const marcaDeTiempo = () => {
   return `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}T${dos(f.getHours())}:${dos(f.getMinutes())}`
 }
 
-const esFuturo = (entrenamiento) => entrenamiento.fecha > HOY_EJEMPLO
+const esFuturo = (entrenamiento) => entrenamiento.fecha > hoy()
 const copia = (x) => structuredClone(x)
 const observacionLimpia = (texto) => String(texto ?? '').trim()
 

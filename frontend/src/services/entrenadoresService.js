@@ -20,6 +20,7 @@
 //   NO captura todavía.
 // - La base de datos también deberá exigir que documento y correo no se repitan (observación 2).
 import { apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
 import { CATEGORIAS } from './entrenamientosService.js'
 import { ENTRENADORES_CLUB } from './horarioClubData.js'
 import { CATEGORIAS_POR_EDAD } from '../utils/categorias.js'
@@ -230,7 +231,7 @@ const api = {
   },
 }
 
-const usarApi = import.meta.env.MODE !== 'test'
+const usarApi = usarApiDe('entrenadores')
 
 export async function listar() {
   return usarApi ? api.listar() : listarMock()

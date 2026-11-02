@@ -1,12 +1,13 @@
 // Sesión de la persona en sessionStorage (se borra al cerrar la pestaña). Funciones puras de almacenamiento, sin React,
 // para poder probarlas. Con Supabase Auth (servicio real) el SDK guarda los tokens; este estado solo recuerda si ESTA pestaña completó el 2FA.
-import { servicio } from '../services/auth.js'
+import { servicio, sinConfiguracion } from '../services/auth.js'
 
 export const CLAVE_SESION = 'futdata.sesion'
 export const ESTADOS = ['sin-sesion', 'pendiente', 'verificada']
 export const VACIA = { estado: 'sin-sesion', usuario: null }
 
 export function leerSesion() {
+  if (sinConfiguracion()) return VACIA // sin configuración de producción no vale ninguna sesión guardada (podría ser una demo)
   try {
     const guardada = JSON.parse(sessionStorage.getItem(CLAVE_SESION))
     // Un estado "pendiente" solo vale si el servicio todavía tiene la solicitud de código

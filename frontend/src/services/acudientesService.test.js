@@ -18,8 +18,15 @@ const admin = { rol: 'administrador', correo: 'administrador@pradofc.co' }
 const datos = (extra = {}) => ({ nombre: 'Claudia', apellido: 'Ruiz', correo: 'claudia@correo.com', telefono: '3001234567', parentesco: 'Madre', ...extra })
 
 describe('acudientesService', () => {
-  it('los parentescos son Madre, Padre, Abuelo(a), Tío(a) y Otro', () => {
-    expect(servicio.PARENTESCOS).toEqual(['Madre', 'Padre', 'Abuelo(a)', 'Tío(a)', 'Otro'])
+  it('los parentescos son Madre, Padre, Abuelo, Abuela, Tía, Tío y Otro', () => {
+    expect(servicio.PARENTESCOS).toEqual(['Madre', 'Padre', 'Abuelo', 'Abuela', 'Tía', 'Tío', 'Otro'])
+  })
+
+  it('parentescoParaApi / parentescoDesdeApi: ida y vuelta de las 7 opciones, con la API sin tilde', () => {
+    const api = ['Madre', 'Padre', 'Abuelo', 'Abuela', 'Tia', 'Tio', 'Otro']
+    expect(servicio.PARENTESCOS.map(servicio.parentescoParaApi)).toEqual(api)
+    expect(api.map(servicio.parentescoDesdeApi)).toEqual(servicio.PARENTESCOS)
+    for (const p of servicio.PARENTESCOS) expect(servicio.parentescoDesdeApi(servicio.parentescoParaApi(p))).toBe(p)
   })
 
   it('la cuenta demo tiene a Santiago y Valeria vinculados', async () => {
@@ -43,8 +50,8 @@ describe('acudientesService', () => {
 
   it('un deportista tiene un solo acudiente: vincular de nuevo reemplaza el vínculo', async () => {
     const { acudiente } = await resolver(servicio.guardarAcudiente(datos(), admin))
-    await resolver(servicio.vincularAcudiente(1, acudiente.id, 'Tío(a)', admin))
-    expect(await resolver(servicio.obtenerAcudienteDe(1))).toMatchObject({ correo: 'claudia@correo.com', parentesco: 'Tío(a)' })
+    await resolver(servicio.vincularAcudiente(1, acudiente.id, 'Tío', admin))
+    expect(await resolver(servicio.obtenerAcudienteDe(1))).toMatchObject({ correo: 'claudia@correo.com', parentesco: 'Tío' })
     await expect(resolver(servicio.vincularAcudiente(1, 1, 'Vecino', admin))).rejects.toMatchObject({ codigo: 'VALIDACION' })
   })
 })

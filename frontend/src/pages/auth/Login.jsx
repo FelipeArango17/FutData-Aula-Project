@@ -8,6 +8,7 @@ import Field from '../../components/ui/Field.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useAuth } from '../../context/AuthContext.js'
 import { inicioDe } from '../../config/menus.js'
+import { MENSAJE_SIN_CONFIGURACION, sinConfiguracion } from '../../services/auth.js'
 import { rutaDeRetorno } from '../../utils/accesoRutas.js'
 import { MENSAJES as MENSAJES_VALIDACION, requerido, validarCampos, validarCorreo } from '../../utils/validaciones.js'
 
@@ -65,6 +66,16 @@ export default function Login() {
   useEffect(() => {
     if (intentos > 0) formulario.current?.querySelector('[aria-invalid="true"]')?.focus()
   }, [intentos])
+
+  // Producción sin configurar: ni formulario ni cuentas demo
+  if (sinConfiguracion()) {
+    return (
+      <AuthLayout>
+        <h1 ref={titulo} tabIndex={-1} className="break-words text-display focus:outline-none">Iniciar sesión</h1>
+        <p role="alert" className="break-words text-body">{MENSAJE_SIN_CONFIGURACION}</p>
+      </AuthLayout>
+    )
+  }
 
   if (estado === 'verificada') return <Navigate to={rutaDeRetorno(location.state?.desde, usuario.rol) ?? inicioDe(usuario.rol)} state={{ enfocarTitulo: true }} replace />
   // Sesión de Supabase restaurada sin 2FA en esta pestaña: se vuelve al paso del código, no se entra directo

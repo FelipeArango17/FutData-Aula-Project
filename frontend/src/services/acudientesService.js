@@ -15,7 +15,13 @@
 // correo no se repita (hoy, si el correo ya existe, se reutiliza el acudiente).
 import { validarCampos, validarCorreo, validarNombre, validarTelefono, enLista, MENSAJES } from '../utils/validaciones.js'
 
-export const PARENTESCOS = ['Madre', 'Padre', 'Abuelo(a)', 'Tío(a)', 'Otro']
+export const PARENTESCOS = ['Madre', 'Padre', 'Abuelo', 'Abuela', 'Tía', 'Tío', 'Otro']
+
+// La API usa los mismos valores sin tilde (Tia, Tio). En pantalla y en este servicio se usa la forma con tilde.
+const PARENTESCO_API = { Tía: 'Tia', Tío: 'Tio' }
+const PARENTESCO_DESDE_API = { Tia: 'Tía', Tio: 'Tío' }
+export const parentescoParaApi = (p) => PARENTESCO_API[p] ?? p
+export const parentescoDesdeApi = (p) => PARENTESCO_DESDE_API[p] ?? p
 export const ACUDIENTE_VACIO = { nombre: '', apellido: '', correo: '', telefono: '', parentesco: '' }
 export const MENSAJE_PARENTESCO = 'Selecciona el parentesco.'
 

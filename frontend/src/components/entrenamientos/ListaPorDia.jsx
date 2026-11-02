@@ -1,7 +1,8 @@
 import Card from '../ui/Card.jsx'
 import Badge from '../ui/Badge.jsx'
 import Button from '../ui/Button.jsx'
-import { ENTRENADORES, HOY_EJEMPLO } from '../../services/entrenamientosService.js'
+import { hoy } from '../../utils/hoy.js'
+import { ENTRENADORES } from '../../services/entrenamientosService.js'
 import { diaLargo, formatHora } from '../../utils/fechas.js'
 
 // Lista agrupada por día (móvil). Solo se dibujan los días que tienen entrenamientos.
@@ -15,7 +16,7 @@ export default function ListaPorDia({ dias, entrenamientos, base, onEliminar }) 
         return (
           <section key={dia} aria-labelledby={`dia-${dia}`} className="flex flex-col gap-2">
             <h2 id={`dia-${dia}`} className="text-label uppercase text-secondary">
-              {diaLargo(dia)}{dia === HOY_EJEMPLO ? ' · Hoy' : ''}
+              {diaLargo(dia)}{dia === hoy() ? ' · Hoy' : ''}
             </h2>
             <ul className="flex flex-col gap-2">
               {delDia.map((e) => {

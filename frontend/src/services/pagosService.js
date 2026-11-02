@@ -16,7 +16,7 @@
 //
 // PENDIENTE: confirmar con Juan / el modelo de datos (docs/info-sprints/sprint-1/diccionario-datos.md, sección 2.5 Pago):
 // - La tabla Pago del diccionario aún no cierra estos campos (concepto, fecha de vencimiento, método, estado derivado).
-// - "Hoy" es HOY_EJEMPLO. "Desde cuándo" = vencimiento más antiguo entre los pagos sin pagar del deportista.
+// - "Hoy" es hoy() (utils/hoy.js). "Desde cuándo" = vencimiento más antiguo entre los pagos sin pagar del deportista.
 // - Un acudiente solo ve a SUS deportistas (los que tienen su correo en `acudiente`). Aquí se simula; en producción
 //   lo valida el backend con el JWT.
 // - El pago en línea (Wompi) NO está en esta tarea.
@@ -26,7 +26,7 @@
 //   El estado de cuenta del acudiente NO muestra quién registró el pago ni la nota interna.
 // - La descarga es un CSV provisional generado en el navegador; la versión final será un PDF generado por el
 //   backend (GET /pagos/estado-cuenta?formato=pdf).
-import { HOY_EJEMPLO } from './entrenamientosService.js'
+import { hoy as hoyDeLaApp } from '../utils/hoy.js'
 import { listarDeportistas, obtenerDeportista } from './deportistasService.js'
 import { MENSAJES, enLista, maximoCaracteres, requerido, requeridoSi, validarCampos, validarFechaPago, validarMes, validarMonto } from '../utils/validaciones.js'
 import { mesEnTexto } from '../utils/fechas.js'
@@ -49,11 +49,12 @@ let pagos = [
 // Simulación de red y de reloj: se pueden cambiar (pruebas y verificación manual de errores).
 let retardoMs = 250
 let fallosPendientes = 0
-let hoy = HOY_EJEMPLO
+let hoyFijado = null // null = hoy() de la app
+const hoy = () => hoyFijado ?? hoyDeLaApp()
 export function configurarSimulacion({ retardo, fallos, hoy: nuevoHoy } = {}) {
   if (retardo !== undefined) retardoMs = retardo
   if (fallos !== undefined) fallosPendientes = fallos
-  if (nuevoHoy !== undefined) hoy = nuevoHoy ?? HOY_EJEMPLO
+  if (nuevoHoy !== undefined) hoyFijado = nuevoHoy ?? null
 }
 
 const error = (codigo, mensaje) => Object.assign(new Error(mensaje), { codigo })
@@ -68,7 +69,7 @@ async function simularRed() {
 
 // "pagado" si tiene fecha de pago; si no, "vencido" cuando el vencimiento es anterior a hoy y "pendiente" en otro caso
 // (vence hoy = todavía pendiente).
-export function estadoDelPago(pago, fechaHoy = HOY_EJEMPLO) {
+export function estadoDelPago(pago, fechaHoy = hoyDeLaApp()) {
   if (pago.fechaPago) return 'pagado'
   return pago.fechaVencimiento < fechaHoy ? 'vencido' : 'pendiente'
 }
@@ -88,7 +89,7 @@ export async function obtenerEstadoCuenta(actor) {
       // Solo los campos que ve el acudiente: nunca quién registró el pago, la referencia ni la nota interna
       .map((p) => ({
         id: p.id, idDeportista: p.idDeportista, concepto: p.concepto, monto: p.monto, fechaVencimiento: p.fechaVencimiento,
-        fechaPago: p.fechaPago, metodo: p.metodo, estado: estadoDelPago(p, hoy),
+        fechaPago: p.fechaPago, metodo: p.metodo, estado: estadoDelPago(p, hoy()),
       }))
       .sort((a, b) => b.fechaVencimiento.localeCompare(a.fechaVencimiento) || b.id - a.id)
     const sinPagar = lista.filter((p) => p.estado !== 'pagado')
@@ -140,7 +141,7 @@ export function generarCsvEstadoCuenta(estado) {
 // Vuelve a pedir el estado completo: la descarga incluye todos los deportistas y pagos, no solo el filtro de la pantalla.
 export async function prepararDescargaEstadoCuenta(actor) {
   const estado = await obtenerEstadoCuenta(actor)
-  return { nombreArchivo: `estado-de-cuenta-${hoy}.csv`, tipo: 'text/csv;charset=utf-8', contenido: generarCsvEstadoCuenta(estado) }
+  return { nombreArchivo: `estado-de-cuenta-${hoy()}.csv`, tipo: 'text/csv;charset=utf-8', contenido: generarCsvEstadoCuenta(estado) }
 }
 
 // ---- Registro manual de pagos (HU-016): solo administrador y tesorero ----
@@ -148,8 +149,8 @@ export const METODOS_PAGO_MANUAL = ['Efectivo', 'Transferencia']
 export const MAX_REFERENCIA = 60
 export const MAX_NOTA = 200
 
-// Los últimos meses y el actual, calculados con `fechaHoy` (HOY_EJEMPLO): [{ valor: '2026-10', texto: 'octubre 2026' }, ...] del más reciente al más antiguo
-export function mesesParaPago(fechaHoy = HOY_EJEMPLO, cantidad = 6) {
+// Los últimos meses y el actual, calculados con `fechaHoy` (hoy()): [{ valor: '2026-10', texto: 'octubre 2026' }, ...] del más reciente al más antiguo
+export function mesesParaPago(fechaHoy = hoyDeLaApp(), cantidad = 6) {
   const [anio, mes] = fechaHoy.split('-').map(Number)
   return Array.from({ length: cantidad }, (_, i) => {
     const d = new Date(Date.UTC(anio, mes - 1 - i, 1))
@@ -160,7 +161,7 @@ export function mesesParaPago(fechaHoy = HOY_EJEMPLO, cantidad = 6) {
 
 // Reglas del formulario y del servicio (los mismos validadores compartidos). Devuelve { campo: mensaje } solo con los campos con error.
 // datos: { idDeportista, mes ("AAAA-MM"), monto, fechaPago ("AAAA-MM-DD"), metodo, referencia, nota }
-export function validarDatosPagoManual(datos, fechaHoy = HOY_EJEMPLO) {
+export function validarDatosPagoManual(datos, fechaHoy = hoyDeLaApp()) {
   return validarCampos(datos, {
     idDeportista: [requerido(MENSAJES.pagoDeportista)],
     mes: [(v) => validarMes(v, fechaHoy)],
@@ -187,7 +188,7 @@ export async function consultarCobroMensualidad(idDeportista, mes, actor) {
   exigirRegistrador(actor)
   const cobro = buscarMensualidad(Number(idDeportista), mes)
   if (!cobro) return { existe: false }
-  return { existe: true, concepto: cobro.concepto, monto: cobro.monto, estado: estadoDelPago(cobro, hoy), fechaVencimiento: cobro.fechaVencimiento, fechaPago: cobro.fechaPago }
+  return { existe: true, concepto: cobro.concepto, monto: cobro.monto, estado: estadoDelPago(cobro, hoy()), fechaVencimiento: cobro.fechaVencimiento, fechaPago: cobro.fechaPago }
 }
 
 // Registra el pago de la mensualidad de un mes. Orden de las comprobaciones: permiso, datos, deportista (existe y está activo),
@@ -196,7 +197,7 @@ export async function consultarCobroMensualidad(idDeportista, mes, actor) {
 export async function registrarPagoManual(datos, actor) {
   await simularRed()
   exigirRegistrador(actor)
-  const errores = validarDatosPagoManual(datos, hoy)
+  const errores = validarDatosPagoManual(datos, hoy())
   if (Object.keys(errores).length > 0) throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores })
 
   const deportista = await obtenerDeportista(datos.idDeportista) // lanza DEPORTISTA_NO_EXISTE
@@ -234,5 +235,5 @@ export async function registrarPagoManual(datos, actor) {
     }
     pagos = [...pagos, resultado]
   }
-  return { pago: { ...resultado, estado: estadoDelPago(resultado, hoy) }, cobroCreado: !cobro }
+  return { pago: { ...resultado, estado: estadoDelPago(resultado, hoy()) }, cobroCreado: !cobro }
 }

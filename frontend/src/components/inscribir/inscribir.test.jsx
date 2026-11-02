@@ -73,7 +73,7 @@ describe('paso 2: Acudiente', () => {
     const html = renderToStaticMarkup(<PasoAcudiente acudiente={ACUDIENTE_VACIO} errores={{}} onCambio={sinLlenar} />)
     expect(html).toContain('* Campo obligatorio')
     expect(html.match(/aria-required="true"/g)).toHaveLength(5)
-    for (const p of ['Madre', 'Padre', 'Abuelo(a)', 'Tío(a)', 'Otro']) expect(html).toContain(`>${p}</option>`)
+    for (const p of ['Madre', 'Padre', 'Abuelo', 'Abuela', 'Tía', 'Tío', 'Otro']) expect(html).toContain(`>${p}</option>`)
     expect(html).toContain('type="email"')
     expect(html).not.toMatch(/Claudia Ruiz|claudia\.ruiz/)
   })
