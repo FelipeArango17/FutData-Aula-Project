@@ -94,7 +94,7 @@ public class PagoServiceImpl implements IPagoService {
     @Override
     public PagoResponseDTO crear(UUID idUsuario, CrearPagoRequestDTO datos) {
         Pago nuevo = validarNuevo(datos, idUsuario);
-        if (deportistas.buscarPorId(nuevo.idDeportista()).isEmpty()) {
+        if (deportistas.buscarPorId(nuevo.idDeportista(), LocalDate.now(reloj).getYear()).isEmpty()) {
             throw new RecursoNoEncontradoException("No existe un deportista con ese id.");
         }
         UUID id = crearSinDuplicar(nuevo);
