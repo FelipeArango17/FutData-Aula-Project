@@ -185,6 +185,18 @@ Después de la 001 se ejecutan, una sola vez cada una y en orden, las demás de 
 
 La 004, la 007 y la 008 van en una transacción: si falla, no queda ningún cambio y el mensaje dice qué dato corregir.
 
+### 6.2 Cargar el horario del club (seed)
+
+[`supabase/seeds/franjas_club.sql`](../supabase/seeds/franjas_club.sql) deja la plantilla semanal del club: **30 franjas** de lunes a sábado (la tabla de la sección 6 de `docs/PRESENTACION-TECNICA.md`). No es una migración: se carga a mano, **una sola vez** por base.
+
+1. Requisitos: la 007 ya aplicada (crea `franja_horario` y las 9 categorías) y **`franja_horario` vacía**. Comprobar: `select count(*) from franja_horario;` debe dar 0.
+2. Cargarlo **primero en el proyecto de prueba** de Supabase y revisar el resultado; solo después, en el proyecto real.
+3. En **SQL Editor**, pegar el contenido completo del archivo y ejecutarlo (o, con `psql`: `psql "<connection string>" -f supabase/seeds/franjas_club.sql`). Va en una transacción.
+4. Si `franja_horario` ya tiene datos, el script **se detiene sin cambiar nada** (`franja_horario ya tiene datos: no se carga la plantilla del club`), para no duplicar ni pisar lo que el administrador haya editado. Si queda con un número distinto de 30 (por ejemplo, porque falta una categoría), también se detiene y deshace todo.
+5. Comprobar: `select count(*) from franja_horario;` debe dar **30**, y `select count(*) from franja_horario where grupo is not null;`, **8** (Cachorros y Semillero, martes y jueves).
+
+Las 30 franjas quedan **con `id_entrenador` NULL** ("por turnos"). Los entrenadores de Sub-11 a Sub-16 se asignan después, desde la aplicación o con `PUT /api/horario-club/{id}` (ver `backend/README.md`), cuando ya existan como entrenadores.
+
 ## 7. Verificar las tablas
 
 En SQL Editor:
