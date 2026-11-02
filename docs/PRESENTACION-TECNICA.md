@@ -33,7 +33,7 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
-- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **875 pruebas, 0 fallos, 7 omitidas** (las que necesitan n8n y Supabase reales, incluida la de fotos contra Supabase real).
+- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **874 pruebas, 0 fallos, 7 omitidas** (las que necesitan n8n y Supabase reales, incluida la de fotos contra Supabase real).
 
 ## 4. Modelo de datos (resumen)
 
@@ -126,6 +126,8 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 **Alta de entrenador.** El administrador lo crea; se genera el usuario con rol ENTRENADOR sin contraseña y n8n envía el enlace. Si el enlace vence, el administrador puede reenviarlo.
 
 **Revisión de documentos.** El acudiente o el administrador suben. Solo el administrador aprueba o rechaza. Al rechazar va un comentario y n8n avisa al acudiente.
+
+**Código 2FA (asíncrono).** n8n valida la petición, responde `202` y después envía el correo, así el ingreso no espera al SMTP (~3 s). Si el envío falla después del `202`, el código queda guardado pero el correo no llega: el usuario usa "Reenviar código" (al minuto) y la falla queda solo en el registro enmascarado de n8n.
 
 ## 8. API
 
@@ -220,3 +222,4 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-01 | Bloque 2A (rama `feat/deportistas-api`, pendiente de merge). Migración 008: `parentesco`, `deportista.grupo` y `deportista.activo` (los RETIRADA quedan inactivos). API de deportistas: categoría calculada al leer con el reloj de Bogotá (`id_categoria` y `estado_inscripcion` quedan heredados), `estadoInscripcion` calculado, lista paginada con filtros, `PUT`, foto con URL firmada. El entrenador no ve el número de documento. **624 pruebas, 0 fallos, 6 omitidas.** |
 | 2026-11-01 | Bloque 6 (pagos con Wompi): **backend en curso**. Migración 009 (más medios de pago, tipos TORNEO y UNIFORME, `id_transaccion_wompi`), `/api/pagos`, webhook con firma, reintento y conciliación. El monto de la mensualidad queda configurable y pendiente de que lo defina el club. |
 | 2026-11-02 | Bloque 4A (rama `feat/horario-club`, pendiente de merge), sin migración nueva. API `/api/horario-club`: lectura para los cuatro roles y edición solo para el administrador, filtros `categoria`, `entrenador` y `sede`, horas `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo, y la respuesta trae `entrenadorActivo`. El cruce del mismo entrenador lo decide `franja_cruce_entrenador_ex` (`409`); las contiguas no se cruzan. El bloque 4 se divide en 4A (horario) y 4B (entrenamientos). **875 pruebas, 0 fallos, 7 omitidas** (con el bloque 6 de `develop`). |
+| 2026-11-02 | Latencia del 2FA (rama `fix/latencia-2fa`): `CODIGO_2FA` pasa a asíncrono en n8n (valida, responde `202` y después envía). `N8nClient` ya aceptaba `200` y `202`, así que el orden de despliegue no importa. Si el SMTP falla después del `202`, el código queda guardado, el correo no llega y el usuario usa "Reenviar código"; la falla solo queda en el registro enmascarado de n8n. **874 pruebas, 0 fallos, 7 omitidas** (`develop` tenía 873: el 875 anterior contaba reportes viejos de `target/`). |

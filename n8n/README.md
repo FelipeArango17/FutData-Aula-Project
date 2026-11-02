@@ -6,7 +6,7 @@ Contrato completo (campos, respuestas, cómo llamarlo desde Spring Boot): [`docs
 
 | Evento | Historia | Respuesta | Correo |
 | :--- | :--- | :--- | :--- |
-| `CODIGO_2FA` | HU-036 | `200` cuando el SMTP acepta el correo; `502` si falla | Código de verificación a un usuario |
+| `CODIGO_2FA` | HU-036 | `202` apenas valida los datos; envía después | Código de verificación a un usuario |
 | `CAMBIO_ENTRENAMIENTO` | HU-026 | `202` apenas valida los datos; envía después | Aviso de entrenamiento creado, modificado o cancelado, un correo por destinatario (hasta 200) |
 
 | Archivo | Para qué |
@@ -16,7 +16,7 @@ Contrato completo (campos, respuestas, cómo llamarlo desde Spring Boot): [`docs
 | `workflows/futdata-notificaciones.json` | Flujo `FutData · Notificaciones` para importar |
 | `plantillas/codigo-2fa.html` / `.txt` | Correo del código 2FA (HTML y texto plano) |
 | `plantillas/cambio-entrenamiento.html` / `.txt` | Aviso de cambio de entrenamiento (HTML y texto plano) |
-| `scripts/probar-2fa.sh` / `.ps1` | Prueba de `CODIGO_2FA`: caso válido (200), sin token (401), evento inválido (400) y, opcional, falla de envío (502) |
+| `scripts/probar-2fa.sh` / `.ps1` | Prueba de `CODIGO_2FA`: caso válido (202), sin token (401), evento inválido (400) y, opcional, falla de envío (202 y línea en el registro) |
 | `scripts/probar-entrenamiento.sh` / `.ps1` | Prueba de `CAMBIO_ENTRENAMIENTO`: creado, modificado, cancelado y duplicados (202), lista vacía, tipo inválido y más de 200 destinatarios (400), sin token (401) y, opcional, falla de envío |
 | `logs/` | Registro de fallas de envío `fallas-notificaciones.jsonl` (los `.jsonl` están ignorados por Git) |
 
@@ -28,11 +28,11 @@ Webhook POST ─► Validar token ─► Validar estructura ─► Evento (Switc
                     ▼                  ▼                                └─ otro evento ─────────► Responder 400 evento
               Responder 401   Responder 400 estructura
 
-Rama 2FA (síncrona):
-Validar datos CODIGO_2FA ─► Enviar correo 2FA ─► Responder 200
-        │ no                       │ error SMTP
-        ▼                          ▼
-Responder 400 datos        (registro de fallas) ─► Responder 502
+Rama 2FA (asíncrona):
+Validar datos CODIGO_2FA ─► Responder 202 2FA ─► Enviar correo 2FA
+        │ no                                           │ error SMTP
+        ▼                                              ▼
+Responder 400 datos                    (registro de fallas) ─► fin, sin respuesta
 
 Rama entrenamiento (asíncrona):
 Validar datos CAMBIO_ENTRENAMIENTO ─► ¿Datos válidos? ─► Responder 202 ─► Armar un correo por destinatario ─► Enviar aviso de entrenamiento
@@ -41,13 +41,15 @@ Validar datos CAMBIO_ENTRENAMIENTO ─► ¿Datos válidos? ─► Responder 202
                                  Responder 400 entrenamiento                                               (registro de fallas) ─► fin, sin respuesta
 
 Registro de fallas (común):
-Armar registro de falla ─► Serializar línea JSONL ─► Convertir a archivo ─► Guardar falla en log ─► ¿Responder 502? ─► Responder 502
-                                                                                                         │ CAMBIO_ENTRENAMIENTO
+Armar registro de falla ─► Serializar línea JSONL ─► Convertir a archivo ─► Guardar falla en log ─► ¿Responder 502? ─► Responder 502 (solo eventos síncronos)
+                                                                                                         │ CODIGO_2FA o CAMBIO_ENTRENAMIENTO
                                                                                                          ▼
                                                                                                    (ya respondió 202)
 ```
 
-La rama de error SMTP agrega una línea al [registro de fallas](#registro-de-fallas). Los cuatro nodos del registro y `¿Responder 502?` tienen *On Error → Continue*: si el registro falla, la respuesta `502` de `CODIGO_2FA` sale igual. `CAMBIO_ENTRENAMIENTO` ya respondió `202`, así que `¿Responder 502?` no vuelve a responder.
+La rama de error SMTP agrega una línea al [registro de fallas](#registro-de-fallas). Los cuatro nodos del registro y `¿Responder 502?` tienen *On Error → Continue*: si el registro falla, la respuesta `502` de un evento síncrono sale igual. `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO` ya respondieron `202`, así que `¿Responder 502?` no vuelve a responder. Hoy ningún evento es síncrono: `¿Responder 502?` y `Responder 502` quedan para los que vengan (por ejemplo `ENLACE_CONTRASENA`).
+
+**Rama `CODIGO_2FA`:** **Responder 202 2FA** responde `{"aceptado": true}` después de validar el token, la estructura y los datos, y antes de enviar. El SMTP tarda ~3 s y el backend espera máximo 5 s. Si el envío falla, el backend ya respondió y el código quedó guardado: el usuario no recibe el correo y debe usar "Reenviar código" (disponible al minuto). La falla solo queda en el registro, con el correo enmascarado y sin el código (ver el contrato).
 
 **Rama `CAMBIO_ENTRENAMIENTO`:**
 
@@ -182,7 +184,7 @@ Como el envío sigue después del `202`, revisa la bandeja de `CORREO_PRUEBA`: d
 
 #### Caso opcional: falla de envío
 
-Comprueba que una falla real del SMTP quede en el [registro de fallas](#registro-de-fallas) y que `CODIGO_2FA` responda `502`. Hay que romper la credencial a propósito:
+Comprueba que una falla real del SMTP quede en el [registro de fallas](#registro-de-fallas) y que `CODIGO_2FA` responda `202` igual. Hay que romper la credencial a propósito:
 
 1. Confirma que n8n está encendido: `docker compose ps` debe mostrar `futdata-n8n` con estado `Up`. Si no muestra nada, el contenedor está detenido (por ejemplo, después de reiniciar el equipo o Docker Desktop); levántalo con `docker compose up -d`.
 2. En n8n abre la credencial `SMTP FutData`, cambia **Port** a un puerto donde no escuche nada (por ejemplo `2525`) y guárdala. Al guardar, n8n prueba la conexión y muestra *Couldn't connect with these settings … ECONNREFUSED*: es lo esperado, la credencial queda guardada igual. El flujo publicado la usa al momento, sin volver a publicar.
@@ -198,18 +200,18 @@ Comprueba que una falla real del SMTP quede en el [registro de fallas](#registro
    pwsh -File scripts/probar-entrenamiento.ps1 -ProbarFalla
    ```
 
-   En este modo se omite el caso `200` (con el SMTP roto no puede pasar). Corren *Sin token*, *Evento inválido* y *Falla de envío SMTP*, que espera `502`. Después el script revisa que `logs/fallas-notificaciones.jsonl` tenga una línea nueva, que sea JSON con los cinco campos y que no contenga el código `123456`, el `CORREO_PRUEBA` completo ni el token. Deben salir cuatro líneas `OK`.
+   En este modo se omite el caso *Código 2FA válido*. Corren *Sin token*, *Evento inválido* y *Falla de envío SMTP (responde 202 igual)*, que espera `202` de inmediato, porque n8n responde antes de enviar. Después el script espera hasta 150 s a que aparezca una línea `CODIGO_2FA` nueva en `logs/fallas-notificaciones.jsonl`, y revisa que sea JSON con los cinco campos y que no contenga el código `123456`, el `CORREO_PRUEBA` completo ni el token. Deben salir cuatro líneas `OK`.
 
-   El caso *Falla de envío SMTP* tarda: con Docker Desktop en Windows la conexión rechazada demora unos 20 s, y si el host no responde nodemailer espera hasta 2 min. Por eso ese caso espera hasta 150 s (los demás, 15 s). Si sale `sin respuesta`, revisa el paso 1.
+   La línea tarda: con Docker Desktop en Windows la conexión rechazada demora unos 20 s, y si el host no responde nodemailer espera hasta 2 min. Por eso la espera del registro es de hasta 150 s (las respuestas, 15 s). Si sale `sin respuesta`, revisa el paso 1.
 
    En `probar-entrenamiento` se omiten los cuatro casos que envían correos. Corren los cuatro casos de error (`400` y `401`) y *Falla de envío SMTP (responde 202 igual)*, con dos destinatarios: `CORREO_PRUEBA` y el mismo con `+falla` antes de la `@`. Ese caso espera `202` de inmediato, porque n8n responde antes de enviar. Después el script espera hasta 150 s (cada rechazo tarda ~21 s y los envíos van uno tras otro) a que aparezcan **dos** líneas `CAMBIO_ENTRENAMIENTO` en el log, una por destinatario, lo que muestra que la falla del primero no frenó al segundo. Revisa que sean JSON con los cinco campos y que no tengan ninguno de los dos correos completos ni el token. Deben salir seis líneas `OK`.
-4. **Restaura el puerto** de la credencial (`465`, o `587`) y vuelve a correr los scripts sin el parámetro para confirmar el `200` y los `202`.
+4. **Restaura el puerto** de la credencial (`465`, o `587`) y vuelve a correr los scripts sin el parámetro para confirmar los `202` y que lleguen los correos.
 
 Los scripts leen el log desde `n8n/logs/` en tu equipo, así que solo sirven con el n8n de este `docker-compose.yml`.
 
 ## Registro de fallas
 
-n8n no guarda ejecuciones (ver [Privacidad de los datos](#privacidad-de-los-datos)), así que una falla de envío no aparece en *Executions*. Por eso la rama de error de cada nodo de envío agrega una línea a un archivo propio: en `CODIGO_2FA`, antes de responder `502`; en `CAMBIO_ENTRENAMIENTO`, una línea por cada destinatario al que no se pudo enviar (la respuesta `202` ya salió). No depende del backend ni de la base de datos.
+n8n no guarda ejecuciones (ver [Privacidad de los datos](#privacidad-de-los-datos)), así que una falla de envío no aparece en *Executions*. Por eso la rama de error de cada nodo de envío agrega una línea a un archivo propio: en `CODIGO_2FA`, una línea con el correo enmascarado; en `CAMBIO_ENTRENAMIENTO`, una línea por cada destinatario al que no se pudo enviar. En los dos la respuesta `202` ya salió; en un evento síncrono la línea se escribe antes de responder `502`. No depende del backend ni de la base de datos.
 
 | | |
 | :--- | :--- |
@@ -235,7 +237,7 @@ Ejemplo de línea:
 
 **Por qué no tiene datos sensibles.** El nodo **Armar registro de falla** construye la línea campo por campo; no copia la petición. Nunca incluye el código, el nombre, el correo completo, el token, el cuerpo ni los datos del entrenamiento. El mensaje del SMTP puede traer la dirección del destinatario (por ejemplo, en un rechazo `550`), por eso se limpia de correos, y de paso de cualquier número de 6 dígitos. El correo enmascarado basta para que soporte ubique el caso sin exponer la dirección. `scripts/probar-2fa.* --probar-falla` y `scripts/probar-entrenamiento.* --probar-falla` lo verifican.
 
-**Si el registro falla**, por ejemplo por permisos o disco lleno, los cuatro nodos del registro y **¿Responder 502?** siguen (*On Error → Continue*) y **Responder 502** sale igual en `CODIGO_2FA`. El backend nunca se queda sin respuesta por culpa del log. En `CAMBIO_ENTRENAMIENTO` la respuesta `202` ya salió antes de enviar, así que el log no la afecta.
+**Si el registro falla**, por ejemplo por permisos o disco lleno, los cuatro nodos del registro y **¿Responder 502?** siguen (*On Error → Continue*) y **Responder 502** sale igual en un evento síncrono. El backend nunca se queda sin respuesta por culpa del log. En `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO` la respuesta `202` ya salió antes de enviar, así que el log no la afecta.
 
 **Configuración en `docker-compose.yml`:**
 
@@ -258,7 +260,7 @@ tail -f logs/fallas-notificaciones.jsonl                          # seguir en vi
 
 El archivo crece sin límite. Para vaciarlo basta con borrarlo; n8n lo vuelve a crear.
 
-**Eventos nuevos.** Los nodos del registro toman `evento` del Webhook y el correo del ítem que falló (campo `correo`, como en `CAMBIO_ENTRENAMIENTO`, donde hay un ítem por destinatario) o, si no lo tiene, de `datos.correo` (como en `CODIGO_2FA`). Así sirven para cualquier evento: conecta la salida de error del nodo de envío nuevo a **Armar registro de falla**. Si no hay correo en ninguno de los dos, el campo queda como `***`. Si el evento responde antes de enviar (asíncrono, como `CAMBIO_ENTRENAMIENTO`), agrégalo a la condición de **¿Responder 502?**.
+**Eventos nuevos.** Los nodos del registro toman `evento` del Webhook y el correo del ítem que falló (campo `correo`, como en `CAMBIO_ENTRENAMIENTO`, donde hay un ítem por destinatario) o, si no lo tiene, de `datos.correo` (como en `CODIGO_2FA`). Así sirven para cualquier evento: conecta la salida de error del nodo de envío nuevo a **Armar registro de falla**. Si no hay correo en ninguno de los dos, el campo queda como `***`. Si el evento responde antes de enviar (asíncrono, como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`), agrégalo a la condición de **¿Responder 502?**; si es síncrono, déjalo fuera para que la falla responda `502`.
 
 ### Propuesta: tabla `fallas_notificacion` en Supabase
 

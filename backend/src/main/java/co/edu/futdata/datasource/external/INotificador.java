@@ -12,7 +12,10 @@ import java.util.Map;
  */
 public interface INotificador {
 
-    /** Código de verificación al iniciar sesión. Respuesta síncrona: el correo ya salió. */
+    /**
+     * Código de verificación al iniciar sesión. Respuesta asíncrona ({@code 202}): recibido, no entregado. Si el
+     * SMTP falla después, n8n solo lo registra y el usuario debe usar "Reenviar código".
+     */
     String CODIGO_2FA = "CODIGO_2FA";
 
     /** Aviso de entrenamiento creado, modificado o cancelado. Respuesta asíncrona: recibido, no entregado. */

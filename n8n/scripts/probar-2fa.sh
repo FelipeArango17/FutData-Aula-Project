@@ -2,8 +2,9 @@
 # Prueba el webhook de notificaciones de FutData (HU-036).
 # Uso (desde cualquier carpeta):  bash n8n/scripts/probar-2fa.sh
 # Lee N8N_BASE_URL, N8N_WEBHOOK_TOKEN y CORREO_PRUEBA de n8n/.env.
-# Con --probar-falla (y la credencial SMTP rota a propósito, ver n8n/README.md) cambia el caso
-# válido por uno que espera 502 y revisa que se agregue una línea al registro de fallas.
+# CODIGO_2FA es asíncrono: n8n valida, responde 202 y después envía el correo.
+# Con --probar-falla (y la credencial SMTP rota a propósito, ver n8n/README.md) el caso válido
+# sigue esperando 202 y después espera a que aparezca la línea de la falla en el registro.
 set -euo pipefail
 
 PROBAR_FALLA=0
@@ -64,13 +65,18 @@ leer_log() {
   if [[ -f "$LOG_FALLAS" ]]; then grep -v '^[[:space:]]*$' "$LOG_FALLAS" || true; fi
 }
 
-# Revisa que la última petición haya agregado líneas al log y que no tengan datos sensibles.
+# Espera hasta 150 s a que aparezca una línea CODIGO_2FA nueva en el log y revisa que no tenga
+# datos sensibles. El envío sigue después del 202 y cada rechazo del SMTP tarda ~20 s con Docker
+# Desktop (hasta 2 min si el host no responde), así que hay que darle tiempo.
 revisar_log() {
-  local antes="$1" nuevas ultima problema=""
-  nuevas="$(leer_log | tail -n +$((antes + 1)))"
+  local antes="$1" nuevas="" ultima problema="" limite=$((SECONDS + 150)) campo
+  while [[ -z "$nuevas" ]] && (( SECONDS < limite )); do
+    sleep 3
+    nuevas="$(leer_log | tail -n +$((antes + 1)) | grep '"evento":"CODIGO_2FA"' || true)"
+  done
   ultima="$(tail -n 1 <<<"$nuevas")"
   if [[ -z "$nuevas" ]]; then
-    problema="no se agregó ninguna línea a $LOG_FALLAS"
+    problema="en 150 s no llegó ninguna línea CODIGO_2FA a $LOG_FALLAS"
   elif grep -qF -e 123456 -e "$CORREO" -e "$TOKEN" <<<"$nuevas"; then
     problema="la línea nueva tiene el código, el correo completo o el token"
   else
@@ -91,7 +97,7 @@ echo "Webhook: $URL"
 VALIDO="{\"evento\":\"CODIGO_2FA\",\"datos\":{\"correo\":\"$CORREO\",\"nombre\":\"Jugador de prueba\",\"codigo\":\"123456\",\"vigenciaMinutos\":10}}"
 
 if (( ! PROBAR_FALLA )); then
-  probar "Código 2FA válido" 200 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
+  probar "Código 2FA válido" 202 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
 fi
 
 probar "Sin token" 401 <<<"$VALIDO"
@@ -102,9 +108,8 @@ JSON
 
 if (( PROBAR_FALLA )); then
   antes="$(leer_log | wc -l)"
-  # El 502 llega cuando el SMTP se rinde: ~20 s con Docker Desktop y hasta 2 min si el host
-  # no responde (connectionTimeout de nodemailer). Por eso este caso espera más.
-  TIEMPO_MAX=150 probar "Falla de envío SMTP" 502 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
+  # n8n responde 202 antes de intentar el envío; la falla solo queda en el registro.
+  probar "Falla de envío SMTP (responde 202 igual)" 202 -H "X-FutData-Token: $TOKEN" <<<"$VALIDO"
   revisar_log "$antes"
 fi
 

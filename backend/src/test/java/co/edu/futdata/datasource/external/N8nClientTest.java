@@ -99,18 +99,28 @@ class N8nClientTest {
                         {"evento": "CODIGO_2FA",
                          "datos": {"correo": "jugador@ejemplo.com", "nombre": "Ana", "codigo": "123456", "vigenciaMinutos": 10}}
                         """, JsonCompareMode.STRICT))
-                .andRespond(json(HttpStatus.OK, "{\"enviado\": true}"));
+                .andRespond(json(HttpStatus.ACCEPTED, "{\"aceptado\": true}"));
 
         assertThatCode(() -> cliente.notificar(INotificador.CODIGO_2FA, datos2fa())).doesNotThrowAnyException();
         servidor.verify();
-        assertThat(textoDeLosLogs()).contains("CODIGO_2FA").contains("HTTP 200").containsPattern("\\d+ ms");
+        assertThat(textoDeLosLogs()).contains("CODIGO_2FA").contains("HTTP 202").containsPattern("\\d+ ms");
+    }
+
+    /** Un n8n con el workflow anterior (síncrono) responde 200: se sigue aceptando, sin mirar el cuerpo. */
+    @Test
+    void codigo2faAceptaUn200SinElCampoEnviado() {
+        servidor.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.OK, "{}"));
+
+        assertThatCode(() -> cliente.notificar(INotificador.CODIGO_2FA, datos2fa())).doesNotThrowAnyException();
+        servidor.verify();
+        assertThat(textoDeLosLogs()).contains("CODIGO_2FA").contains("HTTP 200");
     }
 
     @Test
     void elCodigoSeEnviaComoTextoConservandoLosCeros() {
         servidor.expect(requestTo(URL_WEBHOOK))
                 .andExpect(content().json("{\"datos\": {\"codigo\": \"012345\"}}"))
-                .andRespond(json(HttpStatus.OK, "{\"enviado\": true}"));
+                .andRespond(json(HttpStatus.ACCEPTED, "{\"aceptado\": true}"));
 
         Map<String, Object> datos = new HashMap<>(datos2fa());
         datos.put("codigo", "012345");
@@ -122,7 +132,7 @@ class N8nClientTest {
     void quitaLaBarraFinalDeLaUrlBase() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer otro = MockRestServiceServer.bindTo(builder).build();
-        otro.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.OK, "{\"enviado\": true}"));
+        otro.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.ACCEPTED, "{\"aceptado\": true}"));
 
         new N8nClient(builder.build(), propiedades(BASE_URL + "/", TOKEN, Duration.ofSeconds(5)), JSON)
                 .notificar(INotificador.CODIGO_2FA, datos2fa());
