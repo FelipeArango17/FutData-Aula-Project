@@ -9,6 +9,8 @@ import AuthProvider from './context/AuthProvider.jsx'
 import Login from './pages/auth/Login.jsx'
 import Verificar from './pages/auth/Verificar.jsx'
 import Recuperar from './pages/auth/Recuperar.jsx'
+import Restablecer from './pages/auth/Restablecer.jsx'
+import CrearContrasena from './pages/auth/CrearContrasena.jsx'
 import Perfil from './pages/perfil/Perfil.jsx'
 import Inscripcion from './pages/inscripcion/Inscripcion.jsx'
 import { useAuth } from './context/AuthContext.js'
@@ -44,6 +46,8 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/verificar" element={<Verificar />} />
                 <Route path="/recuperar" element={<Recuperar />} />
+                <Route path="/restablecer" element={<Restablecer />} />
+                <Route path="/crear-contrasena" element={<CrearContrasena />} />
                 <Route path="/inscripcion" element={<Inscripcion />} />
                 <Route element={<AppShell />}>
                   {/* Perfil: dentro del AppShell, para los 4 roles */}

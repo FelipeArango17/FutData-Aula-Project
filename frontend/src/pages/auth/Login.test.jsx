@@ -37,3 +37,9 @@ describe('login con el motivo de cierre', () => {
     }
   })
 })
+
+describe('login tras crear la contraseña', () => {
+  it('muestra el aviso que llega en el estado de la ruta', () => {
+    expect(dibujar({ aviso: 'Tu contraseña quedó creada. Ya puedes iniciar sesión.' })).toContain('Tu contraseña quedó creada. Ya puedes iniciar sesión.')
+  })
+})

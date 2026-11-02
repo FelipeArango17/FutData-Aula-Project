@@ -67,4 +67,17 @@ describe('lista de entrenadores', () => {
     expect(html).toContain('sin categorías asignadas')
     expect(html).toContain('aria-label="Desactivar a Luis Pérez"')
   })
+
+  it('Reenviar enlace aparece solo en los activos', () => {
+    expect(dibujar({ entrenadores: [luis] })).toContain('aria-label="Reenviar enlace a Luis Pérez"')
+    expect(dibujar({ entrenadores: [ana] })).not.toContain('Reenviar enlace')
+  })
+
+  it('el aviso de advertencia del alta se pinta con el tono de advertencia', () => {
+    const texto = 'El entrenador quedó registrado, pero no se pudo enviar el correo. Usa Reenviar enlace en la lista.'
+    const html = dibujar({ entrenadores: [luis], aviso: { id: 1, texto, tono: 'warning' } })
+    expect(html).toContain(texto)
+    expect(html).toContain('bg-warning')
+    expect(dibujar({ entrenadores: [luis], aviso: { id: 2, texto: 'Enviamos el enlace a a@b.co' } })).toContain('bg-success')
+  })
 })

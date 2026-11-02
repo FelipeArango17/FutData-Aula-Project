@@ -212,7 +212,12 @@ const api = {
     }
   },
   async crearDatos(datos) {
-    return desdeApi(await apiRequest('/entrenadores', { method: 'POST', body: JSON.stringify(datosPersonales(datos)) }))
+    const creado = await apiRequest('/entrenadores', { method: 'POST', body: JSON.stringify(datosPersonales(datos)) })
+    // correoEnviado: si el backend pudo mandar el enlace para crear la contraseña. Si no viene, no se da por enviado.
+    return { ...desdeApi(creado), correoEnviado: creado.correoEnviado === true }
+  },
+  async reenviarEnlace(id) {
+    return apiRequest(`${ruta(id)}/reenviar-enlace`, { method: 'POST' })
   },
   async editarDatos(id, datos) {
     return desdeApi(await apiRequest(ruta(id), { method: 'PUT', body: JSON.stringify(datosPersonales(datos)) }))
@@ -291,7 +296,27 @@ async function conCategorias(guardado, categorias) {
 
 export async function crear(datos) {
   if (!usarApi) return crearMock(datos)
-  return conCategorias(await api.crearDatos(datos), datos.categorias)
+  const guardado = await api.crearDatos(datos)
+  const conCats = await conCategorias(guardado, datos.categorias)
+  return { ...conCats, correoEnviado: guardado.correoEnviado }
+}
+
+const errorNoDisponible = () => Object.assign(
+  new Error('Esta función necesita el módulo de entrenadores conectado a la API (VITE_API_MODULOS).'),
+  { codigo: 'NO_DISPONIBLE' },
+)
+
+// POST /api/auth/crear-contrasena (pública: sin Authorization y un 401 no cierra la sesión). El entrenador recibe el enlace
+// por correo con ?token=. 204/200 sin cuerpo útil; 400 = enlace inválido o vencido. Sin API no toca la red.
+export async function crearContrasena(token, contrasena) {
+  if (!usarApi) throw errorNoDisponible()
+  await apiRequest('/auth/crear-contrasena', { method: 'POST', publica: true, body: JSON.stringify({ token, contrasena }) })
+}
+
+// POST /api/entrenadores/{id}/reenviar-enlace (solo administrador). Los 4xx (por ejemplo 409) traen su mensaje en `mensaje`.
+export async function reenviarEnlace(id) {
+  if (!usarApi) throw errorNoDisponible()
+  return api.reenviarEnlace(id)
 }
 
 export async function editar(id, datos) {

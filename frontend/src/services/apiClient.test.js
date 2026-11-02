@@ -197,3 +197,35 @@ describe('apiRequest: respuestas binarias', () => {
     expect(await apiRequest('/x')).toEqual({ ok: 1 })
   })
 })
+
+describe('apiRequest: rutas públicas (publica: true)', () => {
+  it('no manda Authorization aunque haya sesión, ni siquiera consulta la sesión', async () => {
+    await apiRequest('/auth/crear-contrasena', { method: 'POST', publica: true, body: JSON.stringify({ token: 't', contrasena: 'x' }) })
+    const [url, opciones] = ultimaLlamada()
+    expect(url).toMatch(/\/api\/auth\/crear-contrasena$/)
+    expect(opciones.headers.Authorization).toBeUndefined()
+    expect(opciones.headers['Content-Type']).toBe('application/json')
+    expect(opciones.publica).toBeUndefined() // no viaja a fetch
+    expect(supabase.auth.getSession).not.toHaveBeenCalled()
+  })
+
+  it('un 401 no cierra la sesión ni llama al manejador; el error conserva su estado y mensaje', async () => {
+    const alNoAutorizado = vi.fn()
+    configurarAlNoAutorizado(alNoAutorizado)
+    fetchSimulado.mockResolvedValue(respuesta(401, { mensaje: 'Token inválido.' }))
+    const error = await apiRequest('/auth/crear-contrasena', { method: 'POST', publica: true }).catch((e) => e)
+    expect(error).toMatchObject({ estado: 401, mensaje: 'Token inválido.' })
+    expect(alNoAutorizado).not.toHaveBeenCalled()
+    expect(supabase.auth.signOut).not.toHaveBeenCalled()
+  })
+
+  it('un 400 llega con su estado; sin publica, el 401 sí cierra la sesión', async () => {
+    fetchSimulado.mockResolvedValue(respuesta(400, { mensaje: 'Enlace inválido.' }))
+    expect(await apiRequest('/x', { publica: true }).catch((e) => e)).toMatchObject({ estado: 400 })
+    const alNoAutorizado = vi.fn()
+    configurarAlNoAutorizado(alNoAutorizado)
+    fetchSimulado.mockResolvedValue(respuesta(401, {}))
+    await apiRequest('/x').catch(() => {})
+    expect(alNoAutorizado).toHaveBeenCalledTimes(1)
+  })
+})

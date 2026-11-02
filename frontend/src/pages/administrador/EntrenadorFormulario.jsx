@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card.jsx'
 import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import FormularioEntrenador from '../../components/entrenadores/FormularioEntrenador.jsx'
 import Mensaje from '../../components/usuarios/Mensaje.jsx'
+import { avisoDeAlta } from '../../utils/avisosEntrenadores.js'
 import { useEntrenadores } from '../../context/EntrenadoresContext.js'
 
 const VOLVER = '/administrador/usuarios/entrenadores' // la lista de entrenadores (antes era /administrador/usuarios)
@@ -22,6 +23,8 @@ export default function EntrenadorFormulario() {
     crear, editar, asignarCategorias, avisar, detectarDuplicado,
   } = useEntrenadores()
   const titulo = useRef(null)
+  const correoEnviado = useRef(null) // resultado del envío del enlace en el alta (true/false); null si no aplica
+  const correoCreado = useRef('')
   const editando = id ? entrenadores.find((e) => String(e.id) === id) : null
   const listo = !id || Boolean(editando)
 
@@ -56,9 +59,19 @@ export default function EntrenadorFormulario() {
     )
   }
 
-  const guardar = (valores) => (editando ? editar(editando.id, valores) : crear(valores))
+  const guardar = async (valores) => {
+    if (editando) return editar(editando.id, valores)
+    const creado = await crear(valores)
+    correoEnviado.current = creado.correoEnviado ?? null
+    correoCreado.current = creado.correo ?? valores.correo.trim()
+    return creado
+  }
   const terminar = () => {
-    avisar(editando ? 'Entrenador actualizado.' : 'Entrenador registrado.')
+    if (editando) avisar('Entrenador actualizado.')
+    else {
+      const { texto, tono } = avisoDeAlta(correoEnviado.current, correoCreado.current)
+      avisar(texto, tono)
+    }
     navigate(VOLVER)
   }
 

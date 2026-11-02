@@ -220,3 +220,13 @@ describe('enmascararCorreo', () => {
     expect(auth.enmascararCorreo('a@x.co')).toBe('a***@x.co')
   })
 })
+
+describe('recuperar contraseña (simulado)', () => {
+  it('resuelve sin red y no revela si la cuenta existe', async () => {
+    const servicio = await import('./authService.js')
+    await expect(servicio.solicitarRecuperacion('tesorero@pradofc.co')).resolves.toBeUndefined()
+    await expect(servicio.solicitarRecuperacion('nadie@pradofc.co')).resolves.toBeUndefined()
+    await expect(servicio.restablecerContrasena('Clave2026x')).resolves.toBeUndefined()
+    expect(await servicio.esperarRecuperacion()).toBe('listo')
+  })
+})

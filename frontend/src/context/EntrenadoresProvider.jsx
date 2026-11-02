@@ -10,7 +10,7 @@ export default function EntrenadoresProvider({ children }) {
   // estado: 'cargando' | 'listo' | 'error' (con el error de la API en `error`)
   const [carga, setCarga] = useState({ estado: 'cargando', error: null })
   const [intento, setIntento] = useState(0)
-  // aviso = { id, texto }; el id cambia en cada aviso para que la pantalla lo detecte aunque el texto se repita
+  // aviso = { id, texto, tono? } (tono: 'success' por defecto | 'warning'); el id cambia en cada aviso para que la pantalla lo detecte aunque el texto se repita
   const [aviso, setAviso] = useState(null)
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function EntrenadoresProvider({ children }) {
       setEntrenadores(lista)
       if (cats) setCategorias(cats)
     }
-    const avisar = (texto) => setAviso({ id: Date.now(), texto })
+    const avisar = (texto, tono = 'success') => setAviso({ id: Date.now(), texto, tono })
     // Ejecuta la operación y recarga las listas, aunque la operación falle (puede haber guardado algo antes de fallar)
     const conRecarga = async (operacion) => {
       try {
@@ -65,6 +65,8 @@ export default function EntrenadoresProvider({ children }) {
       editar: (id, datos) => conRecarga(() => servicio.editarDatos(id, datos)),
       asignarCategorias: (id, nombres, reasignar = false) => conRecarga(() => servicio.asignarCategorias(id, nombres, reasignar)),
       cambiarEstado: (id, activo) => conRecarga(() => servicio.cambiarEstado(id, activo)),
+      // Reenvía el enlace para crear la contraseña (no cambia la lista, no recarga)
+      reenviarEnlace: (id) => servicio.reenviarEnlace(id),
     }
   }, [entrenadores, categorias, carga, aviso])
 
