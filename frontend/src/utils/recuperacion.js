@@ -11,6 +11,8 @@ export const MENSAJE_RESTABLECER_FALLO = 'No pudimos guardar la contraseña. Int
 export const MENSAJE_SIN_RED = 'No pudimos conectar. Intenta de nuevo.'
 export const MENSAJE_RESTABLECER_ENLACE_INVALIDO = 'El enlace no es válido o venció. Pide uno nuevo.'
 export const MENSAJE_CONTRASENA_IGUAL = 'La contraseña nueva debe ser distinta de la anterior.'
+export const MENSAJE_CONTRASENA_CREADA = 'Tu contraseña se creó. Inicia sesión para entrar a FutData.'
+export const MENSAJE_ENLACE_VENCIDO = 'El enlace venció o ya se usó. Pide uno nuevo desde "Olvidé mi contraseña".'
 export const MENSAJE_CONTRASENA_ACTUALIZADA = 'Tu contraseña se actualizó. Inicia sesión con la nueva.'
 
 // Segundos con el botón "Enviar enlace" deshabilitado tras cada envío (Supabase deja un envío por minuto por usuario).
@@ -66,20 +68,30 @@ export const urlTraeError = (url) => {
   return p.has('error') || p.has('error_code') || p.has('error_description')
 }
 export const urlEsDeRecuperacion = (url) => parametros(url).get('type') === 'recovery'
+// Enlace de invitación (POST /api/usuarios): Supabase manda type=invite. Se trata como la recuperación: la sesión que trae es
+// solo para crear la contraseña, no es un ingreso.
+export const urlEsDeInvitacion = (url) => parametros(url).get('type') === 'invite'
+// Cualquier enlace del correo que termina en /restablecer: recuperación o invitación.
+export const urlEsDeEnlaceDeCorreo = (url) => urlEsDeRecuperacion(url) || urlEsDeInvitacion(url)
+// Enlace vencido o ya usado: Supabase deja error_code=otp_expired o error=access_denied en la URL.
+export const urlEsDeEnlaceVencido = (url) => {
+  const p = parametros(url)
+  return p.get('error_code') === 'otp_expired' || p.get('error') === 'access_denied'
+}
 
 // 'verificando' | 'listo' | 'invalido'. Solo hay sesión de recuperación si la URL trae type=recovery o llegó el evento
 // PASSWORD_RECOVERY (flujo con code): una sesión normal de Supabase NO basta para cambiar la contraseña desde /restablecer.
 // `agotado`: se acabó la espera y no se resolvió -> inválido.
 export function decidirRecuperacion({ url, evento = null, haySesion, agotado = false }) {
   if (urlTraeError(url)) return 'invalido'
-  if (haySesion && (evento === 'PASSWORD_RECOVERY' || urlEsDeRecuperacion(url))) return 'listo'
+  if (haySesion && (evento === 'PASSWORD_RECOVERY' || urlEsDeEnlaceDeCorreo(url))) return 'listo'
   return agotado ? 'invalido' : 'verificando'
 }
 
 // ¿Esta carga de la página es de una recuperación? Si sí, la sesión de Supabase NO se restaura como sesión de la app
 // (no se pide el código 2FA ni se redirige al panel): el usuario cambia la contraseña y vuelve a entrar con Login + 2FA.
 export const esRecuperacionEnCurso = ({ pathname, url, marcada = false }) => (
-  marcada || pathname === '/restablecer' || urlEsDeRecuperacion(url)
+  marcada || pathname === '/restablecer' || urlEsDeEnlaceDeCorreo(url)
 )
 
 // Guarda la contraseña nueva. Devuelve { tipo: 'errores', errores } | { tipo: 'listo' } | { tipo: 'fallo', texto, enlaceInvalido }.

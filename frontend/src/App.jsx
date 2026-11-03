@@ -18,6 +18,9 @@ import EntrenadoresProvider from './context/EntrenadoresProvider.jsx'
 import { useRole } from './context/RoleContext.js'
 import EsperaSesion from './components/EsperaSesion.jsx'
 import { roles, menus, getItems } from './config/menus.js'
+import LlevarEnlaceDeCorreo from './components/auth/LlevarEnlaceDeCorreo.jsx'
+import { urlInicial } from './services/urlInicial.js'
+import { urlEsDeEnlaceDeCorreo, urlEsDeEnlaceVencido } from './utils/recuperacion.js'
 
 // Cualquier ruta desconocida va al inicio del rol activo.
 function RedirectToRole() {
@@ -31,6 +34,9 @@ function Inicio() {
   if (!restaurada) return <EsperaSesion />
   return <Navigate to={estado === 'verificada' ? `/${usuario.rol}` : '/login'} replace />
 }
+
+// Enlace del correo de Supabase (invitación o recuperación, también vencido o usado): se lleva a /restablecer UNA vez, al cargar.
+const ENLACE_DE_CORREO = urlEsDeEnlaceDeCorreo(urlInicial) || urlEsDeEnlaceVencido(urlInicial)
 
 function App() {
   return (
@@ -68,6 +74,7 @@ function App() {
               </Route>
               <Route path="*" element={<RedirectToRole />} />
             </Routes>
+            <LlevarEnlaceDeCorreo activo={ENLACE_DE_CORREO} />
           </RoleProvider>
         </AuthProvider>
       </AccesibilidadProvider>

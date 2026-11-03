@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import Page from '../../components/ui/Page.jsx'
 import FormularioUsuario from '../../components/usuarios/FormularioUsuario.jsx'
 import { useActor } from '../../context/useActor.js'
-import { crearUsuario } from '../../services/usuariosService.js'
+import { crearUsuario, usuariosPorApi } from '../../services/usuariosService.js'
 
 const VOLVER = '/administrador/usuarios'
 
-// Nuevo usuario (HU-004). PENDIENTE: no se envía invitación (Supabase Auth + correo de n8n), así que el aviso no lo afirma.
+// Nuevo usuario (HU-004). Con la API real, el backend crea la cuenta en Supabase Auth e invita por correo: el aviso lo afirma solo
+// cuando la API respondió 201 (crearUsuario no resuelve antes). En modo ejemplo NO se envía invitación y el aviso no lo afirma.
 export default function UsuarioNuevo() {
   const actor = useActor()
   const navigate = useNavigate()
@@ -19,7 +20,11 @@ export default function UsuarioNuevo() {
 
   async function guardar(valores) {
     const { usuario } = await crearUsuario(valores, actor)
-    navigate(VOLVER, { state: { aviso: `Usuario ${usuario.nombre} ${usuario.apellido} creado. Todavía no se envía ninguna invitación por correo.` } })
+    const nombre = `${usuario.nombre} ${usuario.apellido}`
+    const aviso = usuariosPorApi()
+      ? `Usuario ${nombre} creado. Se envió una invitación a ${usuario.correo}.`
+      : `Usuario ${nombre} creado. Todavía no se envía ninguna invitación por correo.`
+    navigate(VOLVER, { state: { aviso } })
   }
 
   return (

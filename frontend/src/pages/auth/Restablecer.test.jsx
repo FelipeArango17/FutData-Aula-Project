@@ -30,3 +30,22 @@ describe('/restablecer (render)', () => {
     expect(html).not.toMatch(/<button[^>]*disabled/)
   })
 })
+
+describe('/restablecer en modo invitación (render)', () => {
+  const invitada = (fase, extra = {}) => dibujar(<VistaRestablecer fase={fase} invitacion restablecer={async () => {}} onListo={() => {}} {...extra} />)
+  it('"Crea tu contraseña", texto de ayuda y botón "Crear contraseña" con los mismos campos', () => {
+    const html = invitada('listo')
+    expect(html).toContain('Crea tu contraseña')
+    expect(html).toContain('Te invitaron a FutData')
+    expect(html).toContain('Crear contraseña</button>')
+    expect(html.match(/type="password"/g)).toHaveLength(2)
+    expect(html).not.toContain('Guardar contraseña')
+  })
+  it('enlace vencido o usado: mensaje claro y salida "Olvidé mi contraseña"', () => {
+    const html = invitada('invalido', { vencido: true })
+    expect(html).toContain('El enlace venció o ya se usó.')
+    expect(html).toContain('Olvidé mi contraseña')
+    expect(html).toContain('href="/recuperar"')
+    expect(html).not.toContain('<form')
+  })
+})

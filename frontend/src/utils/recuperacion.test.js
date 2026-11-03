@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MENSAJE_CONTRASENA_IGUAL, MENSAJE_LIMITE, MENSAJE_RECUPERACION_ENVIADA, MENSAJE_RECUPERACION_FALLO, MENSAJE_RESTABLECER_ENLACE_INVALIDO,
   MENSAJE_RESTABLECER_FALLO, MENSAJE_SIN_RED, codigoDeErrorSupabase, decidirRecuperacion, enviarRestablecer, esRecuperacionEnCurso,
-  solicitarEnlace, urlEsDeRecuperacion, urlTraeError, validarCorreoRecuperacion,
+  solicitarEnlace, urlEsDeEnlaceDeCorreo, urlEsDeEnlaceVencido, urlEsDeInvitacion, urlEsDeRecuperacion, urlTraeError, validarCorreoRecuperacion,
 } from './recuperacion.js'
 import { MENSAJES } from './validaciones.js'
 
@@ -131,5 +131,34 @@ describe('enviarRestablecer', () => {
     expect(await con('LIMITE')).toMatchObject({ texto: MENSAJE_LIMITE, enlaceInvalido: false })
     expect(await con('RED')).toMatchObject({ texto: MENSAJE_SIN_RED })
     expect(await con('DESCONOCIDO')).toMatchObject({ texto: MENSAJE_RESTABLECER_FALLO })
+  })
+})
+
+describe('enlace de invitación (type=invite)', () => {
+  it('lo reconoce en el hash, no en recuperación ni sin type', () => {
+    expect(urlEsDeInvitacion({ hash: '#access_token=a&refresh_token=b&type=invite' })).toBe(true)
+    expect(urlEsDeInvitacion({ hash: '#access_token=a&type=recovery' })).toBe(false)
+    expect(urlEsDeInvitacion({ hash: '#access_token=a' })).toBe(false)
+    expect(urlEsDeInvitacion({})).toBe(false)
+  })
+  it('también lo reconoce en la query (hash y query se unen)', () => {
+    expect(urlEsDeInvitacion({ search: '?type=invite' })).toBe(true)
+    expect(urlEsDeInvitacion({ search: '?type=invite', hash: '#type=recovery' })).toBe(false)
+  })
+  it('urlEsDeEnlaceDeCorreo cubre invitación y recuperación', () => {
+    expect(urlEsDeEnlaceDeCorreo({ hash: '#type=invite' })).toBe(true)
+    expect(urlEsDeEnlaceDeCorreo({ hash: '#type=recovery' })).toBe(true)
+    expect(urlEsDeEnlaceDeCorreo({ hash: '#type=signup' })).toBe(false)
+  })
+  it('usa la misma marca que la recuperación: sesión lista y no se restaura como ingreso', () => {
+    const invitacion = { hash: '#access_token=a&type=invite' }
+    expect(decidirRecuperacion({ url: invitacion, haySesion: true })).toBe('listo')
+    expect(esRecuperacionEnCurso({ pathname: '/', url: invitacion })).toBe(true)
+  })
+  it('enlace vencido o usado (otp_expired / access_denied)', () => {
+    expect(urlEsDeEnlaceVencido({ hash: '#error=access_denied&error_code=otp_expired&error_description=x' })).toBe(true)
+    expect(urlEsDeEnlaceVencido({ hash: '#error=access_denied' })).toBe(true)
+    expect(urlEsDeEnlaceVencido({ hash: '#type=invite' })).toBe(false)
+    expect(decidirRecuperacion({ url: { hash: '#error_code=otp_expired&type=invite' }, haySesion: true })).toBe('invalido')
   })
 })
