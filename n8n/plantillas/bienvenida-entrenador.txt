@@ -1,0 +1,17 @@
+Hola, {{nombre}}:
+
+El administrador de la Asociación Deportiva Prado Fútbol Club te registró
+como entrenador en FutData. Para entrar, primero crea tu contraseña en
+este enlace:
+
+    {{enlace}}
+
+Este enlace vence en {{vigencia}}; si venció, pide al administrador que te lo reenvíe.
+
+¿No esperabas este correo? Ignóralo; nadie podrá entrar a la cuenta sin
+crear la contraseña con este enlace.
+El enlace es personal y sirve una sola vez: no lo reenvíes.
+
+--
+Asociación Deportiva Prado Fútbol Club · FutData
+Este es un correo automático, por favor no lo respondas.

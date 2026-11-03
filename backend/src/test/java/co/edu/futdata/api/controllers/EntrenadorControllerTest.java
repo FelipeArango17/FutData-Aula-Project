@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -23,10 +24,14 @@ import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorResponseDTO;
+import co.edu.futdata.datasource.external.AuthNoDisponibleException;
+import co.edu.futdata.datasource.external.AuthPeticionInvalidaException;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
+import co.edu.futdata.services.facade.DemasiadasSolicitudesException;
 import co.edu.futdata.services.facade.IEntrenadorService;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -253,6 +258,85 @@ class EntrenadorControllerTest {
                 .andExpect(jsonPath("$.categorias").isEmpty());
 
         verify(servicio).cambiarEstado(ID, new CambiarEstadoEntrenadorRequestDTO(false));
+    }
+
+    // ---- Alta con enlace y reenvío (regla 9) ----
+
+    @Test
+    void elAltaDevuelveCorreoEnviadoYLasDemasRespuestasNo() throws Exception {
+        EntrenadorResponseDTO l = luis(List.of());
+        when(servicio.crear(any())).thenReturn(new EntrenadorResponseDTO(l.id(), l.nombre(), l.apellido(), l.tipoDocumento(),
+                l.documento(), l.fechaNacimiento(), l.telefono(), l.correo(), l.especialidad(), l.categorias(),
+                l.horarioTrabajo(), l.direccion(), true, false));
+        when(servicio.consultar(ID)).thenReturn(l);
+
+        mvc.perform(post("/api/entrenadores").contentType(MediaType.APPLICATION_JSON).content(CUERPO))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.correoEnviado").value(false));
+        mvc.perform(get("/api/entrenadores/" + ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correoEnviado").doesNotExist());
+    }
+
+    @Test
+    void reenviarEnlaceResponde204SinCuerpo() throws Exception {
+        mvc.perform(post("/api/entrenadores/" + ID + "/reenviar-enlace"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+        verify(servicio).reenviarEnlace(ID);
+    }
+
+    @Test
+    void reenviarEnlaceDentroDelMinutoResponde429ConRetryAfter() throws Exception {
+        doThrow(new DemasiadasSolicitudesException("Espera un momento.", Duration.ofMillis(40_300)))
+                .when(servicio).reenviarEnlace(ID);
+
+        error(mvc.perform(post("/api/entrenadores/" + ID + "/reenviar-enlace")), 429, "Too Many Requests",
+                "/api/entrenadores/" + ID + "/reenviar-enlace")
+                .andExpect(header().string("Retry-After", "41"))
+                .andExpect(jsonPath("$.mensaje").value("Espera un momento."))
+                .andExpect(jsonPath("$.codigo").value("DEMASIADAS_SOLICITUDES"))
+                .andExpect(jsonPath("$.msRestantes").value(40_300));
+    }
+
+    @Test
+    void reenviarEnlaceConElCorreoDeOtraCuentaResponde409() throws Exception {
+        doThrow(new ConflictoException("Ese correo ya pertenece a otra cuenta", List.of("correo")))
+                .when(servicio).reenviarEnlace(ID);
+
+        error(mvc.perform(post("/api/entrenadores/" + ID + "/reenviar-enlace")), 409, "Conflict",
+                "/api/entrenadores/" + ID + "/reenviar-enlace")
+                .andExpect(jsonPath("$.mensaje").value("Ese correo ya pertenece a otra cuenta"))
+                .andExpect(jsonPath("$.campos").value(contains("correo")));
+    }
+
+    @Test
+    void conSupabaseAuthCaidoResponde503ConMensajeGenerico() throws Exception {
+        doThrow(new AuthNoDisponibleException("Supabase Auth respondió 500 al generar el enlace", 500))
+                .when(servicio).reenviarEnlace(ID);
+
+        error(mvc.perform(post("/api/entrenadores/" + ID + "/reenviar-enlace")), 503, "Service Unavailable",
+                "/api/entrenadores/" + ID + "/reenviar-enlace")
+                .andExpect(jsonPath("$.mensaje").value("El servicio de cuentas no está disponible. Intenta de nuevo más tarde."));
+    }
+
+    @Test
+    void unErrorDeContratoDeAuthAlDesactivarEs500() throws Exception {
+        doThrow(new AuthPeticionInvalidaException("bloquear el acceso", 422)).when(servicio).cambiarEstado(eq(ID), any());
+
+        error(mvc.perform(patch("/api/entrenadores/" + ID + "/estado").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activo\": false}")), 500, "Internal Server Error", "/api/entrenadores/" + ID + "/estado")
+                .andExpect(jsonPath("$.mensaje").value("Ocurrió un error interno. Intenta de nuevo más tarde."));
+    }
+
+    @Test
+    void reactivarConLaCuentaInexistenteEnAuthEs409() throws Exception {
+        String mensaje = "La cuenta de acceso de este entrenador no existe en Supabase Auth; revisa la configuración";
+        doThrow(new ConflictoException(mensaje, List.of("activo"))).when(servicio).cambiarEstado(eq(ID), any());
+
+        error(mvc.perform(patch("/api/entrenadores/" + ID + "/estado").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"activo\": true}")), 409, "Conflict", "/api/entrenadores/" + ID + "/estado")
+                .andExpect(jsonPath("$.mensaje").value(mensaje));
     }
 
     @Test

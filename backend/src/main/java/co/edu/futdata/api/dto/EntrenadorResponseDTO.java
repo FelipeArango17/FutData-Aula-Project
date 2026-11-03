@@ -1,5 +1,6 @@
 package co.edu.futdata.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.util.List;
@@ -25,5 +26,16 @@ public record EntrenadorResponseDTO(
         @Schema(example = "[\"Semillero\", \"Sub-12\"]") List<String> categorias,
         @Schema(example = "Lunes a viernes, 3:30 p. m. a 7:30 p. m.") String horarioTrabajo,
         @Schema(example = "Calle 40 Sur 75b-81") String direccion,
-        @Schema(example = "true") boolean activo) {
+        @Schema(example = "true") boolean activo,
+        @Schema(example = "true", description = "Solo en la respuesta del alta: si salió el correo con el enlace para "
+                + "crear la contraseña. false = el entrenador quedó registrado; usar \"Reenviar enlace\"")
+        @JsonInclude(JsonInclude.Include.NON_NULL) Boolean correoEnviado) {
+
+    /** Sin {@code correoEnviado}: todas las respuestas menos la del alta. */
+    public EntrenadorResponseDTO(UUID id, String nombre, String apellido, String tipoDocumento, String documento,
+                                 LocalDate fechaNacimiento, String telefono, String correo, String especialidad,
+                                 List<String> categorias, String horarioTrabajo, String direccion, boolean activo) {
+        this(id, nombre, apellido, tipoDocumento, documento, fechaNacimiento, telefono, correo, especialidad, categorias,
+                horarioTrabajo, direccion, activo, null);
+    }
 }

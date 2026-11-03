@@ -22,6 +22,18 @@ public interface INotificador {
     String CAMBIO_ENTRENAMIENTO = "CAMBIO_ENTRENAMIENTO";
 
     /**
+     * Enlace para crear la contraseña (alta de entrenador y su reenvío; regla 9). Respuesta <b>síncrona</b>, a
+     * diferencia de los otros dos: n8n responde después de entregar el correo al SMTP, {@code 200} si salió y
+     * {@code 502} si no. No usa el {@code 202}. Por eso tiene su propio tiempo de espera
+     * ({@code futdata.n8n.timeout-enlace}, 15 s).
+     *
+     * <p>Datos: {@code plantilla} (hoy solo {@code BIENVENIDA_ENTRENADOR}), {@code correo}, {@code nombre},
+     * {@code enlace} y {@code vigenciaHoras}. El {@code enlace} es secreto: no se registra en logs ni en el registro
+     * de fallas de n8n.
+     */
+    String ENLACE_CONTRASENA = "ENLACE_CONTRASENA";
+
+    /**
      * Pide el envío de una notificación. Retorna normalmente si n8n la aceptó ({@code 200} o {@code 202}).
      * No reintenta.
      *

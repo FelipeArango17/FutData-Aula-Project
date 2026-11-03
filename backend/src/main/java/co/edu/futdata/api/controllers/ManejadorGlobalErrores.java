@@ -5,6 +5,10 @@ import co.edu.futdata.datasource.external.AlmacenamientoException;
 import co.edu.futdata.datasource.external.ArchivoInvalidoException;
 import co.edu.futdata.datasource.external.ArchivoNoEncontradoException;
 import co.edu.futdata.datasource.external.ArchivoYaExisteException;
+import co.edu.futdata.datasource.external.AuthException;
+import co.edu.futdata.datasource.external.AuthNoDisponibleException;
+import co.edu.futdata.datasource.external.AuthPeticionInvalidaException;
+import co.edu.futdata.datasource.external.CuentaAuthNoEncontradaException;
 import co.edu.futdata.datasource.external.NotificacionException;
 import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
 import co.edu.futdata.datasource.external.WompiNoDisponibleException;
@@ -12,6 +16,10 @@ import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
+import co.edu.futdata.services.facade.CrearContrasenaNoDisponibleException;
+import co.edu.futdata.services.facade.DemasiadasSolicitudesException;
+import co.edu.futdata.services.facade.EnlaceInvalidoException;
+import co.edu.futdata.services.facade.PoliticaContrasenaException;
 import co.edu.futdata.services.facade.FirmaWebhookInvalidaException;
 import co.edu.futdata.services.facade.PagosNoConfiguradosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
@@ -29,6 +37,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -82,6 +91,8 @@ public class ManejadorGlobalErrores {
     static final String CHOCA_CON_DATOS =
             "La operación no se puede completar porque choca con otros datos registrados.";
     static final String ERROR_INTERNO = "Ocurrió un error interno. Intenta de nuevo más tarde.";
+
+    static final String AUTH_NO_DISPONIBLE = "El servicio de cuentas no está disponible. Intenta de nuevo más tarde.";
     /** Solo el nombre de la restricción: el detalle de PostgreSQL trae los valores. */
     private static final Pattern RESTRICCION = Pattern.compile("constraint \"([^\"]+)\"");
 
@@ -212,6 +223,56 @@ public class ManejadorGlobalErrores {
                 yield responder(HttpStatus.SERVICE_UNAVAILABLE, ALMACENAMIENTO_NO_DISPONIBLE, peticion);
             }
         };
+    }
+
+    /** Enlace de crear contraseña inválido, vencido o usado: 400 con mensaje genérico y SIN campos. */
+    @ExceptionHandler(EnlaceInvalidoException.class)
+    public ResponseEntity<ErrorResponseDTO> enlaceInvalido(EnlaceInvalidoException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, EnlaceInvalidoException.MENSAJE, peticion);
+    }
+
+    /** Contraseña fuera de la política: 400 con el mensaje de la política tal cual y campos ["contrasena"]. */
+    @ExceptionHandler(PoliticaContrasenaException.class)
+    public ResponseEntity<ErrorResponseDTO> politicaContrasena(PoliticaContrasenaException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.BAD_REQUEST, e.getMessage(), e.getCampos(), peticion);
+    }
+
+    @ExceptionHandler(CrearContrasenaNoDisponibleException.class)
+    public ResponseEntity<ErrorResponseDTO> crearContrasenaNoDisponible(CrearContrasenaNoDisponibleException e,
+                                                                        HttpServletRequest peticion) {
+        return responder(HttpStatus.SERVICE_UNAVAILABLE, CrearContrasenaNoDisponibleException.MENSAJE, peticion);
+    }
+
+    /** Límite de frecuencia: 429 con Retry-After (segundos) y msRestantes. */
+    @ExceptionHandler(DemasiadasSolicitudesException.class)
+    public ResponseEntity<ErrorResponseDTO> demasiadasSolicitudes(DemasiadasSolicitudesException e, HttpServletRequest peticion) {
+        ResponseEntity<ErrorResponseDTO> base = responder(HttpStatus.TOO_MANY_REQUESTS, e.getMessage(), List.of(),
+                DemasiadasSolicitudesException.CODIGO, e.getEspera().toMillis(), peticion);
+        return ResponseEntity.status(base.getStatusCode())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.segundosParaReintentar()))
+                .body(base.getBody());
+    }
+
+    /**
+     * Supabase Auth no respondió bien (cuentas de acceso). El mensaje de la excepción no trae tokens ni enlaces, pero
+     * tampoco se muestra: al usuario le llega uno genérico.
+     */
+    @ExceptionHandler(AuthNoDisponibleException.class)
+    public ResponseEntity<ErrorResponseDTO> authNoDisponible(AuthNoDisponibleException e, HttpServletRequest peticion) {
+        log.error("Supabase Auth falló en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(), e.getMessage());
+        return responder(HttpStatus.SERVICE_UNAVAILABLE, AUTH_NO_DISPONIBLE, peticion);
+    }
+
+    /**
+     * Supabase Auth rechazó la petición por su forma (400 o 422), o no encontró una cuenta que la base sí tiene (404,
+     * fuera del caso que ya maneja el servicio de entrenadores). No son fallas de disponibilidad: 500 con el motivo en
+     * el log (el mensaje no trae tokens, llaves ni cuerpos).
+     */
+    @ExceptionHandler({AuthPeticionInvalidaException.class, CuentaAuthNoEncontradaException.class})
+    public ResponseEntity<ErrorResponseDTO> authInconsistente(AuthException e, HttpServletRequest peticion) {
+        log.error("Supabase Auth en {} {}: {} ({})", peticion.getMethod(), peticion.getRequestURI(), e.getMessage(),
+                e.getClass().getSimpleName());
+        return responder(HttpStatus.INTERNAL_SERVER_ERROR, ERROR_INTERNO, peticion);
     }
 
     @ExceptionHandler(NotificacionException.class)

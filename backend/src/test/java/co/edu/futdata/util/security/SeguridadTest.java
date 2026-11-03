@@ -23,6 +23,7 @@ import co.edu.futdata.services.facade.IEntrenadorService;
 import co.edu.futdata.services.facade.IPagoService;
 import co.edu.futdata.services.facade.IPagoWompiService;
 import co.edu.futdata.services.facade.FirmaWebhookInvalidaException;
+import co.edu.futdata.services.facade.IContrasenaService;
 import co.edu.futdata.services.facade.IFranjaHorarioService;
 import co.edu.futdata.api.dto.FranjaHorarioResponseDTO;
 import co.edu.futdata.services.facade.IUsuarioService;
@@ -104,6 +105,9 @@ class SeguridadTest {
 
     @MockitoBean
     private IFranjaHorarioService franjas;
+
+    @MockitoBean
+    private IContrasenaService contrasenas;
 
     @BeforeEach
     void prepararTokens() {
@@ -374,6 +378,27 @@ class SeguridadTest {
     @Test
     void unaRutaQueNoExisteTambienExigeSesion() throws Exception {
         error(mvc.perform(get("/api/no-existe")), 401, RespuestasSeguridad.SIN_SESION, "/api/no-existe");
+    }
+
+    @Test
+    void crearLaContrasenaEsPublicaSinTokenNiSesionYLasDemasSiguenProtegidas() throws Exception {
+        // Sin Authorization ni sesión verificada: la seguridad la deja pasar y llega al controlador
+        mvc.perform(post(RutasSin2FA.CREAR_CONTRASENA).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\": \"t\", \"contrasena\": \"Inventada2026\"}"))
+                .andExpect(status().isOk());
+        verify(contrasenas).crearContrasena(any(), any(), any());
+        verify(decoder, never()).decode(any());
+        verify(sesiones, never()).estaVerificada(any(), any(), any());
+
+        // Solo POST a esa ruta: otro método no queda abierto
+        error(mvc.perform(get(RutasSin2FA.CREAR_CONTRASENA)), 401, RespuestasSeguridad.SIN_SESION, RutasSin2FA.CREAR_CONTRASENA);
+        // Las vecinas de /api/auth y el resto siguen exigiendo sesión
+        error(mvc.perform(post("/api/auth/2fa/codigo")), 401, RespuestasSeguridad.SIN_SESION, "/api/auth/2fa/codigo");
+        error(mvc.perform(post("/api/auth/logout")), 401, RespuestasSeguridad.SIN_SESION, "/api/auth/logout");
+        error(mvc.perform(post("/api/auth/crear-contrasena/otra")), 401, RespuestasSeguridad.SIN_SESION,
+                "/api/auth/crear-contrasena/otra");
+        String reenvio = "/api/entrenadores/" + UUID.randomUUID() + "/reenviar-enlace";
+        error(mvc.perform(post(reenvio)), 401, RespuestasSeguridad.SIN_SESION, reenvio);
     }
 
     @Test

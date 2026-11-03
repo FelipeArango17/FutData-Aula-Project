@@ -62,6 +62,8 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `CORS_ORIGINS` | Orígenes del frontend permitidos, separados por coma | `http://localhost:5173` | Obligatoria |
 | `N8N_BASE_URL` | URL de n8n, sin barra final ([Notificaciones](#notificaciones-n8n)) | `http://localhost:5678` | Obligatoria |
 | `N8N_WEBHOOK_TOKEN` | Secreto compartido con n8n (cabecera `X-FutData-Token`) | vacío: la app arranca, pero no envía notificaciones | Obligatoria |
+| `N8N_TIMEOUT_ENLACE` | Tiempo de espera solo para `ENLACE_CONTRASENA`, que es síncrono (los demás eventos usan 5 s) | `15s` | Igual |
+| `FRONTEND_URL` | URL pública del frontend, sin barra final. Arma el enlace del correo: `{FRONTEND_URL}/crear-contrasena?token=...` ([Cuenta de acceso](#cuenta-de-acceso-y-enlace-para-crear-la-contraseña-bloque-5)) | `http://localhost:5173` | Obligatoria (la URL de Vercel) |
 | `SUPABASE_URL` | URL del proyecto de Supabase: [Storage](#almacenamiento-de-comprobantes-supabase-storage) y las llaves públicas para validar los JWT ([Seguridad](#seguridad)) | vacía: la app arranca, pero no guarda comprobantes y rechaza todo token (`401`) | Obligatoria |
 | `SUPABASE_SERVICE_ROLE_KEY` | Llave `service_role` para Storage. **Secreta, solo backend** | vacía: la app arranca, pero no guarda comprobantes | Obligatoria |
 | `SUPABASE_BUCKET_COMPROBANTES`, `SUPABASE_VIGENCIA_URL_FIRMADA` | Bucket de comprobantes y vigencia de las URL firmadas | `comprobantes`, `5m` | Igual |
@@ -351,7 +353,7 @@ Todos los errores de validación salen juntos en un solo `400`, con `campos`.
 - En un `PUT`, la franja no choca consigo misma.
 - **Categorías distintas sí pueden coincidir** en día, hora y sede, y las franjas "por turnos" (`idEntrenador` null) nunca chocan entre sí.
 
-Pendiente (bloque 5): al desactivar un entrenador, sus franjas se conservan con él (salen con `entrenadorActivo: false`); qué hacer con ellas se decide con el alta de entrenadores.
+Al desactivar un entrenador, sus franjas se conservan con él y salen con `entrenadorActivo: false` (decidido en el bloque 5): el administrador decide si las reasigna.
 
 ## Usuarios y roles (HU-004)
 
@@ -368,6 +370,8 @@ La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`
 | `POST /api/usuarios/{id}/restablecer` | Restablece el acceso | `200`, `404`, `409` |
 
 El cuerpo de creación contiene `nombre`, `apellido`, `correo` y `rol`. Los errores de validación y conflictos incluyen `campos`; un correo existente responde `409` con `campos: ["correo"]`. La API no permite dejar el sistema sin un administrador activo.
+
+> **Corregido (bloque 5): revocar y restablecer estaban rotos.** `ISupabaseAuthAdmin.cambiarAcceso` llamaba a Supabase Auth con `PATCH /auth/v1/admin/users/{id}`, pero esa ruta solo acepta `GET`, `PUT` y `DELETE`: toda llamada fallaba y `POST /api/usuarios/{id}/revocar` y `/restablecer` nunca bloquearon ni restauraron una cuenta. Ahora usa `PUT` con `{"ban_duration": "876000h"}` (bloquear) o `{"ban_duration": "none"}` (restaurar), y traduce las respuestas: `404` → `CuentaAuthNoEncontradaException`; `401`, `403`, `429`, `5xx` y tiempo agotado → `AuthNoDisponibleException` (`503`, con el código HTTP en el log); `400` y `422` → `AuthPeticionInvalidaException` (`500`, error de contrato). Lo prueba `SupabaseAuthAdminAccesoTest` (servidor simulado) y la prueba manual `SupabaseAuthEnlaceContraSupabaseTest` (bloquear, comprobar que no puede entrar, restaurar).
 
 > **Supabase:** la migración `002_modelo_datos.sql` añade `public.usuario.apellido` para conservar nombres y apellidos por separado. Ejecútala antes de usar `POST /api/usuarios` sobre una base existente y confirma que `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` estén configuradas.
 
@@ -406,10 +410,11 @@ API para registrar, consultar, editar, activar y desactivar entrenadores, y para
 | :--- | :--- | :--- |
 | `GET /api/entrenadores` | Lista ordenada por apellido y nombre, con sus categorías | `200` |
 | `GET /api/entrenadores/{id}` | Un entrenador | `200`, `400` (el id no es UUID), `404` |
-| `POST /api/entrenadores` | Registra los datos personales (sin categorías) | `201` con `Location: /api/entrenadores/{id}`, `400`, `409` |
-| `PUT /api/entrenadores/{id}` | Edita los datos personales; **no** cambia las categorías | `200`, `400`, `404`, `409` |
+| `POST /api/entrenadores` | Registra los datos personales (sin categorías) y su cuenta de acceso, y envía el enlace para crear la contraseña ([bloque 5](#cuenta-de-acceso-y-enlace-para-crear-la-contraseña-bloque-5)) | `201` con `Location` y `correoEnviado`, `400`, `409`, `503` |
+| `POST /api/entrenadores/{id}/reenviar-enlace` | Reenvía el enlace (crea la cuenta si no la tiene). Uno por minuto | `204`, `404`, `409`, `429`, `503` |
+| `PUT /api/entrenadores/{id}` | Edita los datos personales; **no** cambia las categorías. Con cuenta, el correo no se puede cambiar | `200`, `400`, `404`, `409` |
 | `PUT /api/entrenadores/{id}/categorias` | Deja al entrenador con exactamente esas categorías | `200`, `400`, `404`, `409` |
-| `PATCH /api/entrenadores/{id}/estado` | Activa o desactiva (`{"activo": false}`). Desactivar deja sin entrenador sus categorías | `200`, `400`, `404` |
+| `PATCH /api/entrenadores/{id}/estado` | Activa o desactiva (`{"activo": false}`). Desactivar deja sin entrenador sus categorías y, si tiene cuenta, le impide entrar | `200`, `400`, `404`, `503` |
 | `GET /api/categorias` | Las categorías en el orden oficial, cada una con su entrenador (o `null`) | `200` |
 
 ### Forma de datos
@@ -573,7 +578,7 @@ Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
 6. **Activo e inactivo:** cada entrenador llega con `activo`. Para desactivar o reactivar: `PATCH /api/entrenadores/{id}/estado` con `{"activo": false}` o `true`. Conviene mostrar los inactivos aparte (o con una etiqueta) y no ofrecerles categorías: asignárselas responde `409` con `campos: ["activo"]`.
 7. **Categorías sin entrenador:** en `GET /api/categorias`, `entrenador` puede ser `null`.
 8. **`campos` en los errores:** los `400` del servicio y los `409` traen `campos`, la lista de campos con error o en conflicto. Con ella se marca el formulario: el duplicado que hoy es `error.duplicado.campo` pasa a ser `error.response.data.campos[0]`, y el mensaje para mostrar sigue en `mensaje`. El formulario usa sus propios textos para los duplicados (`textoDuplicado`), así que puede seguir con ellos.
-9. **Sesión en todas las llamadas:** todo endpoint (salvo `GET /api/health`) exige `Authorization: Bearer <access_token de Supabase>`. Conviene un interceptor de Axios que lo agregue desde `supabase.auth.getSession()`, y `withCredentials: true` para la cookie de "Recordar este equipo". Un `401` significa sesión vencida (volver al inicio de sesión); un `403`, que el rol no alcanza. Ver [Seguridad](#seguridad).
+9. **Sesión en todas las llamadas:** todo endpoint (salvo `GET /api/health` y `POST /api/auth/crear-contrasena`) exige `Authorization: Bearer <access_token de Supabase>`. Conviene un interceptor de Axios que lo agregue desde `supabase.auth.getSession()`, y `withCredentials: true` para la cookie de "Recordar este equipo". Un `401` significa sesión vencida (volver al inicio de sesión); un `403`, que el rol no alcanza. Ver [Seguridad](#seguridad).
 10. **2FA sin correo en el cuerpo:** `POST /api/auth/2fa/codigo` y `/reenviar` van **sin cuerpo**, y `POST /api/auth/2fa/verificar` lleva solo `{"codigo": "012345"}`. Las tres con el token del primer paso.
 
 ### Pendientes / diferencias con el frontend y el esquema
@@ -583,8 +588,48 @@ Para cambiar `entrenadoresService.js` por la API (Axios), sin tocar el backend:
 - **Entrenamientos de un entrenador desactivado:** cuando exista el módulo de entrenamientos (HU-026), hay que decidir qué pasa con sus entrenamientos `PROGRAMADO` futuros. Está marcado con `// TODO HU-026` en `EntrenadorServiceImpl.cambiarEstado`.
 - **Ids UUID** en la base y la API, **números** en el frontend (punto 3).
 - **`tipoDocumento` va por código** (punto 4). La tabla permite `TI`, pero la API la rechaza para entrenadores: todos son mayores de edad.
-- `documentos` (carpeta de documentos) e `id_usuario` (cuenta de acceso, CU-06) no los maneja esta historia.
-- Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre) y crear la cuenta del entrenador (CU-06).
+- `documentos` (carpeta de documentos) no lo maneja esta historia. `id_usuario` (cuenta de acceso) lo maneja el bloque 5: ver [Cuenta de acceso](#cuenta-de-acceso-y-enlace-para-crear-la-contraseña-bloque-5).
+- Fuera del alcance: validar cruces de `horario_trabajo` (es texto libre).
+
+## Cuenta de acceso y enlace para crear la contraseña (bloque 5)
+
+Regla 9: el entrenador no recibe una contraseña temporal; recibe un enlace para crear la suya. Clases: `CuentasDeAcceso` (crear la cuenta, enviar el enlace, bloquear y restaurar el acceso; la usará también el acudiente en 2B), `EntrenadorServiceImpl` (alta, reenvío, estado), `ContrasenaServiceImpl` y `ContrasenaController` (crear la contraseña), `ReglasContrasena`, `LimiteDeFrecuencia`, `IpCliente` y las operaciones nuevas de `ISupabaseAuthAdmin` (`crearUsuario`, `generarTokenRecuperacion`, `verificarTokenRecuperacion`, `fijarContrasena`, `cerrarSesion`).
+
+| Método y ruta | Quién | Qué hace | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `POST /api/entrenadores` | ADMINISTRADOR | Alta con cuenta. Responde `correoEnviado` | `201`, `400`, `409` (correo de otra cuenta), `503` (Supabase Auth no responde; no guarda nada) |
+| `POST /api/entrenadores/{id}/reenviar-enlace` | ADMINISTRADOR | Enlace nuevo (invalida el anterior); si no tiene cuenta, la crea. Nunca devuelve el enlace | `204`, `404`, `409` (inactivo, sin correo o correo de otra cuenta), `429` con `Retry-After`, `503` |
+| `POST /api/auth/crear-contrasena` | **Pública** (en `RutasSin2FA`) | `{ "token", "contrasena" }`: crea la contraseña sin iniciar sesión | `200` `{"mensaje"}`, `400`, `429` con `Retry-After`, `503` |
+
+**Alta.** (1) Valida, revisa duplicados y que el correo no sea de otro `usuario`. (2) Crea la cuenta de Supabase Auth con el correo confirmado y sin contraseña. (3) En una transacción: el entrenador, `usuario`, `usuario_rol` (ENTRENADOR) y `entrenador.id_usuario`; si falla (incluido el commit), borra la cuenta de Auth. (4) **Después del commit**: genera el enlace con `generate_link` (`type=recovery`; se usa el `hashed_token`, nunca el `action_link`), lo arma con `FRONTEND_URL` y pide el correo a n8n (`ENLACE_CONTRASENA`, síncrono, 15 s). Cualquier falla en el paso 4 deja el alta en `201` con `correoEnviado: false`.
+
+**Crear la contraseña.** Orden: token vacío → `400` genérico sin llamar a Supabase; contraseña fuera de la política → `400` con el mensaje de la política y `campos: ["contrasena"]` (antes de verificar, porque verificar **consume** el enlace); límites → `429`; `verify` (`token_hash`, `type=recovery`); fijar la contraseña con la API admin por el id del usuario; cerrar la sesión que abrió `verify` (si falla, solo se registra); `200` sin tokens. Enlace inválido, vencido o usado: `400` "El enlace no es válido o venció; pide al administrador que te lo reenvíe", sin `campos`. Falla de Supabase Auth: `503` "Inténtalo de nuevo; si persiste, pide que te reenvíen el enlace."
+
+**Política de contraseña** (`ReglasContrasena`, igual que `validaciones.js`): entre 8 y 72 caracteres, como mucho 72 bytes en UTF-8 (límite de bcrypt en Supabase Auth: una ñ ocupa 2), al menos una letra y un número.
+
+**Desactivar y reactivar.** Con cuenta: primero Supabase Auth (`PUT` con `ban_duration`: bloqueo o restauración), después en una transacción el entrenador, `usuario.activo` y, al desactivar, sus sesiones verificadas; si la base falla, se revierte Auth. Sin cuenta: solo la fila. Al reactivar, entra con la misma contraseña.
+
+Si Auth responde **`404`** (la cuenta no existe): al **desactivar** se sigue con la base (`usuario.activo=false` y se borran sus sesiones; sin cuenta nadie entra) y se registra un error; al **reactivar**, `409` "La cuenta de acceso de este entrenador no existe en Supabase Auth; revisa la configuración", sin cambiar nada. Como `usuario.id_usuario` apunta a `auth.users` con `ON DELETE RESTRICT`, Supabase no puede borrar una cuenta que tiene perfil: un `404` casi siempre significa que **`SUPABASE_URL` y `DB_URL` son de proyectos distintos**, y el log lo dice. Un `400` o `422` de Auth es un error de contrato (`500`), no se disfraza de `503`.
+
+**Límites en memoria** (`LimiteDeFrecuencia`):
+
+| Dónde | Límite |
+| :--- | :--- |
+| Reenvío del enlace | 1 por minuto por entrenador (el alta cuenta como un envío). El cupo solo se gasta si se generó el enlace |
+| Crear la contraseña | 10 intentos por minuto por IP, 5 por enlace (por su SHA-256) y 60 en total. Los que fallan por la política o sin token no cuentan |
+
+Limitación: **se pierden al reiniciar la aplicación y no se comparten entre instancias**. Hoy hay una sola instancia en Render; si se agregan más, cada una llevaría su cuenta y habría que pasarlos a la base o a un almacén compartido.
+
+**IP del cliente** (`IpCliente`). Render agrega direcciones a `X-Forwarded-For` sin borrar las que manda el cliente, así que ese encabezado se puede falsificar y **no se usa** (`server.forward-headers-strategy` queda sin configurar). Se usa `CF-Connecting-IP`, que escribe Cloudflare (delante de Render) y reemplaza la que traiga el cliente; si no viene (en local), `getRemoteAddr()`. En los logs la IP va enmascarada (`190.24.x.x`). **Qué revisar en Render:** que las peticiones lleguen con `CF-Connecting-IP`. Si no llega, todos comparten la IP del proxy y el límite por IP se vuelve uno solo para todos; los límites por enlace y global siguen funcionando.
+
+**Nunca** se registra ni se devuelve el enlace, el token, la contraseña ni el JWT de la sesión de verificación.
+
+**Configuración de Supabase Auth necesaria:** ver [`docs/GUIA-SUPABASE-EQUIPO.md`](../docs/GUIA-SUPABASE-EQUIPO.md) (vencimiento del enlace de 1 hora y política de contraseña no más estricta que la nuestra). Prueba manual contra el proyecto de prueba: `SupabaseAuthEnlaceContraSupabaseTest` (omitida por defecto; con `FUTDATA_PRUEBA_SUPABASE_REAL=true`).
+
+**Deudas:**
+
+- El administrador y el tesorero se siguen creando con la invitación de Supabase (`POST /api/usuarios`, `ISupabaseAuthAdmin.invitar`), no con este camino.
+- El correo de un entrenador con cuenta no se puede editar (`409`): cambiarlo no actualiza `usuario.correo` ni Supabase Auth. Se compara sin mayúsculas ni espacios, así que enviar el mismo correo sí pasa.
 
 ## Comprobante de pago (PDF)
 
@@ -931,7 +976,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 
 | Ruta | Roles |
 | :--- | :--- |
-| `GET /api/health`, `/error`, `OPTIONS` (CORS), `POST /api/pagos/webhook/wompi` | Públicas, sin token (el webhook se autentica con la firma del evento) |
+| `GET /api/health`, `/error`, `OPTIONS` (CORS), `POST /api/pagos/webhook/wompi`, `POST /api/auth/crear-contrasena` | Públicas, sin token (el webhook se autentica con la firma del evento; crear la contraseña, con el token de un solo uso del enlace y límites de intentos) |
 | Swagger (`/swagger-ui.html`, `/v3/api-docs`) | Pública **solo con el perfil `dev`**; en los demás perfiles está apagado |
 | `POST /api/auth/2fa/codigo`, `/reenviar`, `/verificar` | Cualquier rol, con el JWT del primer paso y sin haber verificado el código |
 | `POST /api/auth/logout`, `GET /api/usuarios/yo` | Cualquier rol, con la sesión verificada |
@@ -958,7 +1003,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 2. Sin ningún rol en la base de datos (cuenta sin perfil, sin rol o con el acceso revocado): `403`, también en las rutas del 2FA.
 3. Fuera de las rutas sin 2FA, si la sesión del token no está verificada o venció: `403` con `"codigo": "2FA_REQUERIDA"`.
 
-Las rutas sin 2FA están todas en `util.security.RutasSin2FA`, en una sola lista documentada: las tres del segundo paso, el webhook de Wompi, `GET /api/health`, `/error` y `OPTIONS`; con el perfil `dev`, también la documentación. **Agregar una ruta ahí la abre:** hay que justificarla.
+Las rutas sin 2FA están todas en `util.security.RutasSin2FA`, en una sola lista documentada: las tres del segundo paso, crear la contraseña con el enlace, el webhook de Wompi, `GET /api/health`, `/error` y `OPTIONS`; con el perfil `dev`, también la documentación. **Agregar una ruta ahí la abre:** hay que justificarla.
 
 `POST /api/auth/logout` borra la sesión del token; el frontend también debe cerrar la sesión en Supabase Auth. Revocar el acceso de un usuario (`POST /api/usuarios/{id}/revocar`) borra todas sus sesiones verificadas: si se le restablece, debe verificar el código otra vez.
 
@@ -1006,9 +1051,9 @@ Los correos los envía n8n. El backend se los pide con `INotificador.notificar(e
 | :--- | :--- |
 | Endpoint | `POST {N8N_BASE_URL}/webhook/futdata/notificaciones`, `Content-Type: application/json;charset=UTF-8`, cabecera `X-FutData-Token: {N8N_WEBHOOK_TOKEN}` |
 | Cuerpo | `{"evento": ..., "datos": {...}}` |
-| Timeout | 5 s de conexión y 5 s de lectura (`futdata.n8n.timeout`) |
+| Timeout | 5 s de conexión y 5 s de lectura (`futdata.n8n.timeout`); **15 s solo para `ENLACE_CONTRASENA`** (`futdata.n8n.timeout-enlace`, `N8N_TIMEOUT_ENLACE`), que es síncrono |
 | Reintentos | Ninguno. Si n8n recibió la petición y solo se demoró, un reintento enviaría el correo dos veces |
-| Eventos | `INotificador.CODIGO_2FA` e `INotificador.CAMBIO_ENTRENAMIENTO` (constantes; no escribir la cadena a mano) |
+| Eventos | `INotificador.CODIGO_2FA`, `INotificador.CAMBIO_ENTRENAMIENTO` e `INotificador.ENLACE_CONTRASENA` (constantes; no escribir la cadena a mano) |
 
 `N8nClient` **no arma los `datos`**: cada servicio construye los de su evento (HU-002 el código 2FA, HU-026 el aviso de entrenamiento) y depende solo de la interfaz `INotificador`, inyectada por constructor.
 
@@ -1019,7 +1064,7 @@ Los correos los envía n8n. El backend se los pide con `INotificador.notificar(e
 | Respuesta de n8n | Resultado | Qué significa |
 | :--- | :--- | :--- |
 | `202` (`CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`) | Retorna | n8n **recibió** la notificación y la envía en segundo plano. No significa "entregado": si el SMTP falla después, solo queda en el registro de fallas de n8n |
-| `200` | Retorna | Lo respondía el flujo anterior de `CODIGO_2FA` (síncrono). Se sigue aceptando para que no importe el orden de despliegue; no se lee el campo `enviado` |
+| `200` | Retorna | `ENLACE_CONTRASENA` (síncrono): el SMTP aceptó el correo. También lo respondía el flujo anterior de `CODIGO_2FA`; se sigue aceptando para que no importe el orden de despliegue. No se lee el campo `enviado` |
 | `400` | `NotificacionRechazadaException` | Los `datos` no cumplen el contrato: error de programación. `getDetalle()` trae la explicación de n8n, o `null` si parecía tener datos sensibles (correos, 6 dígitos seguidos o un valor de `datos`; los valores de `evento` y `tipoCambio` no cuentan, porque son fijos) |
 | `401` | `NotificadorMalConfiguradoException` | `N8N_WEBHOOK_TOKEN` no coincide con el de n8n |
 | Falta `N8N_BASE_URL` o `N8N_WEBHOOK_TOKEN` (perfil local) | `NotificadorMalConfiguradoException` | La app arranca, pero no puede enviar. En `prod` la app ni siquiera arranca |

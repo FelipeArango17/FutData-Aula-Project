@@ -109,9 +109,21 @@ SUPABASE_URL=https://TU_PROJECT_REF.supabase.co
 
 N8N_BASE_URL=http://localhost:5678
 N8N_WEBHOOK_TOKEN=TOKEN_LOCAL_DE_N8N
+
+# URL del frontend para el enlace de crear contraseña (bloque 5). En local puede omitirse.
+FRONTEND_URL=http://localhost:5173
 ```
 
 Los valores de n8n deben coincidir con la configuración local de `n8n/.env`. Si todavía no se probarán notificaciones, pueden quedar vacíos en el perfil local.
+
+**Variables nuevas en Render (bloque 5):**
+
+| Variable | Valor | ¿Obligatoria en `prod`? |
+| :--- | :--- | :--- |
+| `FRONTEND_URL` | URL pública del frontend en Vercel, sin barra final (por ejemplo `https://TU_DOMINIO.vercel.app`). Arma el enlace del correo `{FRONTEND_URL}/crear-contrasena?token=...` | **Sí**: sin ella la app no arranca |
+| `N8N_TIMEOUT_ENLACE` | Tiempo de espera del correo con el enlace, que es síncrono | No (por defecto `15s`) |
+
+Después de desplegar, revisar en los logs de Render que las peticiones lleguen con la cabecera `CF-Connecting-IP`: el límite de intentos por IP de `POST /api/auth/crear-contrasena` la usa (ver `backend/README.md`, "Cuenta de acceso").
 
 El archivo `backend/.env` está ignorado por Git. Verificarlo con:
 
@@ -135,6 +147,19 @@ Redirect URL: http://localhost:5173/**
 ```
 
 La contraseña de los usuarios se administra exclusivamente en Supabase Auth. No existe una columna de contraseña en `public.usuario`.
+
+### 5.1 Configuración para el enlace de crear contraseña (bloque 5)
+
+El alta de entrenadores envía un enlace para que cada persona cree su contraseña (regla 9). Para que funcione igual en el proyecto de prueba y en el real, revisar en **Authentication**:
+
+| Dónde | Ajuste | Valor | Por qué |
+| :--- | :--- | :--- | :--- |
+| **Sign In / Providers → Email** | **Email OTP Expiration** | `3600` segundos (1 hora) | Es lo que dura el enlace. El correo dice "vence en 1 hora" (`CuentasDeAcceso.VIGENCIA_ENLACE_HORAS`) |
+| **Sign In / Providers → Email** | **Minimum password length** | `8` | Igual que la política del backend y del frontend |
+| **Sign In / Providers → Email** | **Password requirements** | **No required characters** (con la longitud mínima de 8 de la fila anterior) | El backend ya exige al menos una letra y un número (`ReglasContrasena`). Con *Letters and digits*, una contraseña cuyas únicas letras sean `ñ` o letras con tilde pasaría en FutData y fallaría en Supabase, y eso ocurriría **después** de que el enlace ya se consumió. Por lo mismo, nunca las opciones que exigen mayúsculas o símbolos |
+| **Rate Limits** | **Token verifications** | Anotar el valor | Cuenta la IP del backend, la misma para todos los usuarios. El backend limita a 60 verificaciones por minuto en total; si el valor de Supabase es menor, avisar a Omar |
+
+`SupabaseAuthEnlaceContraSupabaseTest` (prueba manual, omitida por defecto) comprueba contra el proyecto de **prueba** que el enlace funciona, que uno nuevo invalida el anterior y que uno usado no sirve otra vez. Con `SUPABASE_ACCESS_TOKEN` (token personal, secreto) además exige `mailer_otp_exp = 3600` y muestra el límite de verificaciones.
 
 ## 6. Ejecutar el esquema PostgreSQL
 

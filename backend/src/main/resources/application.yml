@@ -75,6 +75,13 @@ futdata:
     base-url: ${N8N_BASE_URL}
     webhook-token: ${N8N_WEBHOOK_TOKEN}
     timeout: 5s
+    # Solo para ENLACE_CONTRASENA, que es síncrono (n8n responde después de enviar el correo). Ver N8nProperties.
+    timeout-enlace: ${N8N_TIMEOUT_ENLACE:15s}
+  frontend:
+    # Dirección pública del frontend, sin barra final (config.FrontendProperties). Con ella se arma el enlace del correo
+    # para crear la contraseña: {FRONTEND_URL}/crear-contrasena?token=... Obligatoria en prod. En local, si falta, el
+    # alta funciona pero el correo no se envía (correoEnviado=false).
+    url: ${FRONTEND_URL:}
   club:
     # Datos públicos del club que salen en los comprobantes y reportes en PDF (util.reports). No son secretos:
     # tienen valor por defecto en todos los perfiles y se cambian con variables de entorno. Si uno queda
@@ -128,6 +135,8 @@ spring:
 futdata:
   cors:
     origins: ${CORS_ORIGINS:http://localhost:5173}
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5173}
   n8n:
     base-url: ${N8N_BASE_URL:http://localhost:5678}
     webhook-token: ${N8N_WEBHOOK_TOKEN:}
@@ -141,7 +150,7 @@ logging:
 
 ---
 # Perfil prod: sin valores por defecto. Si falta DB_URL, DB_USER, DB_PASSWORD, CORS_ORIGINS, N8N_BASE_URL,
-# N8N_WEBHOOK_TOKEN, SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY, la aplicación no arranca y dice cuáles faltan
+# N8N_WEBHOOK_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY o FRONTEND_URL, la aplicación no arranca y dice cuáles faltan
 # (config.VerificadorVariablesProd).
 spring:
   config:

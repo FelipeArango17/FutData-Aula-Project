@@ -20,7 +20,8 @@ class VerificadorVariablesProdTest {
         assertThatThrownBy(() -> verificador.postProcessEnvironment(entorno, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Perfil prod: faltan las variables de entorno DB_USER, DB_PASSWORD, CORS_ORIGINS, "
-                        + "N8N_BASE_URL, N8N_WEBHOOK_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY. Ver backend/.env.example.");
+                        + "N8N_BASE_URL, N8N_WEBHOOK_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, FRONTEND_URL. "
+                        + "Ver backend/.env.example.");
     }
 
     @Test
@@ -34,7 +35,7 @@ class VerificadorVariablesProdTest {
 
     /** Sin n8n o Supabase Storage, prod no arranca: no se podría enviar el código 2FA ni guardar comprobantes. */
     @ParameterizedTest
-    @ValueSource(strings = {"N8N_BASE_URL", "N8N_WEBHOOK_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"})
+    @ValueSource(strings = {"N8N_BASE_URL", "N8N_WEBHOOK_TOKEN", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "FRONTEND_URL"})
     void enProdSinUnaVariableDeN8nOSupabaseNoArranca(String variable) {
         MockEnvironment entorno = new MockEnvironment();
         VerificadorVariablesProd.OBLIGATORIAS.forEach(obligatoria -> entorno.setProperty(obligatoria, "valor"));

@@ -8,8 +8,11 @@ import java.util.UUID;
  * Entrenador del club (tabla {@code entrenador}, diccionario de datos 2.3).
  *
  * <p>{@code categorias} son los nombres de las categorías que dirige ({@code categoria.id_entrenador}), en el
- * orden oficial. No se guardan en esta tabla: el DAO las lee de {@code categoria}. Las columnas
- * {@code documentos} e {@code id_usuario} no se manejan en HU-025 (la cuenta de usuario es de CU-06).
+ * orden oficial. No se guardan en esta tabla: el DAO las lee de {@code categoria}. La columna {@code documentos}
+ * no se maneja aquí.
+ *
+ * <p>{@code idUsuario} es su cuenta de acceso ({@code entrenador.id_usuario} → {@code usuario.id_usuario}, el mismo
+ * id de Supabase Auth). {@code null} si todavía no tiene cuenta: el reenvío del enlace la crea.
  *
  * <p>{@code activo} es {@code false} si el entrenador fue desactivado (migración 004, decisión D8): conserva su
  * historial, pero no dirige categorías ni recibe asignaciones nuevas.
@@ -29,9 +32,18 @@ public class Entrenador {
     private String especialidad;
     private List<String> categorias = List.of();
     private boolean activo = true;
+    private UUID idUsuario;
 
     public UUID getId() {
         return id;
+    }
+
+    public UUID getIdUsuario() {
+        return idUsuario;
+    }
+
+    public void setIdUsuario(UUID idUsuario) {
+        this.idUsuario = idUsuario;
     }
 
     public void setId(UUID id) {

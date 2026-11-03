@@ -45,4 +45,11 @@ public interface IEntrenadorDAO {
      * @return {@code false} si no existe
      */
     boolean cambiarActivo(UUID id, boolean activo);
+
+    /**
+     * Liga al entrenador con su cuenta ({@code id_usuario}), solo si todavía no tiene una.
+     *
+     * @return {@code false} si no existe o ya tenía cuenta
+     */
+    boolean vincularUsuario(UUID id, UUID idUsuario);
 }

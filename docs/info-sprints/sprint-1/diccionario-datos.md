@@ -105,7 +105,7 @@ Información personal y laboral de los entrenadores.
 | `horario_trabajo` | `varchar` | — | Horario de trabajo del entrenador. |
 | `especialidad` | `varchar` | — | **Nuevo (Sprint 2).** Especialidad del entrenador (por ejemplo, porteros o preparación física). Ya existe en el diagrama de clases del dominio. |
 | `documentos` | `varchar` | — | URL a la carpeta de documentos del entrenador. |
-| `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`. Nullable mientras se registra el entrenador. |
+| `id_usuario` | `UUID` | FK | Cuenta de acceso asociada. Referencia `Usuario.id_usuario`, `UNIQUE`. **En uso desde el bloque 5:** el alta del entrenador crea su cuenta (Supabase Auth sin contraseña, `Usuario` y `Usuario_Rol` ENTRENADOR) y lo llena en la misma transacción; el reenvío del enlace la crea si falta. `NULL` = el entrenador todavía no tiene cuenta (por ejemplo, los registrados antes del bloque 5). Con cuenta, el `correo` del entrenador no se puede cambiar, porque es el de su inicio de sesión, y desactivarlo bloquea la cuenta. |
 | `activo` | `boolean` | — | **Migración 004.** `false` si el entrenador fue desactivado: conserva su historial, pero no recibe categorías ni entrenamientos nuevos. Por defecto `true`. Ver decisión D8. |
 
 ### 2.5 `Usuario`
@@ -456,7 +456,7 @@ Por medio de `InscripcionTorneo`, la relación entre `Deportista` y `Torneo` es 
 8. **Nuevo (Sprint 2), reemplazada en la migración 004.** Antes era `UNIQUE (lugar, fecha, hora_inicio)`, que solo impedía dos entrenamientos que empezaran exactamente a la misma hora. Ahora tres restricciones de exclusión impiden que se **crucen** los entrenamientos `PROGRAMADO` de una misma cancha, de una misma categoría o de un mismo entrenador (D15). Los cancelados no cuentan. La pantalla de programación detecta el conflicto y ofrece alternativas; la base de datos lo hace cumplir también.
 9. **Nuevo (Sprint 2).** Todas las PK y FK usan `UUID`, compatible con Supabase Auth y con el diagrama de clases del dominio.
 10. **Nuevo (Sprint 2).** `Torneo.id_categoria` referencia `Categoria.id_categoria`, por lo que torneos y deportistas usan el mismo catálogo.
-11. **Nuevo (Sprint 2).** `Entrenador.id_usuario` y `Acudiente.id_usuario` permiten asociar cada perfil con su cuenta de acceso; ambos son nullable durante el registro.
+11. **Nuevo (Sprint 2).** `Entrenador.id_usuario` y `Acudiente.id_usuario` permiten asociar cada perfil con su cuenta de acceso; ambos son nullable durante el registro. `Entrenador.id_usuario` se usa desde el bloque 5 (alta con enlace para crear la contraseña); `Acudiente.id_usuario` llegará con la inscripción (bloque 2B).
 12. `Entrenador.id_usuario` y `Acudiente.id_usuario` deben ser `UNIQUE` para que una cuenta no se vincule a dos perfiles del mismo tipo.
 13. **Migración 004.** Un deportista tiene como máximo una mensualidad por mes (índice único sobre `id_deportista` y `periodo`; los cobros `RECHAZADO` no cuentan).
 14. **Migración 004.** Todas las tablas tienen RLS activo y sin políticas: solo el backend (rol `postgres`) lee y escribe. El frontend nunca consulta las tablas directamente.

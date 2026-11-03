@@ -62,9 +62,13 @@ public class EntrenadorController {
     }
 
     @PostMapping
-    @Operation(summary = "Registrar un entrenador", description = "Solo datos personales; las categorías se asignan después")
-    @ApiResponse(responseCode = "201", description = "Creado; la cabecera Location tiene su URL")
-    @ApiResponse(responseCode = "409", description = "Documento (tipo y número) o correo de otro entrenador",
+    @Operation(summary = "Registrar un entrenador", description = "Datos personales y cuenta de acceso sin contraseña; "
+            + "las categorías se asignan después. Envía el enlace para crear la contraseña: correoEnviado dice si salió")
+    @ApiResponse(responseCode = "201", description = "Creado; la cabecera Location tiene su URL. Con correoEnviado=false "
+            + "el alta quedó hecha pero el correo no salió")
+    @ApiResponse(responseCode = "409", description = "Documento (tipo y número) o correo de otro entrenador, o correo de otra cuenta",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    @ApiResponse(responseCode = "503", description = "Supabase Auth no está disponible; no se guardó nada",
             content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
     public ResponseEntity<EntrenadorResponseDTO> crear(@RequestBody EntrenadorRequestDTO datos) {
         EntrenadorResponseDTO creado = entrenadores.crear(datos);
@@ -72,12 +76,31 @@ public class EntrenadorController {
         return ResponseEntity.created(ubicacion).body(creado);
     }
 
+    @PostMapping("/{id}/reenviar-enlace")
+    @Operation(summary = "Reenviar el enlace para crear la contraseña",
+            description = "Si no tiene cuenta, la crea. Genera un enlace nuevo (el anterior deja de servir) y lo envía "
+                    + "por correo. La respuesta nunca trae el enlace. Máximo uno por minuto por entrenador")
+    @ApiResponse(responseCode = "204", description = "Enlace enviado")
+    @ApiResponse(responseCode = "404", description = "No existe el entrenador",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    @ApiResponse(responseCode = "409", description = "Entrenador inactivo, sin correo, o correo de otra cuenta",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    @ApiResponse(responseCode = "429", description = "Ya se le envió un enlace hace menos de un minuto (cabecera Retry-After)",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    @ApiResponse(responseCode = "503", description = "Supabase Auth o el correo no están disponibles",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    public ResponseEntity<Void> reenviarEnlace(@PathVariable UUID id) {
+        entrenadores.reenviarEnlace(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PutMapping("/{id}")
     @Operation(summary = "Editar los datos personales de un entrenador", description = "No cambia sus categorías")
     @ApiResponse(responseCode = "200", description = "El entrenador actualizado")
     @ApiResponse(responseCode = "404", description = "No existe",
             content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
-    @ApiResponse(responseCode = "409", description = "Documento (tipo y número) o correo de otro entrenador",
+    @ApiResponse(responseCode = "409", description = "Documento (tipo y número) o correo de otro entrenador, o cambio "
+            + "del correo de un entrenador que ya tiene cuenta de acceso",
             content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
     public EntrenadorResponseDTO editar(@PathVariable UUID id, @RequestBody EntrenadorRequestDTO datos) {
         return entrenadores.editar(id, datos);
