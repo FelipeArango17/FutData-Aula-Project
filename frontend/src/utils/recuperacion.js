@@ -79,6 +79,16 @@ export const urlEsDeEnlaceVencido = (url) => {
   return p.get('error_code') === 'otp_expired' || p.get('error') === 'access_denied'
 }
 
+// Enlace del correo (invitación, recuperación, vencido o usado) que aterrizó fuera de /restablecer y /recuperar -> la URL a la
+// que hay que llevarlo: '/restablecer' + search + hash EXACTOS (supabase-js necesita los tokens). Si no aplica, null.
+// main.jsx lo aplica con history.replaceState ANTES de montar React, una sola vez, sin pasar por el router.
+export function rutaDeEnlaceDeCorreo({ pathname = '', search = '', hash = '' } = {}) {
+  const url = { search, hash }
+  const esEnlace = urlEsDeEnlaceDeCorreo(url) || urlEsDeEnlaceVencido(url)
+  if (!esEnlace || pathname === '/restablecer' || pathname === '/recuperar') return null
+  return `/restablecer${search}${hash}`
+}
+
 // 'verificando' | 'listo' | 'invalido'. Solo hay sesión de recuperación si la URL trae type=recovery o llegó el evento
 // PASSWORD_RECOVERY (flujo con code): una sesión normal de Supabase NO basta para cambiar la contraseña desde /restablecer.
 // `agotado`: se acabó la espera y no se resolvió -> inválido.

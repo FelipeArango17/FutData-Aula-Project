@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   MENSAJE_CONTRASENA_IGUAL, MENSAJE_LIMITE, MENSAJE_RECUPERACION_ENVIADA, MENSAJE_RECUPERACION_FALLO, MENSAJE_RESTABLECER_ENLACE_INVALIDO,
   MENSAJE_RESTABLECER_FALLO, MENSAJE_SIN_RED, codigoDeErrorSupabase, decidirRecuperacion, enviarRestablecer, esRecuperacionEnCurso,
-  solicitarEnlace, urlEsDeEnlaceDeCorreo, urlEsDeEnlaceVencido, urlEsDeInvitacion, urlEsDeRecuperacion, urlTraeError, validarCorreoRecuperacion,
+  solicitarEnlace, rutaDeEnlaceDeCorreo, urlEsDeEnlaceDeCorreo, urlEsDeEnlaceVencido, urlEsDeInvitacion, urlEsDeRecuperacion, urlTraeError, validarCorreoRecuperacion,
 } from './recuperacion.js'
 import { MENSAJES } from './validaciones.js'
 
@@ -160,5 +160,26 @@ describe('enlace de invitación (type=invite)', () => {
     expect(urlEsDeEnlaceVencido({ hash: '#error=access_denied' })).toBe(true)
     expect(urlEsDeEnlaceVencido({ hash: '#type=invite' })).toBe(false)
     expect(decidirRecuperacion({ url: { hash: '#error_code=otp_expired&type=invite' }, haySesion: true })).toBe('invalido')
+  })
+})
+
+describe('rutaDeEnlaceDeCorreo (normalizar la URL antes de montar React)', () => {
+  it('invitación, recuperación y enlace vencido en "/" van a /restablecer', () => {
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/', search: '', hash: '#type=invite&access_token=x' })).toBe('/restablecer#type=invite&access_token=x')
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/', hash: '#access_token=x&type=recovery' })).toBe('/restablecer#access_token=x&type=recovery')
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/login', hash: '#error=access_denied&error_code=otp_expired' })).toBe('/restablecer#error=access_denied&error_code=otp_expired')
+  })
+  it('conserva search y hash exactos', () => {
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/', search: '?a=1&type=invite', hash: '#access_token=x%2By&refresh_token=z' }))
+      .toBe('/restablecer?a=1&type=invite#access_token=x%2By&refresh_token=z')
+  })
+  it('sin enlace de correo: null', () => {
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/', search: '', hash: '' })).toBeNull()
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/login', hash: '#type=signup' })).toBeNull()
+    expect(rutaDeEnlaceDeCorreo()).toBeNull()
+  })
+  it('ya en /restablecer o /recuperar: null', () => {
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/restablecer', hash: '#type=invite&access_token=x' })).toBeNull()
+    expect(rutaDeEnlaceDeCorreo({ pathname: '/recuperar', hash: '#error_code=otp_expired' })).toBeNull()
   })
 })
