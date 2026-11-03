@@ -1,7 +1,7 @@
 # Contrato del webhook de notificaciones (n8n)
 
 **Sprint:** Sprint 2  
-**Historias:** HU-036 · Enviar código 2FA por correo con n8n (AB#51) · HU-026 · Aviso a participantes cuando cambia un entrenamiento (AB#338)  
+**Historias:** HU-036 · Enviar código 2FA por correo con n8n (AB#51) · HU-026 · Aviso a participantes cuando cambia un entrenamiento (AB#338) · Regla 9 · Alta de entrenador con enlace para crear la contraseña  
 **Proyecto:** FutData - Asociación Deportiva Prado Fútbol Club
 
 ## Objetivo
@@ -12,6 +12,7 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | :--- | :--- | :--- | :--- |
 | `CODIGO_2FA` | HU-036 | Asíncrona: `202` | Código de verificación al iniciar sesión |
 | `CAMBIO_ENTRENAMIENTO` | HU-026 (CU-05) | Asíncrona: `202` | Aviso al entrenador, los jugadores y los acudientes cuando se crea, modifica o cancela un entrenamiento |
+| `ENLACE_CONTRASENA` | Regla 9 (alta de entrenador y su reenvío) | **Síncrona**: `200` o `502` | Enlace para que la persona cree su propia contraseña (vence en 1 hora) |
 
 ## Reparto de responsabilidades
 
@@ -19,6 +20,7 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | :--- | :--- | :--- |
 | Backend (`AutenticacionServiceImpl`) | Genera el código de 6 dígitos (`GeneradorCodigo`), guarda solo su hash con vigencia de 10 min (`ReglasVerificacion.VIGENCIA_CODIGO`), valida intentos y reenvíos, y llama a `INotificador.notificar(evento, datos)` | Enviar correos |
 | Backend (servicio de entrenamientos, HU-026) | Después de guardar la creación, edición o eliminación de un entrenamiento, resuelve los destinatarios (entrenador, acudientes y deportistas con correo) y llama a `INotificador.notificar("CAMBIO_ENTRENAMIENTO", datos)` | Enviar correos |
+| Backend (`EntrenadorServiceImpl` con `CuentasDeAcceso`) | Crea la cuenta de Supabase Auth sin contraseña, genera el enlace (`hashed_token` de `generate_link`, nunca el `action_link`), lo arma con `FRONTEND_URL` y llama a `INotificador.notificar("ENLACE_CONTRASENA", datos)` después del commit del alta o en el reenvío | Enviar correos |
 | `N8nClient` (implementa `INotificador`) | Hace el `POST` al webhook de n8n con el secreto compartido | Decidir el contenido del correo |
 | n8n (flujo `FutData · Notificaciones`) | Valida la petición, arma el correo con la plantilla y lo envía por SMTP con TLS | Generar, guardar ni validar códigos; consultar la base de datos |
 
@@ -131,6 +133,33 @@ Todos los textos de la petición (nombre, categoría, lugar, entrenador, motivo)
 
 **Guardar el aviso.** Si el aviso se guarda o no en la base de datos (ampliar `NotificacionPago` a una tabla `Notificacion` con tipo, o enviarlo sin guardarlo) es la decisión **D4** de [`diccionario-datos.md`](../sprint-1/diccionario-datos.md#5-decisiones-pendientes-de-la-ampliación-del-sprint-2). La toma el backend y no cambia este contrato: n8n solo envía.
 
+### Evento `ENLACE_CONTRASENA`
+
+El administrador registra un entrenador (o le reenvía el enlace). Después de guardar el alta, el backend pide un correo con el enlace para que la persona cree **su propia** contraseña: no hay contraseña temporal (regla 9). Un solo destinatario.
+
+```json
+{
+  "evento": "ENLACE_CONTRASENA",
+  "datos": {
+    "plantilla": "BIENVENIDA_ENTRENADOR",
+    "correo": "entrenador@ejemplo.com",
+    "nombre": "Carlos",
+    "enlace": "https://futdata.example/crear-contrasena?token=…",
+    "vigenciaHoras": 1
+  }
+}
+```
+
+| Campo de `datos` | Tipo | Regla |
+| :--- | :--- | :--- |
+| `plantilla` | string | Obligatorio. Una de la lista permitida del nodo `Validar datos ENLACE_CONTRASENA`; hoy solo `BIENVENIDA_ENTRENADOR` (el bloque 2B agregará `BIENVENIDA_ACUDIENTE`) |
+| `correo` | string | Obligatorio. Correo con formato válido, máximo 254 caracteres |
+| `nombre` | string | Obligatorio, no vacío, máximo 120 caracteres. Se usa en el saludo (n8n lo escapa antes de insertarlo en el HTML) |
+| `enlace` | string | Obligatorio. Empieza por `http://` o `https://`, sin espacios, máximo 2000 caracteres. Es `{FRONTEND_URL}/crear-contrasena?token={hashed_token}`. **Secreto**: quien lo tenga puede crear la contraseña mientras no venza ni se use |
+| `vigenciaHoras` | número | Obligatorio, mayor que 0. Debe coincidir con `CuentasDeAcceso.VIGENCIA_ENLACE_HORAS` (1) y con la vigencia de Supabase Auth (`mailer_otp_exp = 3600`) |
+
+**Correo.** Plantilla `n8n/plantillas/bienvenida-entrenador.html` (y `.txt`), asunto "Bienvenido a FutData: crea tu contraseña". Tiene un botón "Crear mi contraseña", el enlace en texto por si el botón no funciona y la línea "Este enlace vence en 1 hora; si venció, pide al administrador que te lo reenvíe." (n8n escribe "1 hora" o "N horas" según `vigenciaHoras`). El nombre y el enlace se escapan antes de insertarlos en el HTML.
+
 ## Respuestas
 
 Todas las respuestas son JSON.
@@ -177,6 +206,20 @@ Otros códigos posibles que no genera el flujo, sino n8n o la red:
 
 > **Para el backend: `202` significa "recibido", no "entregado".** Confirma que n8n aceptó la petición y cuántos correos va a intentar enviar; no garantiza que el SMTP los haya aceptado ni que lleguen. Las fallas de envío solo quedan en el registro de fallas de n8n.
 
+### Respuestas de `ENLACE_CONTRASENA`
+
+| Código | Cuándo | Cuerpo |
+| :--- | :--- | :--- |
+| `200` | Los datos son válidos y el SMTP aceptó el correo | `{"enviado": true}` |
+| `400` | Falta `evento` o `datos`, o el evento no está soportado | Igual que en `CODIGO_2FA` (`{"enviado": false, "error": ...}`) |
+| `400` | Faltan campos de `datos`, tienen formato inválido o la plantilla no está permitida | `{"enviado": false, "error": "Faltan campos o tienen un formato inválido", "detalle": "enlace debe empezar por http:// o https:// y no tener espacios"}` |
+| `401` | Falta la cabecera `X-FutData-Token` o su valor no coincide | `{"enviado": false, "error": "Token inválido"}` |
+| `502` | El SMTP no aceptó el correo. Antes de responder, n8n escribe la línea en el [registro de fallas](#registro-de-fallas-en-n8n) | `{"enviado": false, "error": "No se pudo enviar el correo"}` |
+
+`detalle` explica el primer problema encontrado y nunca incluye el correo, el nombre ni el enlace.
+
+**Este evento es síncrono** (no usa el `202`): n8n envía y después responde, porque el backend necesita saber si el correo salió para responder `correoEnviado` en el alta o un error en el reenvío. El envío tarda ~3 s; por eso `N8nClient` le da **15 s** de espera (los demás eventos, 5 s). Con 5 s, un tiempo agotado con el correo ya enviado haría pensar al administrador que no salió, y el reenvío generaría un enlace nuevo que invalida el que sí llegó.
+
 ## Cómo crece el contrato
 
 Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agregar uno (por ejemplo `PAGO_REGISTRADO` o `RECORDATORIO_PAGO`):
@@ -184,10 +227,10 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
 1. Definir aquí la tabla de campos de `datos` del evento.
 2. En n8n, agregar una regla al nodo Switch `Evento` con el nombre del evento. Cada regla es una salida nueva.
 3. Conectar esa salida a su propia validación de `datos`, su nodo de envío y sus nodos `Respond to Webhook`. Hay dos modelos:
-   - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; por ejemplo `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. Ningún evento implementado hoy es síncrono.
+   - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; como `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. No hay que tocar `¿Responder 502?`.
    - **Asíncrono** (como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
 
-   Los nodos `¿Responder 502?` y `Responder 502` se conservan aunque hoy ningún evento los use: quedan para los eventos síncronos. `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`.
+   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`.
 
    En ambos casos la salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos. Ese nodo toma el correo del ítem que falló (campo `correo`) o, si no lo tiene, de `datos.correo`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.
@@ -205,13 +248,15 @@ futdata:
   n8n:
     base-url: ${N8N_BASE_URL}
     webhook-token: ${N8N_WEBHOOK_TOKEN}
+    timeout: 5s
+    timeout-enlace: ${N8N_TIMEOUT_ENLACE:15s}   # solo ENLACE_CONTRASENA (síncrono)
 ```
 
 **Cliente HTTP:** usar `RestClient` (Spring Boot 3.2+, síncrono, suficiente porque el login espera la respuesta) o `WebClient` si el resto del backend ya es reactivo. En ambos casos:
 
 - `POST` a `{base-url}/webhook/futdata/notificaciones` con `Content-Type: application/json` y la cabecera `X-FutData-Token`.
 - Cuerpo: `Map.of("evento", evento, "datos", datos)` serializado por Jackson. `codigo` como `String`.
-- **Timeout de 5 s** de conexión y de lectura (por ejemplo, con `SimpleClientHttpRequestFactory` o `JdkClientHttpRequestFactory` y `setReadTimeout(Duration.ofSeconds(5))`). Un correo no puede bloquear el inicio de sesión indefinidamente.
+- **Timeout de 5 s** de conexión y de lectura (por ejemplo, con `SimpleClientHttpRequestFactory` o `JdkClientHttpRequestFactory` y `setReadTimeout(Duration.ofSeconds(5))`). Un correo no puede bloquear el inicio de sesión indefinidamente. **Excepción: `ENLACE_CONTRASENA` usa 15 s** (`timeout-enlace`), porque es síncrono (ver [Respuestas de `ENLACE_CONTRASENA`](#respuestas-de-enlace_contrasena)).
 - Sin reintentos automáticos: el usuario ya tiene el botón "Reenviar código", que respeta `INTERVALO_REENVIO = 1 min`.
 
 **Manejo de respuestas de `CODIGO_2FA`:**
@@ -236,31 +281,44 @@ El aviso se envía **después** de guardar el cambio del entrenamiento y su resu
 
 Se usa el mismo timeout de 5 s: n8n responde `202` en milisegundos porque solo valida antes de responder.
 
+**Manejo de respuestas de `ENLACE_CONTRASENA`:**
+
+El alta del entrenador ya está guardada cuando se pide el correo; el resultado del envío nunca la deshace.
+
+| Respuesta | En el alta (`POST /api/entrenadores`) | En el reenvío (`POST /api/entrenadores/{id}/reenviar-enlace`) |
+| :--- | :--- | :--- |
+| `200` | `201` con `correoEnviado: true` | `204` |
+| `502`, timeout, error de red u otro 5xx | `201` con `correoEnviado: false`; el administrador usa "Reenviar enlace" | `503` "No se pudo enviar el correo" (el enlace ya se generó y el cupo de un reenvío por minuto queda gastado) |
+| `400` o `401` | `201` con `correoEnviado: false` y error en el log (contrato roto o token mal configurado) | `500` |
+
+Sin reintentos automáticos: un reintento generaría otro enlace e invalidaría el anterior.
+
 **Seguridad y registros:**
 
 - **Nunca registrar el código** (ni el cuerpo completo de la petición) en logs, trazas de excepción ni en `AuditoriaLogger`. Registrar solo el evento, el `usuarioId` y el código HTTP de la respuesta. Si se activa el log de peticiones HTTP del cliente, debe excluir esta llamada.
 - Tampoco registrar el valor de `X-FutData-Token`.
 - El correo puede registrarse enmascarado (`j***@ejemplo.com`) si hace falta para soporte.
 - En `CAMBIO_ENTRENAMIENTO`, no registrar la lista de `destinatarios` (correos y nombres de deportistas, muchos menores de edad); basta con el id del entrenamiento, `tipoCambio` y el número de destinatarios.
+- En `ENLACE_CONTRASENA`, **nunca registrar el enlace** ni la parte `token=...`: con él se puede crear la contraseña de otra persona. Tampoco devolverlo en una respuesta de la API.
 - **Ante un `502` (eventos síncronos), un timeout o un error de red, registrar también la falla en la auditoría del backend** (`AuditoriaLogger`) cuando exista: evento, `usuarioId`, código HTTP y fecha. El log de n8n no reemplaza esa auditoría. Está en otro equipo, no conoce al usuario y no ve los timeouts ni las fallas de red, que solo ve el backend.
 
 **Pruebas:** con `MockRestServiceServer` (para `RestClient`) o un servidor simulado, verificar la cabecera, el cuerpo y el manejo de cada código de respuesta, y que el código no aparezca en los logs capturados.
 
 ## Datos que guarda n8n
 
-El flujo está configurado para no guardar ejecuciones (exitosas, fallidas ni manuales). Aun así, n8n 2.x marca la ejecución como borrada y la elimina de su base de datos después de un búfer; `n8n/docker-compose.yml` reduce ese búfer a 0 y revisa cada minuto, de modo que los datos de una ejecución (que incluyen el código) no permanecen más de ~1 minuto, por debajo de los 10 minutos de vigencia del código. Como consecuencia, los fallos del flujo no quedan en el historial de n8n; para las fallas de envío está el registro de la sección siguiente.
+El flujo está configurado para no guardar ejecuciones (exitosas, fallidas ni manuales). Aun así, n8n 2.x marca la ejecución como borrada y la elimina de su base de datos después de un búfer; `n8n/docker-compose.yml` reduce ese búfer a 0 y revisa cada minuto, de modo que los datos de una ejecución (que incluyen el código o el enlace) no permanecen más de ~1 minuto, por debajo de los 10 minutos de vigencia del código y de la hora del enlace. Como consecuencia, los fallos del flujo no quedan en el historial de n8n; para las fallas de envío está el registro de la sección siguiente.
 
 ## Registro de fallas en n8n
 
-Cuando el SMTP falla, el flujo agrega una línea en formato JSON Lines a `/opt/futdata/logs/fallas-notificaciones.jsonl` (en el repo, `n8n/logs/`, ignorado por Git). En `CODIGO_2FA`, que ya respondió `202`, escribe una línea con el correo enmascarado; en `CAMBIO_ENTRENAMIENTO`, también después del `202`, una línea por cada destinatario al que no se pudo enviar. En un evento síncrono la escribe antes de responder `502`. No depende del backend ni de la base de datos.
+Cuando el SMTP falla, el flujo agrega una línea en formato JSON Lines a `/opt/futdata/logs/fallas-notificaciones.jsonl` (en el repo, `n8n/logs/`, ignorado por Git). En `CODIGO_2FA`, que ya respondió `202`, escribe una línea con el correo enmascarado; en `CAMBIO_ENTRENAMIENTO`, también después del `202`, una línea por cada destinatario al que no se pudo enviar. En un evento síncrono (`ENLACE_CONTRASENA`) la escribe antes de responder `502`. No depende del backend ni de la base de datos.
 
 ```json
 {"fecha":"2026-10-28T09:42:06.626-05:00","evento":"CODIGO_2FA","correoEnmascarado":"o***3@gmail.com","error":"connect ECONNREFUSED 127.0.0.1:2525","idEjecucion":"4"}
 {"fecha":"2026-11-02T18:05:11.203-05:00","evento":"CAMBIO_ENTRENAMIENTO","correoEnmascarado":"m***a@ejemplo.com","error":"connect ECONNREFUSED 127.0.0.1:2525","idEjecucion":"57"}
 ```
 
-- Campos: `fecha` (ISO 8601, `America/Bogota`), `evento`, `correoEnmascarado`, `error` (mensaje del SMTP, máximo 500 caracteres, con correos y números de 6 dígitos reemplazados) e `idEjecucion`.
-- **Nunca** contiene el código, el nombre, el correo completo, el token ni el cuerpo de la petición.
+- Campos: `fecha` (ISO 8601, `America/Bogota`), `evento`, `correoEnmascarado`, `error` (mensaje del SMTP, máximo 500 caracteres, con las URL y cualquier `token=...` reemplazados por `[enlace]`, los correos por `[correo]` y los números de 6 dígitos por `[código]`) e `idEjecucion`.
+- **Nunca** contiene el código, el enlace (ni `token=...`), el nombre, el correo completo, el token del webhook ni el cuerpo de la petición.
 - Si escribir el registro falla, un evento síncrono responde `502` igual: para el backend, un `502` siempre significa "falló el envío", haya quedado o no la línea. En los eventos asíncronos la respuesta `202` ya salió y el log no la afecta.
 - El registro de n8n complementa la auditoría del backend; no la reemplaza (ver *Seguridad y registros*).
 

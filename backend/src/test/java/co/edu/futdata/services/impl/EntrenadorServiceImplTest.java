@@ -3,18 +3,26 @@ package co.edu.futdata.services.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import co.edu.futdata.api.dto.AsignarCategoriasRequestDTO;
 import co.edu.futdata.api.dto.CambiarEstadoEntrenadorRequestDTO;
 import co.edu.futdata.api.dto.CategoriaResponseDTO;
 import co.edu.futdata.api.dto.EntrenadorRequestDTO;
 import co.edu.futdata.api.dto.EntrenadorResponseDTO;
+import co.edu.futdata.config.FrontendProperties;
+import co.edu.futdata.datasource.external.INotificador;
+import co.edu.futdata.datasource.external.ISupabaseAuthAdmin;
 import co.edu.futdata.domain.entities.Categoria;
 import co.edu.futdata.domain.entities.Entrenador;
 import co.edu.futdata.domain.rules.ReglasEntrenador;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
 import co.edu.futdata.persistence.dao.ICategoriaDAO;
 import co.edu.futdata.persistence.dao.IEntrenadorDAO;
+import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
+import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
@@ -34,6 +42,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 /** EntrenadorServiceImpl con dobles en memoria de los DAO: sin base de datos ni Spring. */
 class EntrenadorServiceImplTest {
@@ -53,7 +62,7 @@ class EntrenadorServiceImplTest {
     void prepararDatos() {
         categorias = new CategoriasFalsas();
         entrenadores = new EntrenadoresFalsos(categorias);
-        servicio = new EntrenadorServiceImpl(entrenadores, categorias, RELOJ);
+        servicio = new EntrenadorServiceImpl(entrenadores, categorias, cuentasQueFuncionan(), TransactionOperations.withoutTransaction(), RELOJ);
         // Los mismos datos de ejemplo del frontend (entrenadoresService.js)
         mora = entrenadores.agregar("Andrés", "Mora", "CC", "1017234567", "andres.mora@pradofc.co");
         diaz = entrenadores.agregar("Carlos", "Díaz", "CC", "71654321", "carlos.diaz@pradofc.co");
@@ -67,6 +76,18 @@ class EntrenadorServiceImplTest {
         categorias.agregar("Sub-14", diaz);
         categorias.agregar("Sub-15", null);
         categorias.agregar("Sub-16", diaz);
+    }
+
+    /**
+     * Cuentas de acceso con Supabase Auth, la tabla usuario y n8n simulados, todos respondiendo bien. Las pruebas de
+     * la cuenta, el enlace y sus fallas están en {@link EntrenadorServiceImplCuentaTest}.
+     */
+    static CuentasDeAcceso cuentasQueFuncionan() {
+        ISupabaseAuthAdmin auth = mock(ISupabaseAuthAdmin.class);
+        when(auth.crearUsuario(anyString())).thenAnswer(i -> UUID.randomUUID());
+        when(auth.generarTokenRecuperacion(anyString())).thenReturn("token-inventado");
+        return new CuentasDeAcceso(auth, mock(IUsuarioDAO.class), mock(ISesionVerificadaDAO.class),
+                mock(INotificador.class), new FrontendProperties("http://localhost:5173"));
     }
 
     static EntrenadorRequestDTO datos() {
@@ -151,7 +172,7 @@ class EntrenadorServiceImplTest {
             assertThat(creado.id()).isNotNull();
             assertThat(creado).isEqualTo(new EntrenadorResponseDTO(creado.id(), "Luis", "Pérez", "CC", "1098765432",
                     LocalDate.of(1990, 5, 14), "3001112233", "luis.perez@pradofc.co", "Porteros", List.of(), null,
-                    "Calle 40 Sur 75b-81", true));
+                    "Calle 40 Sur 75b-81", true, true));
             assertThat(entrenadores.filas).hasSize(3);
         }
 
@@ -623,7 +644,19 @@ class EntrenadorServiceImplTest {
             if (!filas.containsKey(e.getId())) {
                 return false;
             }
-            filas.put(e.getId(), copia(e));
+            Entrenador nueva = copia(e);
+            nueva.setIdUsuario(filas.get(e.getId()).getIdUsuario()); // como el DAO real: no toca id_usuario
+            filas.put(e.getId(), nueva);
+            return true;
+        }
+
+        @Override
+        public boolean vincularUsuario(UUID id, UUID idUsuario) {
+            Entrenador fila = filas.get(id);
+            if (fila == null || fila.getIdUsuario() != null) {
+                return false;
+            }
+            fila.setIdUsuario(idUsuario);
             return true;
         }
 
@@ -646,6 +679,7 @@ class EntrenadorServiceImplTest {
         private Entrenador copia(Entrenador e) {
             Entrenador c = ReglasEntrenador.limpiar(e);
             c.setCorreo(e.getCorreo());
+            c.setIdUsuario(e.getIdUsuario());
             c.setCategorias(e.getId() == null ? List.of() : categorias.de(e.getId()));
             return c;
         }

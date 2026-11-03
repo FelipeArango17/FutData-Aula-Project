@@ -26,7 +26,8 @@ import org.springframework.web.client.RestClientException;
  * {@link INotificador} sobre el webhook de n8n: {@code POST {baseUrl}/webhook/futdata/notificaciones}
  * con la cabecera {@code X-FutData-Token} y el cuerpo {@code {"evento", "datos"}}.
  *
- * <p>Timeout de conexión y de lectura de {@code futdata.n8n.timeout} (5 s). Sin reintentos.
+ * <p>Timeout de conexión y de lectura de {@code futdata.n8n.timeout} (5 s), salvo {@link #ENLACE_CONTRASENA}, que es
+ * síncrono y usa {@code futdata.n8n.timeout-enlace} (15 s). Sin reintentos.
  *
  * <p><b>Registros:</b> solo el evento, el código HTTP, la duración y, si n8n lo devuelve, el número de
  * destinatarios. Nunca el cuerpo, el código 2FA, los correos, los destinatarios ni el token.
@@ -50,17 +51,26 @@ public class N8nClient implements INotificador {
     private static final Set<String> CAMPOS_NO_SENSIBLES = Set.of("evento", "tipoCambio");
 
     private final RestClient http;
+    /** Para {@link INotificador#ENLACE_CONTRASENA}, con {@code futdata.n8n.timeout-enlace} (15 s). */
+    private final RestClient httpEnlace;
     private final N8nProperties propiedades;
     private final ObjectMapper json;
 
     @Autowired
     public N8nClient(RestClient.Builder builder, N8nProperties propiedades, ObjectMapper json) {
-        this(builder.requestFactory(fabricaConTimeout(propiedades.timeout())).build(), propiedades, json);
+        this(builder.clone().requestFactory(fabricaConTimeout(propiedades.timeout())).build(),
+                builder.clone().requestFactory(fabricaConTimeout(propiedades.timeoutEnlace())).build(),
+                propiedades, json);
     }
 
     /** Para las pruebas: recibe un {@code RestClient} ya armado (por ejemplo, con MockRestServiceServer). */
     N8nClient(RestClient http, N8nProperties propiedades, ObjectMapper json) {
+        this(http, http, propiedades, json);
+    }
+
+    private N8nClient(RestClient http, RestClient httpEnlace, N8nProperties propiedades, ObjectMapper json) {
         this.http = http;
+        this.httpEnlace = httpEnlace;
         this.propiedades = propiedades;
         this.json = json;
     }
@@ -91,7 +101,8 @@ public class N8nClient implements INotificador {
         long inicio = System.nanoTime();
         Respuesta respuesta;
         try {
-            respuesta = http.post()
+            RestClient cliente = ENLACE_CONTRASENA.equals(evento) ? httpEnlace : http;
+            respuesta = cliente.post()
                     .uri(url)
                     .contentType(JSON_UTF8)
                     .accept(MediaType.APPLICATION_JSON)

@@ -161,6 +161,30 @@
               },
               "renameOutput": true,
               "outputKey": "CAMBIO_ENTRENAMIENTO"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000003",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "ENLACE_CONTRASENA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ENLACE_CONTRASENA"
             }
           ]
         },
@@ -312,7 +336,7 @@
             {
               "id": "d0000001-0000-4000-8000-000000000004",
               "name": "error",
-              "value": "={{ String($json.error || 'Error desconocido').replace(/[^\\s@<>\"'(),;:\\[\\]]+@[^\\s@<>\"'(),;:\\[\\]]+/g, '[correo]').replace(/\\b\\d{6}\\b/g, '[código]').slice(0, 500) }}",
+              "value": "={{ String($json.error || 'Error desconocido').replace(/https?:\\/\\/[^\\s\"'<>]+/gi, '[enlace]').replace(/token=[^\\s&\"'<>]*/gi, '[enlace]').replace(/[^\\s@<>\"'(),;:\\[\\]]+@[^\\s@<>\"'(),;:\\[\\]]+/g, '[correo]').replace(/\\b\\d{6}\\b/g, '[código]').slice(0, 500) }}",
               "type": "string"
             },
             {
@@ -333,7 +357,7 @@
         1340,
         80
       ],
-      "notes": "Solo datos no sensibles: nunca el código, el nombre, el correo completo, el token ni el cuerpo.",
+      "notes": "Solo datos no sensibles: nunca el código, el nombre, el correo completo, el enlace (ni \"token=...\"), el token del webhook ni el cuerpo.",
       "onError": "continueRegularOutput"
     },
     {
@@ -584,7 +608,7 @@
         2220,
         80
       ],
-      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA) ya respondieron 202: solo registran la falla. Este nodo y Responder 502 quedan para los eventos síncronos.",
+      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA) ya respondieron 202: solo registran la falla. Los síncronos (ENLACE_CONTRASENA) siguen a Responder 502.",
       "onError": "continueRegularOutput"
     },
     {
@@ -654,6 +678,118 @@
         660,
         360
       ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de ENLACE_CONTRASENA (síncrono: 200 enviado, 400 datos, 502 si el SMTP falla).\n// Devuelve { valido, detalle, ... } y el IF siguiente envía el correo o responde 400.\n// \"detalle\" explica el primer problema y nunca incluye el correo, el nombre ni el enlace.\n// Plantillas permitidas: cada una tiene su texto en el nodo de envío (hoy solo BIENVENIDA_ENTRENADOR).\nconst PLANTILLAS = ['BIENVENIDA_ENTRENADOR'];\nconst MAX_NOMBRE = 120;\nconst MAX_ENLACE = 2000;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_ENLACE = /^https?:\\/\\/[^\\s\"'<>]+$/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst html = (v) =>\n  String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n\nfunction validar(d) {\n  if (!PLANTILLAS.includes(d.plantilla)) return 'plantilla debe ser una de: ' + PLANTILLAS.join(', ');\n  if (typeof d.correo !== 'string' || d.correo.trim().length > 254 || !RE_CORREO.test(d.correo.trim())) {\n    return 'correo no tiene un formato válido';\n  }\n  if (typeof d.nombre !== 'string' || d.nombre.trim() === '' || d.nombre.trim().length > MAX_NOMBRE) {\n    return `nombre es obligatorio (máximo ${MAX_NOMBRE} caracteres)`;\n  }\n  if (typeof d.enlace !== 'string' || d.enlace.length > MAX_ENLACE || !RE_ENLACE.test(d.enlace)) {\n    return 'enlace debe empezar por http:// o https:// y no tener espacios';\n  }\n  if (typeof d.vigenciaHoras !== 'number' || !Number.isFinite(d.vigenciaHoras) || d.vigenciaHoras <= 0) {\n    return 'vigenciaHoras debe ser un número mayor que 0';\n  }\n  return null;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  if (detalle) {\n    resultado = { valido: false, detalle };\n  } else {\n    const horas = datos.vigenciaHoras;\n    resultado = {\n      valido: true,\n      detalle: '',\n      correo: datos.correo.trim(),\n      nombre: datos.nombre.trim(),\n      nombreHtml: html(datos.nombre.trim()),\n      enlace: datos.enlace,\n      enlaceHtml: html(datos.enlace),\n      vigencia: horas === 1 ? '1 hora' : horas + ' horas',\n    };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido' };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000025",
+      "name": "Validar datos ENLACE_CONTRASENA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        880
+      ],
+      "notes": "Valida los datos (plantilla permitida, correo, nombre, enlace http(s), vigenciaHoras > 0) y escapa el nombre y el enlace para el HTML."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000007-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000026",
+      "name": "¿Datos de enlace válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM }}",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "Bienvenido a FutData: crea tu contraseña",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $json.nombre }}:\n\nEl administrador de la Asociación Deportiva Prado Fútbol Club te registró\ncomo entrenador en FutData. Para entrar, primero crea tu contraseña en\neste enlace:\n\n    {{ $json.enlace }}\n\nEste enlace vence en {{ $json.vigencia }}; si venció, pide al administrador que te lo reenvíe.\n\n¿No esperabas este correo? Ignóralo; nadie podrá entrar a la cuenta sin\ncrear la contraseña con este enlace.\nEl enlace es personal y sirve una sola vez: no lo reenvíes.\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Bienvenido a FutData: crea tu contraseña</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nCrea tu contraseña para entrar a FutData. El enlace vence en {{ $json.vigencia }}.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ $json.nombreHtml }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">El administrador de la Asociación Deportiva Prado Fútbol Club te registró como entrenador en FutData. Para entrar, primero crea tu contraseña:</p>\n          </td>\n        </tr>\n        <!-- Botón -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n              <tr>\n                <td align=\"center\" style=\"background-color:#3CB043; border-radius:8px;\">\n                  <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-block; padding:14px 28px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:8px;\">Crear mi contraseña</a>\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <tr>\n          <td align=\"center\" style=\"padding:16px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#1F7A29; font-weight:600;\">\n            Este enlace vence en {{ $json.vigencia }}; si venció, pide al administrador que te lo reenvíe.\n          </td>\n        </tr>\n        <!-- Enlace en texto, por si el botón no funciona -->\n        <tr>\n          <td align=\"left\" style=\"padding:8px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#4B5563;\">\n            Si el botón no funciona, copia y pega este enlace en tu navegador:<br>\n            <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"color:#0F2C4C; word-break:break-all;\">{{ $json.enlaceHtml }}</a>\n          </td>\n        </tr>\n        <!-- Aviso de seguridad -->\n        <tr>\n          <td style=\"padding:0 32px 32px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>¿No esperabas este correo?</strong> Ignóralo; nadie podrá entrar a la cuenta sin crear la contraseña con este enlace.<br>\n                  <strong>El enlace es personal</strong> y sirve una sola vez: no lo reenvíes.\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000027",
+      "name": "Enviar correo enlace",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1320,
+        820
+      ],
+      "webhookId": "e2a1c0de-0e1a-4ce0-9a51-f17da7a00027",
+      "credentials": {
+        "smtp": {
+          "id": "smtpFutData",
+          "name": "SMTP FutData"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Plantilla BIENVENIDA_ENTRENADOR (n8n/plantillas/bienvenida-entrenador.*). Síncrono: responde después de enviar."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": true\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000028",
+      "name": "Responder 200 enlace",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ enviado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000029",
+      "name": "Responder 400 enlace",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        960
+      ]
     }
   ],
   "connections": {
@@ -716,6 +852,13 @@
         [
           {
             "node": "Validar datos CAMBIO_ENTRENAMIENTO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar datos ENLACE_CONTRASENA",
             "type": "main",
             "index": 0
           }
@@ -880,6 +1023,53 @@
     "Enviar aviso de entrenamiento": {
       "main": [
         [],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos ENLACE_CONTRASENA": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de enlace válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de enlace válidos?": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo enlace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 enlace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo enlace": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 enlace",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Armar registro de falla",

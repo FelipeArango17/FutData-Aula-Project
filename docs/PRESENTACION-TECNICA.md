@@ -3,7 +3,7 @@
 Sistema de gestión deportiva para la Asociación Deportiva Prado Fútbol Club (PPI, sexto semestre).
 
 > **Esta es la fuente de verdad del proyecto.** El documento PPI ya no se modifica: lo que se decida desde el 1 de noviembre de 2026 se registra aquí. Se actualiza con cada cambio (ver el registro de cambios al final).
-> Última actualización: 2 de noviembre de 2026 (versión 2: alcance de la entrega final).
+> Última actualización: 2 de noviembre de 2026 (versión 2: alcance de la entrega final; bloque 5).
 > **Entrega final al jurado: sábado 7 de noviembre de 2026.** Para esa fecha toda la aplicación debe funcionar con datos reales, con los cuatro roles y sin maquetas.
 
 ## 1. Qué es FutData
@@ -33,7 +33,7 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
-- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual: **874 pruebas, 0 fallos, 7 omitidas** (las que necesitan n8n y Supabase reales, incluida la de fotos contra Supabase real).
+- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual, contado con `./mvnw clean test`: **1030 pruebas, 0 fallos, 9 omitidas** (las 9 manuales, que necesitan n8n o Supabase reales: n8n local, Storage, fotos y el enlace de crear contraseña contra el proyecto de prueba). El "874" que figuraba antes era un error de conteo: al sumar los reportes `.txt` de surefire no se contaban las clases `@Nested`. El total real antes del bloque 5 era **928**.
 
 ## 4. Modelo de datos (resumen)
 
@@ -75,7 +75,12 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
    - La "foto tipo documento" es la **foto del deportista**, no un tipo de documento. La ficha médica ya no existe.
    - Archivos PDF, JPG o PNG, máximo 5 MB, validados por su contenido real (no por la extensión).
 8. **Validación de documentos:** el administrador revisa. Mientras no los haya validado, **la inscripción queda pendiente**. Al rechazar un documento el comentario es obligatorio y se envía por correo al acudiente (n8n).
-9. **Alta de entrenador y de acudiente:** sin contraseña temporal. Se envía un enlace para que cada persona cree su propia contraseña.
+9. **Alta de entrenador y de acudiente:** sin contraseña temporal ni cambio forzado. Se envía un enlace para que cada persona cree su propia contraseña. Hecho para el entrenador (bloque 5); el acudiente llega con la inscripción (2B).
+   - **Enlace:** vence en **1 hora** (Supabase Auth, `mailer_otp_exp = 3600`) y sirve una sola vez; un enlace nuevo invalida el anterior. Si vence, el administrador lo reenvía. Nunca se registra en logs ni sale en una respuesta de la API.
+   - **Contraseña:** entre 8 y 72 caracteres, como mucho 72 bytes en UTF-8 (una ñ o una tilde ocupan 2), con al menos una letra y un número. Mismo mensaje en el frontend y el backend: "La contraseña debe tener entre 8 y 72 caracteres, con al menos una letra y un número."
+   - **Límites en memoria:** un envío del enlace por minuto por entrenador (el alta cuenta como uno) y, al crear la contraseña, 10 intentos por minuto por IP, 5 por enlace y 60 en total. Se pierden al reiniciar y no se comparten entre instancias (hoy hay una sola en Render).
+   - **Desactivar un entrenador con cuenta le impide entrar:** se bloquea su cuenta en Supabase Auth, `usuario.activo` pasa a `false` y se borran sus sesiones verificadas; al reactivarlo se restaura. Sus franjas se conservan (con `entrenadorActivo: false`).
+   - El correo de un entrenador con cuenta no se puede cambiar (`409`): es con el que inicia sesión.
 10. **Inscripción pendiente:** el estado de la inscripción **se calcula** (no es una columna): está *pendiente* mientras alguno de los 4 documentos obligatorios no esté APROBADO. La API lo devuelve como `estadoInscripcion`. Mientras esté pendiente, el deportista queda **activo**, para que el administrador lo vea en la lista y valide sus documentos.
 11. **Parentesco** (acudiente–deportista): `Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio`, `Otro` (migración 008). El frontend lo muestra con tilde y lo envía sin tilde.
 12. **Protección de pantallas:** sin sesión verificada, cualquier ruta de la aplicación lleva a `/login`; con la sesión de un rol, las rutas de otro rol llevan al inicio del propio.
@@ -123,7 +128,11 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 
 **Inscripción (administrador, 4 pasos: Jugador, Acudiente, Documentos, Confirmar).** Un solo `POST` transaccional (la categoría no se guarda: se calcula al leer) que crea el deportista, crea o reutiliza al acudiente por correo (con su parentesco), sube la foto y los documentos a Storage, y envía al acudiente el enlace para crear su contraseña. La inscripción queda **pendiente** hasta que el administrador valide los documentos. Si algo falla a mitad, devuelve un error claro (`INSCRIPCION_PARCIAL`).
 
-**Alta de entrenador.** El administrador lo crea; se genera el usuario con rol ENTRENADOR sin contraseña y n8n envía el enlace. Si el enlace vence, el administrador puede reenviarlo.
+**Alta de entrenador.** El administrador lo registra (`POST /api/entrenadores`). El backend crea la cuenta de Supabase Auth sin contraseña y, en una sola transacción, el entrenador, su `usuario` con rol ENTRENADOR y el vínculo `entrenador.id_usuario`; si la base falla, borra la cuenta de Auth. **Después** del commit genera el enlace y n8n envía el correo de bienvenida (evento síncrono `ENLACE_CONTRASENA`). Si el envío falla, el alta queda hecha igual y responde `correoEnviado: false`, y el frontend sugiere "Reenviar enlace". Si el correo ya es de otra cuenta, responde `409` y no guarda nada.
+
+**Reenvío del enlace.** El administrador pulsa "Reenviar enlace" (`POST /api/entrenadores/{id}/reenviar-enlace`). Si el entrenador no tiene cuenta, se crea; si la tiene, se genera un enlace nuevo, que invalida el anterior. Uno por minuto por entrenador (`429`). Responde `204` sin el enlace; `409` si el entrenador está inactivo o su correo es de otra cuenta, y `503` si Supabase o el correo fallan.
+
+**Crear la contraseña.** El entrenador abre el enlace (`/crear-contrasena?token=...`), escribe su contraseña y el frontend llama a `POST /api/auth/crear-contrasena`, que es público. El backend revisa la política **antes** de verificar el enlace (verificar lo consume), lo verifica con Supabase, fija la contraseña, cierra la sesión que abrió la verificación y responde `200` sin iniciar sesión: la persona entra después por el login normal, con su 2FA. Enlace inválido, vencido o usado: `400` con un mensaje único, sin decir cuál de los tres.
 
 **Revisión de documentos.** El acudiente o el administrador suben. Solo el administrador aprueba o rechaza. Al rechazar va un comentario y n8n avisa al acudiente.
 
@@ -144,12 +153,31 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
   - `POST /api/horario-club`, `PUT /api/horario-club/{id}` (reemplaza todo) y `DELETE /api/horario-club/{id}` (`204`): solo ADMINISTRADOR.
   - Horas en `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo. Grupo solo en Cachorros y Semillero.
   - El mismo entrenador con dos franjas que se solapan el mismo día: `409` "Ese entrenador ya tiene otra franja que se cruza con este horario". Las contiguas no se cruzan y categorías distintas pueden coincidir en hora y sede.
+- Alta de entrenadores con enlace (bloque 5, en la rama `feat/alta-entrenador-enlace`; detalle en `backend/README.md`):
+  - `POST /api/entrenadores` (solo ADMINISTRADOR) ahora también crea la cuenta de acceso y responde `201` con `correoEnviado` (`true` o `false`); `409` si el correo ya es de otra cuenta y `503` si Supabase Auth no responde (no se guarda nada). Las demás respuestas de entrenadores no traen `correoEnviado`.
+  - `POST /api/entrenadores/{id}/reenviar-enlace` (solo ADMINISTRADOR): `204` sin cuerpo; `404`; `409` (inactivo, sin correo o correo de otra cuenta); `429` con `Retry-After` (un envío por minuto); `503` (Supabase o el correo fallan).
+  - `POST /api/auth/crear-contrasena` (**público**, sin token ni sesión) con `{ token, contrasena }`: `200` con un mensaje y sin tokens; `400` de política con `campos: ["contrasena"]`; `400` de enlace inválido, vencido o usado (mensaje único, sin `campos`); `429` con `Retry-After`; `503` si Supabase Auth falla.
+  - `PUT /api/entrenadores/{id}`: `409` si intenta cambiar el correo de un entrenador con cuenta.
 
 **Previstos:**
 
 - Documentos: subir, aprobar y rechazar.
 - `POST` de inscripción única.
-- Alta de entrenador con enlace y reenvío.
+- Mis jugadores del acudiente (bloque 2C), solo rol ACUDIENTE; el acudiente sale del token, nunca de un id que envíe el frontend:
+  - `GET /api/acudientes/me/deportistas`: sus jugadores vinculados, con foto firmada y categoría derivada.
+  - `GET /api/acudientes/me/deportistas/{id}`: la ficha de uno de sus hijos; si no es suyo, `404` (no `403`).
+- Horario de la semana (bloque 4B). **Borrador del contrato: se ajusta al implementar.**
+  - `GET /api/usuarios/yo` (ya existe) agrega `"entrenador": { "idEntrenador": uuid, "categorias": [ { "idCategoria": uuid, "nombre": "Semillero" } ] }` para el rol ENTRENADOR (`categorias` = las categorías a su cargo, `categoria.id_entrenador`). Es `null` para los demás roles y también para un ENTRENADOR sin fila de entrenador vinculada (`entrenador.id_usuario`). (4B-1)
+  - `GET /api/horario-semana?fecha=AAAA-MM-DD` (4 roles; sin `fecha` = hoy en Bogotá). El acudiente solo puede pedir la semana en curso (otra: `403` "Solo puedes consultar la semana en curso"); los demás roles, cualquiera. Respuesta: `{ "desde": "2026-11-02", "hasta": "2026-11-07", "sesiones": [...] }`, ordenadas por `fecha` y `horaInicio`. (4B-1, solo franjas)
+  - Cada sesión: `tipo` (`FRANJA` o `EXTRA`), `estado` (`ACTIVO` o `CANCELADO`), `idFranja` (uuid; `null` en un extra), `idExcepcion` (uuid de la cancelación o el extra; `null` en una franja activa), `fecha`, `dia` (1..6), `horaInicio` y `horaFin` (`HH:mm`), `idCategoria`, `categoria` (nombre), `sede`, `idEntrenador`, `entrenador` (nombre; `null` = por turnos), `entrenadorActivo`, `grupo` (`null` salvo Cachorros y Semillero), `motivo` (texto o `null`) y `puedeGestionar` (si quien consulta puede cancelar o editar esa sesión). Mismos nombres que `/api/horario-club`.
+  - Escritura (4B-2). ADMINISTRADOR en cualquier categoría; ENTRENADOR solo en sus categorías o en franjas que le tocan (si no, `403`); acudiente y tesorero solo leen:
+    - `POST /api/horario-semana/cancelaciones` `{ fecha, idFranja, motivo? (máx. 200) }`: `201`.
+    - `DELETE /api/horario-semana/cancelaciones/{idExcepcion}`: deshace la cancelación.
+    - `POST /api/horario-semana/extras` `{ idCategoria, fecha, horaInicio, horaFin, sede, idEntrenador (null = por turnos), grupo?, motivo? }`: `201`.
+    - `PUT /api/horario-semana/extras/{idExcepcion}` (mismo cuerpo).
+    - `DELETE /api/horario-semana/extras/{idExcepcion}`.
+  - Todas las de escritura responden `{ "sesion": {...la sesión resultante, o null si se borró...}, "avisoEnviado": true | false | null }`. `true`: n8n recibió el aviso a los acudientes de la categoría (no garantiza que el correo llegue; `CAMBIO_ENTRENAMIENTO` es asíncrono). `false`: no se pudo avisar, pero la operación **sí** quedó hecha. `null`: no había a quién avisar.
+  - Validaciones: no cancelar ni crear en fechas pasadas (`400`); al cancelar, el día de la semana de la fecha debe coincidir con el de la franja (`400`); no cancelar dos veces la misma franja y fecha (`409`); extras de lunes a sábado, sede válida, `horaFin` > `horaInicio`, grupo solo para Cachorros y Semillero; cruce del mismo entrenador contra franjas no canceladas y otros extras (`409` "Ese entrenador ya tiene otra franja que se cruza con este horario"). Un extra puede quedar fuera de las franjas fijas.
 - Pagos: crear el cobro (mensualidad), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
 - Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
 
@@ -162,12 +190,22 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 | 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | Omar | **Hecho** (en `develop` y en la base real) |
 | 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición. Incluye la migración 008 (parentesco, grupo y activo) | Omar | Hecho en la rama `feat/deportistas-api` (pendiente de merge) |
 | 4A | API del horario fijo del club (`franja_horario`, `/api/horario-club`), sin migración nueva | Omar | Hecho en la rama `feat/horario-club` (pendiente de merge) |
-| 4B | Entrenamientos (HU-026) | Omar | Pendiente |
-| 5 | Alta de entrenadores con enlace y reenvío | Omar | Pendiente |
+| 5 | Alta de entrenadores con enlace para crear la contraseña, reenvío y desactivación con bloqueo de la cuenta, sin migración nueva | Omar | Hecho en la rama `feat/alta-entrenador-enlace` (pendiente de merge) |
+| 2C | **Mis jugadores (acudiente):** `GET /api/acudientes/me/deportistas` y `GET /api/acudientes/me/deportistas/{id}` (ver abajo). No depende de nada nuevo; va antes del bloque 3 | Omar | Pendiente |
+| 4B | Entrenamientos (HU-026), redefinido: las franjas son fijas todo el año y solo se registran **excepciones por fecha** (`CANCELADO` y `EXTRA`) en una **tabla nueva de excepciones** (migración 010), sin tocar la tabla `entrenamiento`. `GET /api/horario-semana?fecha=` arma la semana con las franjas y sus excepciones. El acudiente solo ve la semana en curso. Cancelar una sesión y crear una extra: el administrador y el entrenador de la categoría. Se divide en 4B-1 y 4B-2 | Omar | Pendiente |
+| 4B-1 | Sin migración: `GET /api/usuarios/yo` con el bloque `entrenador` para ENTRENADOR y `GET /api/horario-semana` **solo con franjas** (`estado` siempre `ACTIVO`, sin excepciones ni extras) | Omar | Pendiente |
+| 4B-2 | Migración 010 (tabla nueva de excepciones; `entrenamiento` no se toca): cancelaciones y extras con sus reglas, y los avisos por `CAMBIO_ENTRENAMIENTO`. Primera versión: cancelar, deshacer, crear y eliminar extra; editar un extra después, si da el tiempo | Omar | Pendiente |
 | 3 | Documentos: subir, aprobar, rechazar, correo | Omar | Pendiente |
 | 2B | Inscripción única (la migración 008 llegó con el 2A) | Omar | Pendiente |
 
-Orden acordado: 2A, 4A, 5, 3, 2B, 4B (4A es el horario del club; 4B, los entrenamientos, HU-026).
+Orden acordado: 2A y 4A (hechos), después **5 → 2C → 4B-1 → 3 → 2B → 4B-2** (4A es el horario del club; 4B, los entrenamientos, HU-026).
+
+**Bloque 2C — Mis jugadores (acudiente).**
+
+- **Motivo:** `GET /api/deportistas` es solo para ADMINISTRADOR y ENTRENADOR; no existe ningún endpoint para que un acudiente vea a sus propios hijos, así que las pantallas acudiente/Jugadores, Ficha e Inicio no se pueden conectar.
+- **Alcance:** `GET /api/acudientes/me/deportistas` (lista de sus jugadores vinculados, con foto firmada y categoría derivada) y `GET /api/acudientes/me/deportistas/{id}` (ficha de uno de sus hijos; si no es suyo, `404`, no `403`). Solo rol ACUDIENTE; el acudiente se identifica por el token, nunca por un id enviado por el frontend. Reutiliza el DAO, la categoría derivada y las URL firmadas del 2A.
+- **Pregunta abierta:** si el acudiente ve `estadoInscripcion` y qué documentos faltan de sus hijos (propuesta: sí, solo de los suyos; se cierra en el bloque 3).
+- **Responsable:** Omar. No depende de nada nuevo; va antes del bloque 3.
 
 ### 9.2 Módulos nuevos para la entrega final
 
@@ -208,6 +246,7 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 - Una rama por bloque desde `develop`; PR a `develop`, el otro lo revisa.
 - Toda migración se prueba primero en un proyecto de prueba de Supabase y se aplica en la real con backup. Una migración ya aplicada no se edita: se crea una nueva.
 - Las pruebas corren con `.\mvnw.cmd test` desde `backend\` (Docker abierto) y no tocan la base real.
+- **El total de pruebas se cuenta siempre con `./mvnw clean test`** (`.\mvnw.cmd clean test` en Windows) y se toma de la línea final de Maven (`Tests run: N, Failures: 0, Errors: 0, Skipped: M`). Sin `clean` quedan reportes viejos en `target/`, y sumar los `.txt` de surefire no cuenta las clases `@Nested`.
 - Cada bloque termina con este archivo actualizado.
 - Ninguna pantalla muestra datos de ejemplo en la entrega final: lo que no esté conectado a la API se oculta del menú.
 
@@ -223,3 +262,5 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-01 | Bloque 6 (pagos con Wompi): **backend en curso**. Migración 009 (más medios de pago, tipos TORNEO y UNIFORME, `id_transaccion_wompi`), `/api/pagos`, webhook con firma, reintento y conciliación. El monto de la mensualidad queda configurable y pendiente de que lo defina el club. |
 | 2026-11-02 | Bloque 4A (rama `feat/horario-club`, pendiente de merge), sin migración nueva. API `/api/horario-club`: lectura para los cuatro roles y edición solo para el administrador, filtros `categoria`, `entrenador` y `sede`, horas `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo, y la respuesta trae `entrenadorActivo`. El cruce del mismo entrenador lo decide `franja_cruce_entrenador_ex` (`409`); las contiguas no se cruzan. El bloque 4 se divide en 4A (horario) y 4B (entrenamientos). **875 pruebas, 0 fallos, 7 omitidas** (con el bloque 6 de `develop`). |
 | 2026-11-02 | Latencia del 2FA (rama `fix/latencia-2fa`): `CODIGO_2FA` pasa a asíncrono en n8n (valida, responde `202` y después envía). `N8nClient` ya aceptaba `200` y `202`, así que el orden de despliegue no importa. Si el SMTP falla después del `202`, el código queda guardado, el correo no llega y el usuario usa "Reenviar código"; la falla solo queda en el registro enmascarado de n8n. **874 pruebas, 0 fallos, 7 omitidas** (`develop` tenía 873: el 875 anterior contaba reportes viejos de `target/`). |
+| 2026-11-02 | **Corrección del conteo de pruebas.** El "874" estaba mal contado: se sumaban los `.txt` de surefire, que no incluyen las clases `@Nested` (`EntrenadorServiceImplTest` y `JwtValidatorTest`). Con `./mvnw clean test`, el total real antes del bloque 5 era **928 pruebas, 0 fallos, 7 omitidas**. Desde ahora se cuenta siempre así (sección 10). |
+| 2026-11-02 | Bloque 5 (rama `feat/alta-entrenador-enlace`, pendiente de merge), sin migración nueva. Alta de entrenador con cuenta de Supabase Auth sin contraseña, `usuario`, `usuario_rol` e `id_usuario` en una transacción (con compensación en Auth) y, después del commit, enlace para crear la contraseña por n8n (`ENLACE_CONTRASENA`, síncrono, 15 s de espera) con `correoEnviado`. Reenvío (`POST /api/entrenadores/{id}/reenviar-enlace`, uno por minuto) y `POST /api/auth/crear-contrasena` público (política antes de verificar, `400` genérico, `429`, `503`). El enlace vence en 1 hora. Política de contraseña 8–72 caracteres y máximo 72 bytes, con letra y número. Límites en memoria (por IP con `CF-Connecting-IP`, por enlace y global). Desactivar un entrenador con cuenta bloquea su acceso. `FRONTEND_URL` obligatoria en prod. Deudas: administrador y tesorero siguen con la invitación de Supabase; el correo de un entrenador con cuenta no se puede editar. Nuevo orden: 5 → 2C → 4B-1 → 3 → 2B → 4B-2, con 4B redefinido (excepciones por fecha, migración 010). Corrección: bloquear y restaurar una cuenta en Supabase Auth usaba `PATCH`, que esa ruta no acepta (desactivar un entrenador con cuenta daba `503`, y revocar y restablecer de `/api/usuarios` nunca funcionaron); ahora usa `PUT`, traduce cada respuesta y un `404` (cuenta inexistente, probable mezcla de proyectos `SUPABASE_URL`/`DB_URL`) deja desactivar y responde `409` al reactivar. **1030 pruebas, 0 fallos, 9 omitidas.** |

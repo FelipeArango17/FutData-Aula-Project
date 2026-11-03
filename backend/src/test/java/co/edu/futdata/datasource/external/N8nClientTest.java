@@ -53,7 +53,9 @@ class N8nClientTest {
     private static final String CORREO_ACUDIENTE = "acudiente@ejemplo.com";
     private static final String NOMBRE_DESTINATARIO = "Marta Gómez";
     /** Lo que nunca debe salir en un log ni en una excepción. */
-    private static final List<String> SECRETOS = List.of(CODIGO, TOKEN, CORREO, CORREO_ACUDIENTE, NOMBRE_DESTINATARIO);
+    private static final String ENLACE = "https://example.test/crear-contrasena?token=PRUEBA-enlace-7c1e";
+    private static final List<String> SECRETOS = List.of(CODIGO, TOKEN, CORREO, CORREO_ACUDIENTE, NOMBRE_DESTINATARIO,
+            ENLACE, "token=PRUEBA");
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<String> LOGGERS_EN_DETALLE = List.of("co.edu.futdata", "org.springframework.web", "org.springframework.http");
 
@@ -273,6 +275,86 @@ class N8nClientTest {
         sinSecretos(e);
     }
 
+    // --- ENLACE_CONTRASENA: síncrono, con su propio tiempo de espera ---
+
+    @Test
+    void enlaceContrasenaHaceElPostYAceptaEl200() {
+        servidor.expect(requestTo(URL_WEBHOOK))
+                .andExpect(content().json("{\"evento\":\"ENLACE_CONTRASENA\",\"datos\":{\"plantilla\":\"BIENVENIDA_ENTRENADOR\","
+                        + "\"correo\":\"" + CORREO + "\",\"nombre\":\"Ana\",\"enlace\":\"" + ENLACE + "\",\"vigenciaHoras\":1}}",
+                        JsonCompareMode.STRICT))
+                .andRespond(json(HttpStatus.OK, "{\"enviado\":true}"));
+
+        cliente.notificar(INotificador.ENLACE_CONTRASENA, datosEnlace());
+        servidor.verify();
+    }
+
+    @Test
+    void enlaceContrasenaCon502LanzaNoEnviadaSinElEnlace() {
+        servidor.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.BAD_GATEWAY,
+                "{\"enviado\":false,\"error\":\"No se pudo enviar el correo\"}"));
+
+        NotificacionNoEnviadaException e = catchThrowableOfType(NotificacionNoEnviadaException.class,
+                () -> cliente.notificar(INotificador.ENLACE_CONTRASENA, datosEnlace()));
+        assertThat(e.getCodigoHttp()).hasValue(502);
+        sinSecretos(e);
+    }
+
+    @Test
+    void enlaceContrasenaCon400NoRepiteElEnlaceDelDetalle() {
+        servidor.expect(requestTo(URL_WEBHOOK)).andRespond(json(HttpStatus.BAD_REQUEST,
+                "{\"enviado\":false,\"detalle\":\"enlace inválido: " + ENLACE + "\"}"));
+
+        NotificacionRechazadaException e = catchThrowableOfType(NotificacionRechazadaException.class,
+                () -> cliente.notificar(INotificador.ENLACE_CONTRASENA, datosEnlace()));
+        sinSecretos(e);
+    }
+
+    /**
+     * Con el constructor real y un n8n que tarda 1 s: con 300 ms para los demás eventos, CODIGO_2FA se corta, pero
+     * ENLACE_CONTRASENA usa su propio tiempo (3 s aquí; 15 s por defecto) y recibe el 200.
+     */
+    @Test
+    void enlaceContrasenaUsaSuPropioTiempoDeEsperaYLosDemasNo() throws IOException {
+        HttpServer lento = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        lento.createContext(N8nClient.RUTA_WEBHOOK, intercambio -> {
+            try {
+                Thread.sleep(1_000);
+                byte[] cuerpo = "{\"enviado\":true}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                intercambio.getResponseHeaders().add("Content-Type", "application/json");
+                intercambio.sendResponseHeaders(200, cuerpo.length);
+                intercambio.getResponseBody().write(cuerpo);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                intercambio.close();
+            }
+        });
+        lento.start();
+        try {
+            String base = "http://127.0.0.1:" + lento.getAddress().getPort();
+            N8nClient real = new N8nClient(RestClient.builder(),
+                    new N8nProperties(base, TOKEN, Duration.ofMillis(300), Duration.ofSeconds(3)), JSON);
+
+            assertThatThrownBy(() -> real.notificar(INotificador.CODIGO_2FA, datos2fa()))
+                    .isInstanceOf(NotificacionNoEnviadaException.class);
+            assertThatCode(() -> real.notificar(INotificador.ENLACE_CONTRASENA, datosEnlace())).doesNotThrowAnyException();
+
+            // Y es configurable: con 300 ms también para el enlace, se corta
+            N8nClient corto = new N8nClient(RestClient.builder(),
+                    new N8nProperties(base, TOKEN, Duration.ofMillis(300), Duration.ofMillis(300)), JSON);
+            assertThatThrownBy(() -> corto.notificar(INotificador.ENLACE_CONTRASENA, datosEnlace()))
+                    .isInstanceOf(NotificacionNoEnviadaException.class);
+        } finally {
+            lento.stop(0);
+        }
+    }
+
+    @Test
+    void elTiempoDelEnlaceEsDe15SegundosPorDefecto() {
+        assertThat(new N8nProperties(BASE_URL, TOKEN, Duration.ofSeconds(5)).timeoutEnlace()).isEqualTo(Duration.ofSeconds(15));
+    }
+
     /** Con el constructor real: el timeout de lectura sí se aplica (servidor local que tarda más que el timeout). */
     @Test
     void elTimeoutDeLecturaConfiguradoCortaLaEspera() throws IOException {
@@ -423,6 +505,11 @@ class N8nClientTest {
 
     private static ResponseCreator json(HttpStatus estado, String cuerpo) {
         return withStatus(estado).contentType(MediaType.APPLICATION_JSON).body(cuerpo);
+    }
+
+    private static Map<String, Object> datosEnlace() {
+        return Map.of("plantilla", "BIENVENIDA_ENTRENADOR", "correo", CORREO, "nombre", "Ana", "enlace", ENLACE,
+                "vigenciaHoras", 1);
     }
 
     private static Map<String, Object> datos2fa() {

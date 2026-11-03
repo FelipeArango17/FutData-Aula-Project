@@ -29,7 +29,7 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
 
     private static final String COLUMNAS = """
             id_entrenador, nombre, apellido, tipo_documento, documento_identidad, fecha_nacimiento, telefono,
-            correo, direccion, horario_trabajo, especialidad, activo""";
+            correo, direccion, horario_trabajo, especialidad, activo, id_usuario""";
 
     private static final RowMapper<Entrenador> FILA_A_ENTIDAD = EntrenadorDAOImpl::aEntidad;
 
@@ -111,6 +111,12 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
                 new MapSqlParameterSource().addValue("activo", activo).addValue("id", id)) > 0;
     }
 
+    @Override
+    public boolean vincularUsuario(UUID id, UUID idUsuario) {
+        return jdbc.update("UPDATE entrenador SET id_usuario = :idUsuario WHERE id_entrenador = :id AND id_usuario IS NULL",
+                new MapSqlParameterSource().addValue("idUsuario", idUsuario).addValue("id", id)) > 0;
+    }
+
     private boolean existe(String condicion, MapSqlParameterSource parametros, UUID excluirId) {
         String sql = "SELECT EXISTS (SELECT 1 FROM entrenador WHERE " + condicion;
         if (excluirId != null) {
@@ -163,6 +169,7 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
         e.setHorarioTrabajo(fila.getString("horario_trabajo"));
         e.setEspecialidad(fila.getString("especialidad"));
         e.setActivo(fila.getBoolean("activo"));
+        e.setIdUsuario(fila.getObject("id_usuario", UUID.class));
         return e;
     }
 }

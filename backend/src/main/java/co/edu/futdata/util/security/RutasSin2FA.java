@@ -9,7 +9,8 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 /**
  * Las <b>únicas</b> rutas que no exigen una sesión con el segundo paso completado (PPI 4.2: "todos los servicios de
  * la API, excepto los de inicio de sesión, verificación del código y el webhook de Wompi, exigen un token válido de
- * una sesión que ya completó el segundo paso"). Todo lo que no esté aquí exige JWT válido, un rol en la base de
+ * una sesión que ya completó el segundo paso"), más crear la contraseña con el enlace del correo (regla 9), que es
+ * parte del inicio de sesión. Todo lo que no esté aquí exige JWT válido, un rol en la base de
  * datos y la sesión verificada ({@link SesionVerificadaFilter}).
  *
  * <p>Las usan {@link SeguridadConfig} (las {@link Acceso#PUBLICA} van con {@code permitAll}) y
@@ -23,6 +24,9 @@ public final class RutasSin2FA {
 
     /** Webhook de Wompi ({@code WompiWebhookController}). */
     public static final String WEBHOOK_WOMPI = "/api/pagos/webhook/wompi";
+
+    /** Crear la contraseña con el enlace del correo ({@code ContrasenaController}). */
+    public static final String CREAR_CONTRASENA = "/api/auth/crear-contrasena";
 
     /** Cómo se entra a una ruta sin 2FA. */
     public enum Acceso {
@@ -52,6 +56,9 @@ public final class RutasSin2FA {
                     "Segundo paso: reenviar el código (uno por minuto)"),
             new Ruta(HttpMethod.POST, "/api/auth/2fa/verificar", Acceso.CON_TOKEN,
                     "Segundo paso: verificar el código; marca la sesión como verificada"),
+            new Ruta(HttpMethod.POST, CREAR_CONTRASENA, Acceso.PUBLICA,
+                    "Quien crea su contraseña aún no tiene sesión: la credencial es el token del enlace (de un solo uso, "
+                            + "lo verifica Supabase) y hay límite de intentos por IP, por token y global"),
             new Ruta(HttpMethod.POST, WEBHOOK_WOMPI, Acceso.PUBLICA,
                     "Wompi no envía JWT: el controlador debe verificar la firma del evento antes de usarlo"),
             new Ruta(HttpMethod.GET, "/api/health", Acceso.PUBLICA,
