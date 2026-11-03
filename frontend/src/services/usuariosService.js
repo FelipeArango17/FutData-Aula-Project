@@ -26,8 +26,20 @@
 // - Permisos: aquí solo el administrador opera esto; en producción lo valida el backend con el JWT (el actor simula el token).
 // - Autoacceso: se compara el correo del actor con el del usuario (sin importar mayúsculas).
 // - Solo nombre, correo, rol y estado: sin teléfono ni documentos.
+//
+// Modo API (VITE_API_MODULOS con "usuarios"): ver el final del archivo. Habla con /api/usuarios; los ids son UUID. La API no ofrece
+// historial de cambios, "creadoPor", estados Invitado/Sin activar ni "Reenviar": en modo API no se muestran. Las reglas de
+// autoacceso y del último administrador las decide el backend (409) y se muestra su mensaje. Sin el interruptor (y siempre en las
+// pruebas) todo sigue con los datos de ejemplo, con ids numéricos: los dos modos no se mezclan.
+// PENDIENTE: un usuario 'entrenador' sigue sin ligarse al registro de entrenadores (módulo entrenadores).
 import { roleLabels } from '../config/menus.js'
+import { adaptarUsuario, cuerpoRol, cuerpoUsuario, errorDeUsuarios } from '../utils/usuariosApi.js'
+import { apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
 import { MENSAJES, enLista, validarCampos, validarCorreo, validarNombre } from '../utils/validaciones.js'
+
+const usarApi = usarApiDe('usuarios')
+export const usuariosPorApi = () => usarApi
 
 export const ROLES = ['administrador', 'tesorero', 'entrenador', 'acudiente']
 export const ETIQUETAS_ROL = roleLabels
@@ -124,6 +136,7 @@ const fallaValidacion = (errores) => Object.assign(error('VALIDACION', 'Hay dato
 
 // texto: nombre, apellido o correo. rol: un rol o ''/'todos'. estado: 'todos' | 'activos' | 'revocados'.
 export async function listarUsuarios({ texto, rol, estado = 'todos' } = {}, actor) {
+  if (usarApi) return api.listar({ texto, rol, estado })
   await simularRed()
   exigirAdministrador(actor)
   let lista = usuarios
@@ -135,14 +148,16 @@ export async function listarUsuarios({ texto, rol, estado = 'todos' } = {}, acto
   return lista.map(copiar)
 }
 
-// { usuario, historial }
+// { usuario, historial } (en modo API el historial va siempre vacío)
 export async function obtenerUsuario(id, actor) {
+  if (usarApi) return api.obtener(id)
   await simularRed()
   exigirAdministrador(actor)
   return respuesta(buscar(id))
 }
 
 export async function obtenerHistorial(id, actor) {
+  if (usarApi) return [] // la API no tiene historial
   await simularRed()
   exigirAdministrador(actor)
   return copiaHistorial(buscar(id).id)
@@ -150,6 +165,7 @@ export async function obtenerHistorial(id, actor) {
 
 // Crea un usuario con acceso vigente. NO envía invitación ni guarda contraseña (ver PENDIENTE arriba).
 export async function crearUsuario(datos, actor) {
+  if (usarApi) return api.crear(datos)
   await simularRed()
   exigirAdministrador(actor)
   const errores = validarDatosUsuario(datos)
@@ -185,6 +201,7 @@ function guardarCambio(actual, cambios, actor, detalle) {
 }
 
 export async function cambiarRol(id, rol, actor) {
+  if (usarApi) return api.cambiarRol(id, rol)
   await simularRed()
   exigirAdministrador(actor)
   const actual = buscar(id)
@@ -197,6 +214,7 @@ export async function cambiarRol(id, rol, actor) {
 
 // No borra nada: solo pone activo = false y lo deja en el historial.
 export async function revocarAcceso(id, actor) {
+  if (usarApi) return api.cambiarAcceso(id, 'revocar')
   await simularRed()
   exigirAdministrador(actor)
   const actual = buscar(id)
@@ -206,9 +224,51 @@ export async function revocarAcceso(id, actor) {
 }
 
 export async function restablecerAcceso(id, actor) {
+  if (usarApi) return api.cambiarAcceso(id, 'restablecer')
   await simularRed()
   exigirAdministrador(actor)
   const actual = buscar(id)
   if (actual.activo) throw error('SIN_CAMBIOS', 'Este usuario ya tiene acceso.')
   return guardarCambio(actual, { activo: true }, actor, [{ campo: 'activo', antes: ETIQUETA_REVOCADO, despues: ETIQUETA_ACTIVO }])
+}
+
+// ---- API real ----
+// Los errores de la API llegan con `estado`, `mensaje` (en español) y `campos`; errorDeUsuarios los deja con `codigo`, `message` y,
+// si traen campos, `errores` ({ campo: texto }), que es lo que ya muestran las pantallas. El permiso lo valida el backend con el JWT.
+const rutaDe = (id) => `/usuarios/${encodeURIComponent(id)}`
+const conHistorial = (dto) => ({ usuario: adaptarUsuario(dto), historial: [] })
+
+async function llamar(ruta, opciones) {
+  try {
+    return await apiRequest(ruta, opciones)
+  } catch (error) {
+    throw errorDeUsuarios(error)
+  }
+}
+
+const api = {
+  async listar({ texto, rol, estado }) {
+    let lista = (await llamar('/usuarios')).map(adaptarUsuario)
+    if (rol && rol !== 'todos') lista = lista.filter((x) => x.rol === rol)
+    if (estado === 'activos') lista = lista.filter((x) => x.activo)
+    else if (estado === 'revocados') lista = lista.filter((x) => !x.activo)
+    const buscado = normalizar(texto)
+    if (buscado) lista = lista.filter((x) => normalizar(`${x.nombre} ${x.apellido}`).includes(buscado) || normalizar(x.correo).includes(buscado))
+    return lista
+  },
+  async obtener(id) {
+    return conHistorial(await llamar(rutaDe(id)))
+  },
+  // Solo resuelve con la respuesta 201 de la API: ahí es cuando el backend ya invitó a la persona por correo.
+  async crear(datos) {
+    const errores = validarDatosUsuario(datos)
+    if (Object.keys(errores).length > 0) throw fallaValidacion(errores)
+    return conHistorial(await llamar('/usuarios', { method: 'POST', body: JSON.stringify(cuerpoUsuario(datos)) }))
+  },
+  async cambiarRol(id, rol) {
+    return conHistorial(await llamar(`${rutaDe(id)}/rol`, { method: 'PUT', body: JSON.stringify(cuerpoRol(rol)) }))
+  },
+  async cambiarAcceso(id, accion) {
+    return conHistorial(await llamar(`${rutaDe(id)}/${accion}`, { method: 'POST' }))
+  },
 }

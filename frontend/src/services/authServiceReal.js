@@ -16,7 +16,7 @@ import { urlInicial } from './urlInicial.js'
 import { apiRequest } from './apiClient.js'
 import { supabase } from './supabaseClient.js'
 import {
-  ESPERA_VERIFICACION_MS, codigoDeErrorSupabase, decidirRecuperacion, esRecuperacionEnCurso, urlEsDeRecuperacion,
+  ESPERA_VERIFICACION_MS, codigoDeErrorSupabase, decidirRecuperacion, esRecuperacionEnCurso, urlEsDeEnlaceDeCorreo,
 } from '../utils/recuperacion.js'
 
 export const VIGENCIA_CODIGO_MS = 10 * 60 * 1000
@@ -341,7 +341,8 @@ export function alCerrarSesionExterna(funcion) {
 // -> restablecerContrasena(nueva), que cierra la sesión local -> /login. Errores con `codigo`: LIMITE, RED, POLITICA,
 // IGUAL_ANTERIOR, ENLACE_INVALIDO, DESCONOCIDO.
 // `recuperacionActiva` es la marca explícita de que la sesión de Supabase actual es de recuperación y no un ingreso.
-let recuperacionActiva = urlEsDeRecuperacion(urlInicial)
+// También lo es un enlace de invitación (type=invite): la persona invitada crea su contraseña por el mismo camino.
+let recuperacionActiva = urlEsDeEnlaceDeCorreo(urlInicial)
 
 const errorRecuperacion = (error) => fallo(codigoDeErrorSupabase(error))
 

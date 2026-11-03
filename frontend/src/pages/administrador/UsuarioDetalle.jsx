@@ -12,7 +12,7 @@ import GrupoRoles from '../../components/usuarios/GrupoRoles.jsx'
 import Correo from '../../components/usuarios/Correo.jsx'
 import Mensaje from '../../components/usuarios/Mensaje.jsx'
 import { useActor } from '../../context/useActor.js'
-import { ETIQUETAS_ROL, cambiarRol, obtenerUsuario, restablecerAcceso, revocarAcceso } from '../../services/usuariosService.js'
+import { ETIQUETAS_ROL, cambiarRol, obtenerUsuario, restablecerAcceso, revocarAcceso, usuariosPorApi } from '../../services/usuariosService.js'
 import { formatHora, fechaLargaConAnio, momentoLegible, partesMomento } from '../../utils/fechas.js'
 
 // Gestión de un usuario (HU-004): datos, cambio de rol, revocar y restablecer acceso, e historial. Ruta /administrador/usuarios/:id.
@@ -20,6 +20,7 @@ import { formatHora, fechaLargaConAnio, momentoLegible, partesMomento } from '..
 // trata como "no existe" (el servicio lo rechaza con USUARIO_NO_EXISTE).
 // Solo nombre, correo, rol y estado: sin teléfono ni documentos.
 const VOLVER = '/administrador/usuarios'
+const porApi = usuariosPorApi()
 const ETIQUETAS_CAMPO = { rol: 'Rol', activo: 'Estado del acceso' }
 
 function Dato({ etiqueta, children }) {
@@ -82,7 +83,7 @@ function Detalle({ id }) {
       setRolElegido(null)
       setExito({ texto: textoExito })
     } catch (error) {
-      const claros = ['AUTOACCESO', 'ULTIMO_ADMINISTRADOR', 'SIN_CAMBIOS', 'SIN_PERMISO', 'USUARIO_NO_EXISTE', 'VALIDACION']
+      const claros = ['AUTOACCESO', 'ULTIMO_ADMINISTRADOR', 'SIN_CAMBIOS', 'SIN_PERMISO', 'USUARIO_NO_EXISTE', 'VALIDACION', 'CONFLICTO']
       setFallo({ texto: claros.includes(error.codigo) ? (error.errores?.rol ?? error.message) : 'No se pudo completar la acción. Intenta de nuevo.' })
     } finally {
       enVuelo.current = false
@@ -135,6 +136,8 @@ function Detalle({ id }) {
       />
     )
   } else {
+    // No revocarse a uno mismo: se compara con la sesión real. Lo demás (último administrador) lo decide el backend con un 409.
+    const esYo = porApi && Boolean(actor.correo) && usuario.correo.toLowerCase() === actor.correo.toLowerCase()
     const registro = usuario.creadoPor && usuario.creadoEn ? partesMomento(usuario.creadoEn) : null
     contenido = (
       <>
@@ -172,16 +175,21 @@ function Detalle({ id }) {
               ? 'Al revocar el acceso, el usuario deja de poder iniciar sesión. No se borra nada.'
               : 'Este usuario no puede iniciar sesión. Puedes restablecer su acceso cuando quieras.'}
           </p>
-          {usuario.activo ? (
+          {usuario.activo && esYo ? (
+            <p className="break-words text-small text-secondary">No puedes revocar tu propio acceso.</p>
+          ) : usuario.activo ? (
             <Button variant="danger" disabled={ocupado} onClick={() => setDialogo('revocar')} className="disabled:opacity-60 sm:self-start">Revocar acceso</Button>
           ) : (
             <Button disabled={ocupado} onClick={() => setDialogo('restablecer')} className="disabled:opacity-60 sm:self-start">Restablecer acceso</Button>
           )}
         </Card>
 
-        <div className="w-full max-w-2xl">
-          <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
-        </div>
+        {/* La API no ofrece historial de cambios: en modo API no se muestra */}
+        {!porApi && (
+          <div className="w-full max-w-2xl">
+            <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />
+          </div>
+        )}
       </>
     )
   }
@@ -196,7 +204,9 @@ function Detalle({ id }) {
       <DialogoConfirmacion
         open={dialogo === 'revocar'}
         titulo="¿Revocar el acceso?"
-        descripcion={`${nombre} dejará de poder iniciar sesión. No se borra nada: sus datos y su historial se conservan y puedes restablecer su acceso después.`}
+        descripcion={porApi
+          ? `${nombre} dejará de poder iniciar sesión y se cerrarán todas sus sesiones abiertas. No se borra nada: puedes restablecer su acceso después.`
+          : `${nombre} dejará de poder iniciar sesión. No se borra nada: sus datos y su historial se conservan y puedes restablecer su acceso después.`}
         textoConfirmar="Sí, revocar acceso"
         onConfirmar={() => confirmar('revocar')}
         onCancelar={() => setDialogo(null)}
@@ -204,7 +214,7 @@ function Detalle({ id }) {
       <DialogoConfirmacion
         open={dialogo === 'restablecer'}
         titulo="¿Restablecer el acceso?"
-        descripcion={`${nombre} podrá volver a iniciar sesión como ${usuario ? ETIQUETAS_ROL[usuario.rol] : ''}. Esta versión no envía ningún correo.`}
+        descripcion={`${nombre} podrá volver a iniciar sesión como ${usuario ? ETIQUETAS_ROL[usuario.rol] : ''}.${porApi ? '' : ' Esta versión no envía ningún correo.'}`}
         textoConfirmar="Sí, restablecer acceso"
         onConfirmar={() => confirmar('restablecer')}
         onCancelar={() => setDialogo(null)}

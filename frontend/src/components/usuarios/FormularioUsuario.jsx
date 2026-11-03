@@ -4,7 +4,7 @@ import Field from '../ui/Field.jsx'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import GrupoRoles from './GrupoRoles.jsx'
-import { USUARIO_VACIO, validarDatosUsuario } from '../../services/usuariosService.js'
+import { USUARIO_VACIO, usuariosPorApi, validarDatosUsuario } from '../../services/usuariosService.js'
 
 // Datos de un usuario nuevo: nombres, apellidos, correo y rol. No guarda por sí mismo: llama a onGuardar(valores) y,
 // si el servicio rechaza, muestra el error donde corresponde. No pide contraseña (PENDIENTE: invitación por Supabase Auth).
@@ -45,6 +45,7 @@ export default function FormularioUsuario({ onGuardar, onCancelar }) {
     } catch (error) {
       if (error.codigo === 'VALIDACION') setErrores(error.errores)
       else if (error.codigo === 'CORREO_DUPLICADO') setErrores({ correo: error.message })
+      else if (error.codigo === 'CONFLICTO') setErrorGeneral(error.message)
       else {
         setErrorGeneral(error.codigo === 'SIN_PERMISO' ? error.message : 'No se pudo crear el usuario. Intenta de nuevo.')
         return
@@ -73,9 +74,11 @@ export default function FormularioUsuario({ onGuardar, onCancelar }) {
       <Field label="Apellidos" id="apellido" requerido autoComplete="off" {...texto('apellido')} />
       <Field label="Correo electrónico" id="correo" type="email" requerido autoComplete="off" {...texto('correo')} />
       <GrupoRoles id="rol" requerido value={valores.rol} error={errores.rol} onChange={(rol) => cambiar('rol', rol)} />
-      {/* PENDIENTE: invitación por correo (Supabase Auth + n8n). Esta versión NO envía ningún correo. */}
+      {/* Modo ejemplo: NO se envía ningún correo. Con la API real el backend invita por correo al crear la cuenta. */}
       <p className="break-words text-small text-secondary">
-        Esta versión crea la cuenta, pero todavía no envía ninguna invitación por correo.
+        {usuariosPorApi()
+          ? 'Al crear la cuenta se envía una invitación al correo indicado.'
+          : 'Esta versión crea la cuenta, pero todavía no envía ninguna invitación por correo.'}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button type="submit" disabled={guardando} aria-busy={guardando} className="disabled:opacity-60">
