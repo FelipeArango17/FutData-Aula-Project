@@ -340,8 +340,9 @@ export async function crearCobro({ idDeportista, tipo, concepto, monto, fechaVen
   return adaptarCobro(await apiRequest('/pagos', cuerpoJson({ idDeportista, tipo, concepto: concepto?.trim() || undefined, monto: Number(monto), fechaVencimiento, periodo: periodo || undefined })))
 }
 
-// POST /api/pagos/generar-mensualidades: { periodo: "AAAA-MM" } -> { periodo, creadas, yaExistentes }
-export async function generarMensualidades({ periodo }) {
+// POST /api/pagos/generar-ciclos (solo ADMINISTRADOR, sin cuerpo, idempotente; puede tardar más de un minuto en arranque en frío)
+// -> { creadas, yaExistentes, avisosEnviados, avisosFallidos, deportistasConError }. 409 si el monto de la mensualidad no está configurado.
+export async function generarCiclos() {
   exigirApi()
-  return apiRequest('/pagos/generar-mensualidades', cuerpoJson({ periodo }))
+  return apiRequest('/pagos/generar-ciclos', { method: 'POST' })
 }

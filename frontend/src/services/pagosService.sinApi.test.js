@@ -21,7 +21,7 @@ describe('con el interruptor apagado', () => {
     for (const llamar of [
       () => servicio.iniciarPagoEnLinea('x'), () => servicio.reintentarPago('x'), () => servicio.descargarComprobante('x'), () => servicio.listarCobros(),
       () => servicio.aprobarPagoManual('x', {}), () => servicio.rechazarCobro('x'), () => servicio.conciliarCobro('x'), () => servicio.crearCobro({}),
-      () => servicio.generarMensualidades({ periodo: '2026-11' }),
+      () => servicio.generarCiclos(),
     ]) {
       await expect(llamar()).rejects.toMatchObject({ codigo: 'NO_DISPONIBLE' })
     }

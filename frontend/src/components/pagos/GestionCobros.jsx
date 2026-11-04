@@ -10,18 +10,18 @@ import Paginacion from '../ui/Paginacion.jsx'
 import TablaCobros from './TablaCobros.jsx'
 import { listarDeportistas } from '../../services/deportistasService.js'
 import {
-  aprobarPagoManual, conciliarCobro, crearCobro, descargarComprobante, generarMensualidades, listarCobros, rechazarCobro,
+  aprobarPagoManual, conciliarCobro, crearCobro, descargarComprobante, generarCiclos, listarCobros, rechazarCobro,
 } from '../../services/pagosService.js'
 import {
-  ETIQUETAS_TIPO, METODOS_MANUALES, TIPOS_COBRO, accionesDeCobro, etiquetaMetodo, mensajeDeErrorPagos, validarAprobacionManual, validarNuevoCobro, validarPeriodo,
+  ETIQUETAS_TIPO, METODOS_MANUALES, TIPOS_COBRO, accionesDeCobro, etiquetaMetodo, mensajeDeErrorPagos, validarAprobacionManual, validarNuevoCobro,
+  CONFIRMACION_GENERAR_CICLOS, MENSAJE_MONTO_NO_CONFIGURADO, NOTA_PERIODO_SOLO_MENSUALIDAD, resumenGeneracionCiclos, tipoUsaPeriodo,
 } from '../../utils/pagosApi.js'
 import { descargarBlob } from '../../utils/descargas.js'
 import { hoy } from '../../utils/hoy.js'
 import { formatearCOP } from '../../utils/dinero.js'
-import { mesEnTexto } from '../../utils/fechas.js'
 
 // Gestión de cobros con la API de pagos (backend: "Pagos con Wompi"): lista paginada con filtros por estado, tipo y periodo y las
-// acciones de cada fila. La usan el tesorero y el administrador (el administrador además crea cobros y genera mensualidades).
+// acciones de cada fila. La usan el tesorero y el administrador (el administrador además crea cobros y genera los cobros del ciclo).
 //   Registrar pago manual (fecha y método) y Rechazar piden confirmar. Conciliar solo si el cobro ya se inició en Wompi.
 //   Un cobro iniciado en Wompi no se aprueba a mano: el backend responde 409 y se muestra su mensaje.
 // El tesorero registra pagos sobre cobros existentes; no crea cobros (eso es solo del administrador).
@@ -37,8 +37,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const [pagina, setPagina] = useState(1)
   const [recarga, setRecarga] = useState(0)
   const [carga, setCarga] = useState({ clave: null, datos: null, error: null })
-  const [panel, setPanel] = useState(null) // { tipo: 'manual' | 'rechazar' | 'crear' | 'generar', cobro? }
+  const [panel, setPanel] = useState(null) // { tipo: 'manual' | 'rechazar' | 'crear', cobro? }
   const [confirmar, setConfirmar] = useState(false)
+  const [confirmarCiclos, setConfirmarCiclos] = useState(false)
   const [errorPanel, setErrorPanel] = useState(null)
   const [erroresCampos, setErroresCampos] = useState({})
   const [valores, setValores] = useState({})
@@ -76,6 +77,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const mensajeError = !cargando && carga.error ? mensajeDeErrorPagos(carga.error, 'No se pudieron cargar los cobros.') : null
 
   const cerrarConfirmacion = useCallback(() => setConfirmar(false), [])
+  const cerrarConfirmacionCiclos = useCallback(() => setConfirmarCiclos(false), [])
   const cambiar = (campo, valor) => {
     setValores((v) => ({ ...v, [campo]: valor }))
     setErroresCampos((e) => ({ ...e, [campo]: undefined }))
@@ -93,7 +95,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     setPanel({ tipo: tipoPanel, cobro })
     setValores(tipoPanel === 'manual' ? { fechaPago: hoy(), metodo: '', nota: '' }
       : tipoPanel === 'crear' ? { idDeportista: '', tipo: 'MENSUALIDAD', concepto: '', monto: '', fechaVencimiento: '', periodo: hoy().slice(0, 7) }
-      : tipoPanel === 'generar' ? { periodo: hoy().slice(0, 7) } : { nota: '' })
+      : { nota: '' })
   }
   const cerrarPanel = () => {
     setPanel(null)
@@ -106,13 +108,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     let errores = {}
     if (panel.tipo === 'manual') errores = validarAprobacionManual(valores, hoy())
     if (panel.tipo === 'crear') errores = validarNuevoCobro(valores)
-    if (panel.tipo === 'generar') {
-      const motivo = validarPeriodo(valores.periodo)
-      if (motivo) errores = { periodo: motivo }
-    }
     setErroresCampos(errores)
     if (Object.keys(errores).length > 0) return
-    // Aprobar, rechazar y generar mensualidades cambian cobros: piden confirmar. Crear un cobro es reversible (se rechaza).
+    // Aprobar y rechazar cambian cobros: piden confirmar. Crear un cobro es reversible (se rechaza).
     if (panel.tipo === 'crear') return ejecutar()
     setConfirmar(true)
   }
@@ -130,12 +128,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
       } else if (panel.tipo === 'rechazar') {
         await rechazarCobro(panel.cobro.id, valores.nota)
         setExito({ texto: 'Cobro rechazado.' })
-      } else if (panel.tipo === 'crear') {
+      } else {
         await crearCobro({ ...valores, periodo: valores.tipo === 'MENSUALIDAD' ? `${valores.periodo}-01` : undefined })
         setExito({ texto: 'Cobro creado.' })
-      } else {
-        const r = await generarMensualidades({ periodo: valores.periodo })
-        setExito({ texto: `Mensualidades de ${mesEnTexto(`${valores.periodo}-01`)}: ${r.creadas} nuevas y ${r.yaExistentes} que ya existían.` })
       }
       setPanel(null)
       setRecarga((n) => n + 1)
@@ -146,6 +141,28 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     } finally {
       enVuelo.current = false
       setOcupado(null)
+    }
+  }
+
+  // Generar los cobros del ciclo (solo administrador). Idempotente; el backend puede tardar más de un minuto en arranque en frío.
+  async function generarCobrosDelCiclo() {
+    setConfirmarCiclos(false)
+    if (enVuelo.current) return
+    enVuelo.current = true
+    setOcupado('ciclos')
+    setExito(null)
+    setErrorAccion(null)
+    try {
+      const r = await generarCiclos()
+      const { texto, conProblemas } = resumenGeneracionCiclos(r)
+      if (conProblemas) setErrorAccion({ texto })
+      else setExito({ texto })
+    } catch (error) {
+      setErrorAccion({ texto: error.estado === 409 ? MENSAJE_MONTO_NO_CONFIGURADO : mensajeDeErrorPagos(error, 'No se pudieron generar los cobros. Intenta de nuevo.') })
+    } finally {
+      enVuelo.current = false
+      setOcupado(null)
+      setRecarga((n) => n + 1)
     }
   }
 
@@ -201,16 +218,17 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
       descripcion: `El cobro "${panel.cobro?.concepto}" de ${panel.cobro?.nombreDeportista} quedará rechazado. El acudiente podrá reintentarlo.`,
       boton: 'Rechazar cobro',
     },
-    generar: {
-      titulo: 'Generar mensualidades',
-      descripcion: `Se creará la mensualidad de ${panel.tipo === 'generar' && validarPeriodo(valores.periodo) === null ? mesEnTexto(`${valores.periodo}-01`) : ''} para cada deportista que todavía no la tenga. Los que ya la tienen no cambian.`,
-      boton: 'Generar',
-    },
   }[panel.tipo] ?? {}
 
   const campoMes = (id, label) => (
     <Field label={label} id={id} type="month" requerido value={valores[id] ?? ''} error={erroresCampos[id]} onChange={(e) => cambiar(id, e.target.value)} />
   )
+  const periodoActivo = tipoUsaPeriodo(tipo)
+  const cambiarTipoFiltro = (nuevo) => {
+    setTipo(nuevo)
+    if (!tipoUsaPeriodo(nuevo)) setPeriodo('') // un periodo viejo no se queda aplicado a un tipo que no lo usa
+    setPagina(1)
+  }
 
   return (
     <Page title={titulo} subtitle={subtitulo} tituloRef={tituloRef}>
@@ -219,14 +237,16 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
       {esAdministrador && (
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button onClick={() => abrir('crear')}>Crear cobro</Button>
-          <Button variant="secondary" onClick={() => abrir('generar')}>Generar mensualidades</Button>
+          <Button variant="secondary" onClick={() => setConfirmarCiclos(true)} disabled={ocupado === 'ciclos'} aria-busy={ocupado === 'ciclos'}>
+            {ocupado === 'ciclos' ? 'Generando cobros… puede tardar un minuto' : 'Generar cobros del ciclo'}
+          </Button>
         </div>
       )}
 
       {panel && (
         <Card as="section" aria-labelledby="titulo-panel" className="flex w-full max-w-2xl flex-col gap-4">
           <h2 id="titulo-panel" className="break-words text-h3">
-            {{ manual: 'Registrar pago manual', rechazar: 'Rechazar cobro', crear: 'Crear cobro', generar: 'Generar mensualidades' }[panel.tipo]}
+            {{ manual: 'Registrar pago manual', rechazar: 'Rechazar cobro', crear: 'Crear cobro' }[panel.tipo]}
           </h2>
           {panel.cobro && (
             <p className="break-words text-body text-secondary">{panel.cobro.concepto} · {panel.cobro.nombreDeportista} · {formatearCOP(panel.cobro.monto)}</p>
@@ -246,7 +266,6 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
             {panel.tipo === 'rechazar' && (
               <Field label="Nota (opcional)" id="nota" maxLength={200} value={valores.nota ?? ''} onChange={(e) => cambiar('nota', e.target.value)} />
             )}
-            {panel.tipo === 'generar' && campoMes('periodo', 'Mes')}
             {panel.tipo === 'crear' && (
               <>
                 <Field label="Deportista" id="idDeportista" as="select" requerido value={valores.idDeportista ?? ''} error={erroresCampos.idDeportista} onChange={(e) => cambiar('idDeportista', e.target.value)}>
@@ -264,7 +283,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
             )}
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <Button type="submit" disabled={ocupado === 'panel'} aria-busy={ocupado === 'panel'} variant={panel.tipo === 'rechazar' ? 'danger' : 'primary'}>
-                {ocupado === 'panel' ? 'Guardando…' : { manual: 'Registrar pago', rechazar: 'Rechazar cobro', crear: 'Crear cobro', generar: 'Generar' }[panel.tipo]}
+                {ocupado === 'panel' ? 'Guardando…' : { manual: 'Registrar pago', rechazar: 'Rechazar cobro', crear: 'Crear cobro' }[panel.tipo]}
               </Button>
               <Button variant="secondary" onClick={cerrarPanel}>Cancelar</Button>
             </div>
@@ -274,11 +293,14 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
 
       <FilterChips label="Estado del cobro" options={Object.keys(ESTADOS)} value={estado} onChange={filtrar(setEstado)} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Tipo de cobro" id="filtro-tipo" as="select" value={tipo} onChange={(e) => filtrar(setTipo)(e.target.value)}>
+        <Field label="Tipo de cobro" id="filtro-tipo" as="select" value={tipo} onChange={(e) => cambiarTipoFiltro(e.target.value)}>
           <option value="">Todos los tipos</option>
           {TIPOS_COBRO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO[t]}</option>)}
         </Field>
-        <Field label="Periodo (mes)" id="filtro-periodo" type="month" value={periodo} onChange={(e) => filtrar(setPeriodo)(e.target.value)} />
+        <div className="flex flex-col gap-1">
+          <Field label="Periodo (mes)" id="filtro-periodo" type="month" value={periodo} disabled={!periodoActivo} describedBy={periodoActivo ? undefined : 'nota-periodo'} onChange={(e) => filtrar(setPeriodo)(e.target.value)} />
+          {!periodoActivo && <p id="nota-periodo" className="text-body text-secondary">{NOTA_PERIODO_SOLO_MENSUALIDAD}</p>}
+        </div>
       </div>
 
       <TablaCobros cargando={cargando} mensajeError={mensajeError} onReintentar={() => setRecarga((n) => n + 1)} cobros={cobros} accionesDe={accionesDe} />
@@ -294,6 +316,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
       )}
 
       <DialogoConfirmacion open={confirmar} titulo={textoConfirmacion.titulo ?? ''} descripcion={textoConfirmacion.descripcion ?? ''} textoConfirmar={textoConfirmacion.boton ?? 'Confirmar'} onConfirmar={ejecutar} onCancelar={cerrarConfirmacion} />
+      <DialogoConfirmacion open={confirmarCiclos} titulo={CONFIRMACION_GENERAR_CICLOS.titulo} descripcion={CONFIRMACION_GENERAR_CICLOS.descripcion} textoConfirmar={CONFIRMACION_GENERAR_CICLOS.boton} onConfirmar={generarCobrosDelCiclo} onCancelar={cerrarConfirmacionCiclos} />
     </Page>
   )
 }
