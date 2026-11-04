@@ -198,3 +198,31 @@ export function validarNuevoCobro({ idDeportista, tipo, concepto, monto, fechaVe
 }
 
 export const validarPeriodo = (periodo) => (MES.test(String(periodo ?? '')) ? null : 'Elige el mes.')
+
+// Filtro "Mes" de la lista de cobros. En mensualidades filtra el backend por periodo (GET /pagos?periodo=). El backend no filtra por
+// vencimiento, así que con cualquier otro tipo (o con todos) se trae la lista y se filtra aquí por el mes de fechaVencimiento.
+export const NOTA_FILTRO_MES = 'En mensualidades, el periodo cobrado; en los demás, el mes de vencimiento'
+export const filtroMesEsLocal = (tipo, periodo) => Boolean(periodo) && tipo !== 'MENSUALIDAD'
+export const filtrarPorMesDeVencimiento = (cobros, periodo) => cobros.filter((c) => String(c.fechaVencimiento ?? '').slice(0, 7) === periodo)
+
+export const CONFIRMACION_GENERAR_CICLOS = {
+  titulo: 'Generar cobros del ciclo',
+  descripcion: 'Crea los cobros que le tocan a cada jugador según su fecha de ingreso, hasta 5 días antes de su fecha de cobro. Los que ya existen no se repiten. Esto también se hace solo cada día a las 6:00 a. m. ¿Continuar?',
+  boton: 'Generar',
+}
+export const MENSAJE_MONTO_NO_CONFIGURADO = 'No se pudieron generar los cobros porque el valor de la mensualidad no está configurado. Pide que lo configuren y vuelve a intentarlo.'
+const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`
+
+// Resumen en lenguaje claro de POST /pagos/generar-ciclos
+export function resumenGeneracionCiclos(r) {
+  const { creadas = 0, yaExistentes = 0, avisosEnviados = 0, avisosFallidos = 0, deportistasConError = 0 } = r ?? {}
+  const frases = [
+    creadas === 0 ? 'No hizo falta crear cobros nuevos.' : `Se ${creadas === 1 ? 'creó' : 'crearon'} ${plural(creadas, 'cobro nuevo', 'cobros nuevos')}.`,
+  ]
+  if (yaExistentes > 0) frases.push(`Ya ${yaExistentes === 1 ? 'existía' : 'existían'} ${plural(yaExistentes, 'cobro', 'cobros')}; no se duplicaron.`)
+  if (avisosEnviados > 0) frases.push(`Se ${avisosEnviados === 1 ? 'envió' : 'enviaron'} ${plural(avisosEnviados, 'aviso', 'avisos')} por correo.`)
+  // Un cobro que ya existe se omite al volver a generar: su aviso NO se reenvía.
+  if (avisosFallidos > 0) frases.push(`Los cobros quedaron creados, pero ${plural(avisosFallidos, 'aviso por correo no se pudo enviar y no se reintenta solo', 'avisos por correo no se pudieron enviar y no se reintentan solos')}.`)
+  if (deportistasConError > 0) frases.push(`${plural(deportistasConError, 'deportista no se pudo procesar', 'deportistas no se pudieron procesar')}. Vuelve a generar los cobros para completarlos.`)
+  return { texto: frases.join(' '), conProblemas: avisosFallidos > 0 || deportistasConError > 0 }
+}

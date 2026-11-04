@@ -117,6 +117,12 @@ describe('tesorero y administrador', () => {
     expect(r.items).toHaveLength(3)
   })
 
+  it('listarTodosLosCobros pasa estado y tipo al backend para traer solo esos cobros', async () => {
+    api.apiListaPaginada.mockResolvedValue({ items: [dto()], total: 1, pagina: 0, tamano: 100 })
+    await servicio.listarTodosLosCobros({ estado: 'PENDIENTE', tipo: 'TORNEO' })
+    expect(api.apiListaPaginada).toHaveBeenCalledWith('/pagos', expect.objectContaining({ estado: 'PENDIENTE', tipo: 'TORNEO' }))
+  })
+
   it('listarTodosLosCobros sin cobros devuelve lista vacía y no pide más páginas', async () => {
     api.apiListaPaginada.mockResolvedValue({ items: [], total: 0, pagina: 0, tamano: 100 })
     expect(await servicio.listarTodosLosCobros()).toEqual({ items: [], total: 0, truncado: false })
@@ -173,10 +179,15 @@ describe('tesorero y administrador', () => {
     expect(JSON.parse(opciones.body)).toEqual({ idDeportista: DEPORTISTA, tipo: 'MENSUALIDAD', monto: 90000, fechaVencimiento: '2026-11-05', periodo: '2026-11-01' })
   })
 
-  it('generarMensualidades usa POST /pagos/generar-mensualidades con el periodo AAAA-MM', async () => {
-    api.apiRequest.mockResolvedValue({ periodo: '2026-12', creadas: 12, yaExistentes: 3 })
-    expect(await servicio.generarMensualidades({ periodo: '2026-12' })).toEqual({ periodo: '2026-12', creadas: 12, yaExistentes: 3 })
-    expect(api.apiRequest.mock.calls[0][0]).toBe('/pagos/generar-mensualidades')
-    expect(JSON.parse(api.apiRequest.mock.calls[0][1].body)).toEqual({ periodo: '2026-12' })
+  it('generarCiclos usa POST /pagos/generar-ciclos sin cuerpo y devuelve el resumen', async () => {
+    const resumen = { creadas: 12, yaExistentes: 3, avisosEnviados: 10, avisosFallidos: 2, deportistasConError: 0 }
+    api.apiRequest.mockResolvedValue(resumen)
+    expect(await servicio.generarCiclos()).toEqual(resumen)
+    expect(api.apiRequest).toHaveBeenCalledWith('/pagos/generar-ciclos', { method: 'POST' })
+  })
+
+  it('generarCiclos propaga el 409 (monto no configurado)', async () => {
+    api.apiRequest.mockRejectedValue({ estado: 409, mensaje: 'x' })
+    await expect(servicio.generarCiclos()).rejects.toMatchObject({ estado: 409 })
   })
 })
