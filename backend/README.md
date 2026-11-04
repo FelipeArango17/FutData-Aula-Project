@@ -294,6 +294,51 @@ Cuerpo:
 
 La lista firma las fotos de toda la página en **una sola** llamada a Storage (`POST /storage/v1/object/sign/{bucket}` con varias rutas).
 
+## Mis jugadores del acudiente (bloque 2C)
+
+Lo que el acudiente ve de **sus propios** jugadores. Solo el rol `ACUDIENTE`.
+
+### Endpoints
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `GET /api/acudientes/me/deportistas` | Los jugadores vinculados al acudiente del token (arreglo, sin paginar) | `ACUDIENTE` | `200`, `401`, `403` |
+| `GET /api/acudientes/me/deportistas/{id}` | La ficha de uno de ellos | `ACUDIENTE` | `200`, `400`, `401`, `403`, `404` |
+
+**Regla de propiedad.** El acudiente sale siempre del token: el `sub` del JWT es `usuario.id_usuario`, y de ahí se llega a su fila de `acudiente` (`acudiente.id_usuario`). Ningún parámetro, cuerpo ni cabecera puede indicar de qué acudiente se trata. La propiedad se decide **en el SQL** (`JOIN acudiente_deportista` + `acudiente`, con `WHERE acudiente.id_usuario = :usuario`), no en el controlador. Un deportista que no existe y uno de otro acudiente responden igual: `404` con el mensaje "No existe un deportista con ese id." (nunca `403`).
+
+### Lista
+
+```json
+[{"id": "6f1c2a9e-…", "nombre": "Luis", "apellido": "Gómez", "fechaNacimiento": "2018-03-03", "edad": 8,
+  "categoria": "Cachorros", "idCategoria": "0a0a…", "grupo": "tarde", "posicion": "Delantero",
+  "foto": "https://…/storage/v1/object/sign/fotos/…?token=…", "parentesco": "Madre", "activo": true,
+  "estadoInscripcion": "PENDIENTE"}]
+```
+
+- Ordenada por apellido, nombre e id. Incluye a los jugadores inactivos (`activo: false`). Si el acudiente no tiene jugadores vinculados, o su cuenta no tiene fila en `acudiente`, responde `200` con `[]`.
+- **No trae** `documento`, `tipoDocumento`, `telefono` ni `direccion`.
+- `categoria` e `idCategoria` son `null` si queda fuera de 4 a 16 años; `grupo` solo en Cachorros y Semillero (si no, `null`); `foto` es una URL firmada temporal (60 min) o `null` si no tiene foto o Storage no respondió (no falla por eso).
+- `parentesco` es el del vínculo con **este** acudiente, sin tilde (`Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio`, `Otro`) o `null`. El frontend lo muestra con tilde.
+- `estadoInscripcion`: `COMPLETA` o `PENDIENTE`, igual que en `/api/deportistas`.
+
+### Ficha
+
+Los mismos campos de la lista más `tipoDocumento`, `documento`, `telefono`, `direccion` y `documentosFaltantes`: los tipos de documento obligatorio que aún no tienen uno `APROBADO`, en el orden `DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`. Es `[]` si y solo si `estadoInscripcion` es `COMPLETA`. El estado de cada documento y el comentario de rechazo llegan con el bloque 3.
+
+### Errores
+
+| Código | Cuándo |
+| :--- | :--- |
+| `400` | El `{id}` no es un UUID |
+| `401` | Sin token, token inválido o vencido, o un token sin el claim `session_id` |
+| `403` | La cuenta no tiene el rol `ACUDIENTE`; **o** la sesión del token no completó el 2FA: en ese caso la respuesta es `403` con `codigo: "2FA_REQUERIDA"` (no `401`) |
+| `404` | El deportista no existe o no es de este acudiente (mismo mensaje) |
+
+Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend).
+
+> **Sin el bloque 2B no hay vínculos reales.** Hasta que la inscripción única cree acudientes y vínculos, ninguna cuenta real tiene filas en `acudiente` (con `id_usuario`) ni en `acudiente_deportista`, así que la lista sale vacía hasta que se vinculen a mano (SQL en Supabase) o con un script de siembra. Las pruebas (`MisJugadoresConPostgresTest`) crean sus propios datos.
+
 ## Horario del club (bloque 4A)
 
 Plantilla fija de entrenamientos de lunes a sábado (tabla `franja_horario`, migración 007). Cada franja es de una categoría, un día, una hora de inicio y fin, y una sede; el entrenador y el grupo son opcionales. La plantilla real del club (30 franjas) se carga una vez con `supabase/seeds/franjas_club.sql` (ver `docs/GUIA-SUPABASE-EQUIPO.md`).

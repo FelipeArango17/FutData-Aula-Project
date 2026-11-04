@@ -2,6 +2,7 @@ package co.edu.futdata.services.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.*;
 
 import co.edu.futdata.api.dto.DeportistaRequestDTO;
@@ -12,6 +13,7 @@ import co.edu.futdata.persistence.dao.ConsultaDeportistas;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
 import co.edu.futdata.persistence.dao.IDeportistaDAO;
+import co.edu.futdata.persistence.dao.JugadorDeAcudiente;
 import co.edu.futdata.persistence.dao.OrdenDeportista;
 import org.mockito.ArgumentCaptor;
 import co.edu.futdata.services.facade.ConflictoException;
@@ -612,5 +614,88 @@ class DeportistaServiceImplTest {
         when(almacenamiento.urlsFirmadas(any(), any(), any())).thenReturn(Map.of());
 
         assertThat(servicio.consultar(ID).foto()).isNull();
+    }
+
+    // --- Mis jugadores (acudiente) --------------------------------------------------------------------------
+
+    private static final UUID USUARIO = UUID.fromString("00000000-0000-0000-0000-0000000000ac");
+
+    private static JugadorDeAcudiente jugador(LocalDate nacimiento, String categoria, String grupo, String foto) {
+        Deportista d = leido(nacimiento, categoria, SEMILLERO, grupo);
+        d.setFoto(foto); d.setActivo(true); d.setEstadoInscripcion("PENDIENTE");
+        return new JugadorDeAcudiente(d, "Madre");
+    }
+
+    @Test
+    void misJugadoresFirmaLaFotoYCalculaLaEdad() {
+        when(dao.listarDeAcudiente(USUARIO, 2026))
+                .thenReturn(List.of(jugador(LocalDate.of(2017, 4, 10), "Semillero", "tarde", ID + "/f.jpg")));
+        when(almacenamiento.urlsFirmadas("fotos", List.of(ID + "/f.jpg"), VIGENCIA))
+                .thenReturn(Map.of(ID + "/f.jpg", "https://firmada.test/f"));
+
+        assertThat(servicio.misJugadores(USUARIO)).singleElement().satisfies(j -> {
+            assertThat(j.foto()).isEqualTo("https://firmada.test/f");
+            assertThat(j.edad()).isEqualTo(9);
+            assertThat(j.categoria()).isEqualTo("Semillero");
+            assertThat(j.grupo()).isEqualTo("tarde");
+            assertThat(j.parentesco()).isEqualTo("Madre");
+            assertThat(j.estadoInscripcion()).isEqualTo("PENDIENTE");
+        });
+    }
+
+    @Test
+    void misJugadoresConStorageCaidoDevuelveFotoNulaSinError() {
+        when(dao.listarDeAcudiente(USUARIO, 2026))
+                .thenReturn(List.of(jugador(LocalDate.of(2017, 4, 10), "Semillero", null, ID + "/f.jpg")));
+        when(almacenamiento.urlsFirmadas(any(), any(), any()))
+                .thenThrow(new AlmacenamientoNoDisponibleException("caído", null, null));
+
+        assertThat(servicio.misJugadores(USUARIO)).singleElement().satisfies(j -> assertThat(j.foto()).isNull());
+    }
+
+    @Test
+    void misJugadoresDescartaElGrupoSiLaCategoriaNoLoAdmite() {
+        when(dao.listarDeAcudiente(USUARIO, 2026))
+                .thenReturn(List.of(jugador(LocalDate.of(2015, 4, 10), "Sub-11", "tarde", null)));
+
+        assertThat(servicio.misJugadores(USUARIO)).singleElement().satisfies(j -> assertThat(j.grupo()).isNull());
+        verifyNoInteractions(almacenamiento);
+    }
+
+    @Test
+    void misJugadoresSinHijosDevuelveListaVacia() {
+        when(dao.listarDeAcudiente(USUARIO, 2026)).thenReturn(List.of());
+
+        assertThat(servicio.misJugadores(USUARIO)).isEmpty();
+    }
+
+    @Test
+    void miJugadorTraeLaFichaConLosDocumentosFaltantes() {
+        when(dao.buscarDeAcudiente(USUARIO, ID, 2026))
+                .thenReturn(Optional.of(jugador(LocalDate.of(2017, 4, 10), "Semillero", "tarde", null)));
+        when(dao.documentosObligatoriosFaltantes(ID)).thenReturn(List.of("CERTIFICADO_ESTUDIO"));
+
+        var ficha = servicio.miJugador(USUARIO, ID);
+
+        assertThat(ficha.documento()).isEqualTo("12345678");
+        assertThat(ficha.telefono()).isEqualTo("3001234567");
+        assertThat(ficha.documentosFaltantes()).containsExactly("CERTIFICADO_ESTUDIO");
+        assertThat(ficha.foto()).isNull();
+    }
+
+    @Test
+    void miJugadorAjenoOInexistenteEs404ConElMismoMensaje() {
+        UUID ajeno = UUID.fromString("0a0a0a0a-0000-4000-8000-0000000000bb");
+        UUID inexistente = UUID.fromString("0a0a0a0a-0000-4000-8000-0000000000cc");
+        // El DAO responde igual en los dos casos (la consulta lleva al acudiente): el servicio no puede distinguirlos.
+        when(dao.buscarDeAcudiente(USUARIO, ajeno, 2026)).thenReturn(Optional.empty());
+        when(dao.buscarDeAcudiente(USUARIO, inexistente, 2026)).thenReturn(Optional.empty());
+
+        Throwable deAjeno = catchThrowable(() -> servicio.miJugador(USUARIO, ajeno));
+        Throwable deInexistente = catchThrowable(() -> servicio.miJugador(USUARIO, inexistente));
+
+        assertThat(deAjeno).isInstanceOf(RecursoNoEncontradoException.class).hasMessage("No existe un deportista con ese id.");
+        assertThat(deInexistente).isInstanceOf(deAjeno.getClass()).hasMessage(deAjeno.getMessage());
+        verify(dao, never()).documentosObligatoriosFaltantes(any());
     }
 }

@@ -46,4 +46,25 @@ public interface IDeportistaDAO {
 
     /** Con la categoría calculada y el {@code estadoInscripcion}. */
     Optional<Deportista> buscarPorId(UUID id, int anioActual);
+
+    /**
+     * Los deportistas vinculados al usuario acudiente (el {@code id_usuario} del token), con categoría calculada,
+     * {@code estadoInscripcion} y el parentesco del vínculo. Ordenados por apellido, nombre e id. Vacía si el usuario
+     * no tiene fila de acudiente o no tiene hijos vinculados.
+     */
+    List<JugadorDeAcudiente> listarDeAcudiente(UUID idUsuario, int anioActual);
+
+    /**
+     * Uno de los deportistas del acudiente. La propiedad se comprueba en la misma consulta: si el deportista no existe
+     * o es de otro acudiente, el resultado es el mismo (vacío).
+     */
+    Optional<JugadorDeAcudiente> buscarDeAcudiente(UUID idUsuario, UUID idDeportista, int anioActual);
+
+    /**
+     * Los tipos de {@code ReglasDeportista.DOCUMENTOS_OBLIGATORIOS} que el deportista aún no tiene APROBADOS, en el
+     * orden de esa constante. Vacía si y solo si su {@code estadoInscripcion} es COMPLETA.
+     *
+     * <p>No comprueba propiedad: llamarlo solo después de {@link #buscarDeAcudiente}.
+     */
+    List<String> documentosObligatoriosFaltantes(UUID idDeportista);
 }

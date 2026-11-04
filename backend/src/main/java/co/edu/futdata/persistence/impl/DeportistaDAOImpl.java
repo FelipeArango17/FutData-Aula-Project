@@ -5,12 +5,15 @@ import co.edu.futdata.domain.rules.ReglasDeportista;
 import co.edu.futdata.persistence.dao.ConsultaDeportistas;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
 import co.edu.futdata.persistence.dao.IDeportistaDAO;
+import co.edu.futdata.persistence.dao.JugadorDeAcudiente;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -143,6 +146,47 @@ public class DeportistaDAOImpl implements IDeportistaDAO {
         agregarObligatorios(p);
         return jdbc.query(SELECT.formatted(ESTADO_INSCRIPCION) + " where d.id_deportista = :id", p, FILA)
                 .stream().findFirst();
+    }
+
+    /** Une el vínculo con el acudiente del token: la propiedad se decide aquí, nunca en el controlador. */
+    private static final String SELECT_DE_ACUDIENTE = SELECT.replace(
+            "c.nombre as categoria_calculada,", "c.nombre as categoria_calculada, ad.parentesco,")
+            .replace("from deportista d", """
+                    from deportista d
+                      join acudiente_deportista ad on ad.id_deportista = d.id_deportista
+                      join acudiente a on a.id_acudiente = ad.id_acudiente""");
+
+    @Override
+    public List<JugadorDeAcudiente> listarDeAcudiente(UUID idUsuario, int anioActual) {
+        MapSqlParameterSource p = new MapSqlParameterSource("usuario", idUsuario).addValue("anio", anioActual);
+        agregarObligatorios(p);
+        return jdbc.query(SELECT_DE_ACUDIENTE.formatted(ESTADO_INSCRIPCION) + """
+                 where a.id_usuario = :usuario
+                 order by d.apellido, d.nombre, d.id_deportista""", p, DeportistaDAOImpl::mapearJugador);
+    }
+
+    @Override
+    public Optional<JugadorDeAcudiente> buscarDeAcudiente(UUID idUsuario, UUID idDeportista, int anioActual) {
+        MapSqlParameterSource p = new MapSqlParameterSource("usuario", idUsuario).addValue("id", idDeportista)
+                .addValue("anio", anioActual);
+        agregarObligatorios(p);
+        return jdbc.query(SELECT_DE_ACUDIENTE.formatted(ESTADO_INSCRIPCION)
+                + " where a.id_usuario = :usuario and d.id_deportista = :id", p, DeportistaDAOImpl::mapearJugador)
+                .stream().findFirst();
+    }
+
+    @Override
+    public List<String> documentosObligatoriosFaltantes(UUID idDeportista) {
+        MapSqlParameterSource p = new MapSqlParameterSource("id", idDeportista);
+        agregarObligatorios(p);
+        Set<String> aprobados = new HashSet<>(jdbc.queryForList("""
+                select distinct tipo from documento
+                 where id_deportista = :id and estado = 'APROBADO' and tipo in (:obligatorios)""", p, String.class));
+        return ReglasDeportista.DOCUMENTOS_OBLIGATORIOS.stream().filter(t -> !aprobados.contains(t)).toList();
+    }
+
+    private static JugadorDeAcudiente mapearJugador(ResultSet r, int n) throws SQLException {
+        return new JugadorDeAcudiente(mapear(r, n), r.getString("parentesco"));
     }
 
     private static MapSqlParameterSource parametros(Deportista d) {
