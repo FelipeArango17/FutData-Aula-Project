@@ -33,8 +33,8 @@ export const menus = {
   entrenador: [
     {
       items: [
-        { label: 'Inicio', to: '/entrenador/inicio', modulo: 'inicio' },
-        { label: 'Mis grupos', to: '/entrenador/grupos', modulo: 'deportistas' },
+        { label: 'Inicio', to: '/entrenador/inicio', modulo: 'inicioentrenador' },
+        { label: 'Mis jugadores', to: '/entrenador/jugadores', modulo: 'misjugadores' },
         { label: 'Asistencia', to: '/entrenador/asistencia', modulo: 'asistencia' },
         { label: 'Horarios', to: '/entrenador/horarios', modulo: 'horarioclub' },
         { label: 'Torneos', to: '/entrenador/torneos', modulo: 'torneos' },
@@ -96,10 +96,10 @@ export const bottomNavs = {
     { label: 'Avisos', to: '/acudiente/notificaciones', icon: 'bell', modulo: 'avisos' },
   ],
   entrenador: [
-    { label: 'Inicio', to: '/entrenador/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Inicio', to: '/entrenador/inicio', icon: 'home', modulo: 'inicioentrenador' },
+    { label: 'Jugadores', to: '/entrenador/jugadores', icon: 'users', modulo: 'misjugadores' },
     { label: 'Asistencia', to: '/entrenador/asistencia', icon: 'check', modulo: 'asistencia' },
     { label: 'Horarios', to: '/entrenador/horarios', icon: 'calendar', modulo: 'horarioclub' },
-    { label: 'Torneos', to: '/entrenador/torneos', icon: 'trophy', modulo: 'torneos' },
   ],
   tesorero: [
     { label: 'Inicio', to: '/tesorero/inicio', icon: 'home', modulo: 'iniciotesorero' },

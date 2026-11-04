@@ -6,6 +6,7 @@ import AcuDocumentos from './acudiente/Documentos.jsx'
 import AcuHorarios from './acudiente/Horarios.jsx'
 import AcuNotificaciones from './acudiente/Notificaciones.jsx'
 import EntInicio from './entrenador/Inicio.jsx'
+import EntMisJugadores from './entrenador/MisJugadores.jsx'
 import EntAsistencia from './entrenador/Asistencia.jsx'
 import ListaPorGrupo from './deportistas/ListaPorGrupo.jsx'
 import RedirigirAInscribir from './RedirigirAInscribir.jsx'
@@ -43,7 +44,7 @@ export const screens = {
   '/acudiente/horarios': AcuHorarios,
   '/acudiente/notificaciones': AcuNotificaciones,
   '/entrenador/inicio': EntInicio,
-  '/entrenador/grupos': ListaPorGrupo, // misma pantalla para entrenador y administrador (HU-011)
+  '/entrenador/jugadores': EntMisJugadores, // datos reales de la API: los jugadores de las categorías del entrenador
   '/entrenador/asistencia': EntAsistencia,
   '/entrenador/horarios': Horarios, // misma pantalla para acudiente, entrenador y administrador
   '/entrenador/torneos': EntTorneos,

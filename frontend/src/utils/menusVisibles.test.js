@@ -48,12 +48,13 @@ describe('menusVisibles', () => {
   it('cada rol activa su inicio por separado', () => {
     const solo = (role, modulos) => inicioVisibleDe({ menus, role, autenticacionReal: true, modulos })
     expect(solo('tesorero', ['iniciotesorero'])).toBe('/tesorero/inicio')
-    expect(solo('tesorero', ['inicioacudiente', 'dashboard', 'inicio'])).toBeNull()
+    expect(solo('tesorero', ['inicioacudiente', 'dashboard', 'inicioentrenador'])).toBeNull()
     expect(solo('acudiente', ['inicioacudiente'])).toBe('/acudiente/inicio')
     expect(solo('acudiente', ['iniciotesorero'])).toBeNull()
     expect(solo('administrador', ['dashboard'])).toBe('/administrador/dashboard')
-    expect(solo('administrador', ['inicio', 'iniciotesorero'])).toBeNull()
-    expect(solo('entrenador', ['inicio'])).toBe('/entrenador/inicio')
+    expect(solo('administrador', ['inicioentrenador', 'misjugadores', 'iniciotesorero'])).toBeNull()
+    expect(solo('entrenador', ['inicioentrenador'])).toBe('/entrenador/inicio')
+    expect(solo('entrenador', ['misjugadores'])).toBe('/entrenador/jugadores')
     expect(solo('entrenador', ['dashboard', 'iniciotesorero', 'inicioacudiente'])).toBeNull()
   })
 
