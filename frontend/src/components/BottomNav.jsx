@@ -1,11 +1,14 @@
 import { NavLink } from 'react-router-dom'
 import Icon from './Icon.jsx'
 import { bottomNavs } from '../config/menus.js'
+import { autenticacionReal } from '../services/supabaseClient.js'
+import { modulosConApi } from '../services/usarApi.js'
+import { bottomNavVisible } from '../utils/menusVisibles.js'
 
 // Barra inferior móvil (4 opciones). El administrador no tiene.
 export default function BottomNav({ role }) {
-  const items = bottomNavs[role]
-  if (!items) return null
+  const items = bottomNavVisible({ bottomNavs, role, autenticacionReal, modulos: modulosConApi() })
+  if (items.length === 0) return null
 
   return (
     <nav aria-label="Accesos rápidos" className="sticky bottom-0 z-20 border-t bg-surface pb-safe md:hidden">

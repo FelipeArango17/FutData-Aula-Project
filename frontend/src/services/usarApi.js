@@ -3,7 +3,7 @@
 // conectado hoy); con la variable vacía ningún módulo usa la API. En las pruebas (MODE === 'test') siempre es false.
 export const MODULOS_PREVISTOS = [
   'entrenadores', 'deportistas', 'documentos', 'inscripcion', 'horarioclub', 'entrenamientos',
-  'pagos', 'grupos', 'asistencia', 'torneos', 'avisos', 'reportes', 'usuarios',
+  'pagos', 'grupos', 'asistencia', 'torneos', 'avisos', 'reportes', 'usuarios', 'inicio', 'acudientes', 'respaldo',
 ]
 
 export const MODULOS_POR_DEFECTO = 'entrenadores'
