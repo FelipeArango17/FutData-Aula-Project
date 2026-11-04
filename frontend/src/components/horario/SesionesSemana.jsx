@@ -12,29 +12,31 @@ import { categoriaDeSesion, entrenadorDeSesion, rangoDeSesion } from './formatoS
 // con color: "Cancelado" (texto tachado y atenuado, con el motivo si existe) y "Extra".
 // props: dias ("AAAA-MM-DD" de lunes a sábado), sesiones, hoy, modo ('cuadricula' | 'lista'),
 //        accionesDe(sesion) -> { cancelar, reactivar, rotar, editarExtra, eliminarExtra } (sin ella la vista es de solo lectura),
+//        miId (id del entrenador con sesión: su línea dice "Tú"), esPropia(sesion) (resalta con la etiqueta "Tu categoría"),
 //        onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra (reciben la sesión)
 const descripcion = (s) => `${categoriaDeSesion(s)}, ${diaLargo(s.fecha).toLowerCase()}, ${rangoDeSesion(s)}`
 
-function Estado({ sesion }) {
-  if (sesion.estado !== 'CANCELADO' && sesion.tipo !== 'EXTRA') return null
+function Estado({ sesion, propia }) {
+  if (sesion.estado !== 'CANCELADO' && sesion.tipo !== 'EXTRA' && !propia) return null
   return (
     <span className="flex flex-wrap items-center gap-1">
+      {propia && <Badge tone="success">Tu categoría</Badge>}
       {sesion.estado === 'CANCELADO' && <Badge tone="danger">Cancelado</Badge>}
       {sesion.tipo === 'EXTRA' && <Badge tone="warning">Extra</Badge>}
     </span>
   )
 }
 
-function Datos({ sesion, grande = false }) {
+function Datos({ sesion, grande = false, contexto }) {
   const cancelada = sesion.estado === 'CANCELADO'
   const tachado = cancelada ? 'line-through opacity-70' : ''
   return (
     <>
-      <Estado sesion={sesion} />
+      <Estado sesion={sesion} propia={Boolean(contexto?.esPropia?.(sesion))} />
       <span className={`block break-words font-semibold ${grande ? 'text-body-medium' : ''} ${tachado}`}>{categoriaDeSesion(sesion)}</span>
       <span className={`block break-words ${tachado}`}>{rangoDeSesion(sesion)}</span>
       <span className={`block break-words ${tachado}`}>{sesion.sede}</span>
-      <span className={`block break-words ${tachado}`}>Entrenador: {entrenadorDeSesion(sesion)}</span>
+      <span className={`block break-words ${tachado}`}>Entrenador: {entrenadorDeSesion(sesion, contexto?.miId)}</span>
       {sesion.motivo && <span className="block break-words">Motivo: {sesion.motivo}</span>}
     </>
   )
@@ -55,7 +57,7 @@ function Acciones({ sesion, acciones, manejadores }) {
   )
 }
 
-function Cuadricula({ dias, sesiones, hoy, accionesDe, manejadores }) {
+function Cuadricula({ dias, sesiones, hoy, accionesDe, manejadores, contexto }) {
   const horas = [...new Set(sesiones.map((s) => s.hora))].sort()
   return (
     <div className="overflow-hidden rounded-lg border bg-surface">
@@ -80,8 +82,8 @@ function Cuadricula({ dias, sesiones, hoy, accionesDe, manejadores }) {
                 <td key={dia} className={`border-b border-l p-1 align-top ${dia === hoy ? 'bg-app' : ''}`}>
                   <div className="flex flex-col gap-1">
                     {sesiones.filter((s) => s.fecha === dia && s.hora === hora).map((s) => (
-                      <div key={s.clave} role="group" aria-label={`${descripcion(s)}, ${s.sede}, entrenador: ${entrenadorDeSesion(s)}${s.estado === 'CANCELADO' ? ', cancelado' : ''}${s.tipo === 'EXTRA' ? ', extra' : ''}`} className={`flex flex-col gap-1 rounded-md p-2 ${s.estado === 'CANCELADO' ? 'border bg-app text-primary' : 'bg-brand-primary text-on-dark'}`}>
-                        <Datos sesion={s} />
+                      <div key={s.clave} role="group" aria-label={`${descripcion(s)}, ${s.sede}, entrenador: ${entrenadorDeSesion(s, contexto?.miId)}${contexto?.esPropia?.(s) ? ', tu categoría' : ''}${s.estado === 'CANCELADO' ? ', cancelado' : ''}${s.tipo === 'EXTRA' ? ', extra' : ''}`} className={`flex flex-col gap-1 rounded-md p-2 ${contexto?.esPropia?.(s) ? 'ring-2 ring-inset ring-focus' : ''} ${s.estado === 'CANCELADO' ? 'border bg-app text-primary' : 'bg-brand-primary text-on-dark'}`}>
+                        <Datos sesion={s} contexto={contexto} />
                         <Acciones sesion={s} acciones={accionesDe?.(s)} manejadores={manejadores} />
                       </div>
                     ))}
@@ -96,7 +98,7 @@ function Cuadricula({ dias, sesiones, hoy, accionesDe, manejadores }) {
   )
 }
 
-function Lista({ dias, sesiones, hoy, accionesDe, manejadores }) {
+function Lista({ dias, sesiones, hoy, accionesDe, manejadores, contexto }) {
   return (
     <div className="flex flex-col gap-4">
       {dias.map((dia) => {
@@ -109,9 +111,9 @@ function Lista({ dias, sesiones, hoy, accionesDe, manejadores }) {
             </h2>
             <ul className="flex flex-col gap-2">
               {delDia.map((s) => (
-                <Card as="li" key={s.clave} className="flex flex-col gap-3">
+                <Card as="li" key={s.clave} className={`flex flex-col gap-3 ${contexto?.esPropia?.(s) ? 'border-l-4 border-l-brand-primary' : ''}`}>
                   <div className="flex min-w-0 flex-col gap-1 text-small">
-                    <Datos sesion={s} grande />
+                    <Datos sesion={s} grande contexto={contexto} />
                   </div>
                   <Acciones sesion={s} acciones={accionesDe?.(s)} manejadores={manejadores} />
                 </Card>
@@ -124,8 +126,8 @@ function Lista({ dias, sesiones, hoy, accionesDe, manejadores }) {
   )
 }
 
-export default function SesionesSemana({ dias, sesiones, hoy, modo = 'cuadricula', accionesDe, onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra }) {
+export default function SesionesSemana({ dias, sesiones, hoy, modo = 'cuadricula', accionesDe, onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, miId = null, esPropia }) {
   const manejadores = { onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra }
   const Vista = modo === 'cuadricula' ? Cuadricula : Lista
-  return <Vista dias={dias} sesiones={sesiones} hoy={hoy} accionesDe={accionesDe} manejadores={manejadores} />
+  return <Vista dias={dias} sesiones={sesiones} hoy={hoy} accionesDe={accionesDe} manejadores={manejadores} contexto={{ miId, esPropia }} />
 }
