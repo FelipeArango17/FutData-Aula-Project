@@ -1,18 +1,59 @@
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
-import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
+import EstadoDeCarga from '../../components/pagos/EstadoDeCarga.jsx'
+import { categoriaDeSesion, rangoDeSesion } from '../../components/horario/formatoSesion.js'
+import useCarga from '../../hooks/useCarga.js'
+import { useAuth } from '../../context/AuthContext.js'
+import { cargarInicioEntrenador, inicioEntrenadorPorApi } from '../../services/entrenadorService.js'
+import { autenticacionReal } from '../../services/supabaseClient.js'
+import { modulosConApi } from '../../services/usarApi.js'
+import { mensajeDeErrorEntrenador, textoEntrenamientos, textoJugadores } from '../../utils/entrenadorApi.js'
+import { diaLargo } from '../../utils/fechas.js'
+import { opcionVisible } from '../../utils/menusVisibles.js'
+import { saludoDe } from '../../utils/saludo.js'
 
-const semana = [
-  { lugar: 'Sub-12 · Horizontes', cuando: 'Hoy · 7:00 p. m.', estado: 'Sin asistencia', tone: 'warning' },
-  { lugar: 'Sub-12 · Horizontes', cuando: 'Lun 26 · 7:00 p. m.', estado: 'Programado', tone: 'neutral' },
-  { lugar: 'Sub-12 · Horizontes', cuando: 'Mar 27 · 6:00 p. m.', estado: 'Programado', tone: 'neutral' },
-]
-const faltas = [
-  { nombre: 'Emmanuel Arias', detalle: '6 faltas · 62 % asistencia', accion: 'Revisar', tone: 'danger' },
-  { nombre: 'Tomás Giraldo', detalle: '4 faltas · 71 % asistencia', accion: 'Seguir', tone: 'warning' },
-  { nombre: 'Nicolás Mejía', detalle: '3 faltas · 76 % asistencia', accion: 'Seguir', tone: 'warning' },
-]
+// Inicio del entrenador: sus categorías, cuántos jugadores activos tiene en cada una y sus entrenamientos de hoy y de la semana.
+// Todo sale de la API (usuarios/yo, deportistas y horario-club); nada es de ejemplo.
+const SIN_VINCULO = 'Tu cuenta todavía no está vinculada a un registro de entrenador. Pide al administrador que la revise.'
+const SIN_CATEGORIAS = 'Todavía no tienes categorías asignadas. Cuando el administrador te asigne una, verás aquí tus jugadores y entrenamientos.'
+
+function Sesiones({ id, titulo, sesiones, vacio, conDia }) {
+  return (
+    <Card aria-labelledby={id} className="flex flex-col gap-3">
+      <h2 id={id} className="text-h3">{titulo}</h2>
+      {sesiones.length === 0 ? (
+        <p className="text-body text-secondary">{vacio}</p>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {sesiones.map((s) => (
+            <li key={s.clave} className="min-w-0">
+              <p className="break-words text-body-medium">{categoriaDeSesion(s)}</p>
+              <p className="break-words text-small text-secondary">{conDia ? `${diaLargo(s.fecha)} · ` : ''}{rangoDeSesion(s)} · {s.sede}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+function Categorias({ jugadores, verJugadores }) {
+  return (
+    <Card aria-labelledby="categorias-titulo" className="flex flex-col gap-3">
+      <h2 id="categorias-titulo" className="text-h3">Mis categorías</h2>
+      <ul className="flex flex-col gap-3">
+        {jugadores.categorias.map((c) => (
+          <li key={c.idCategoria} className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="break-words text-body-medium">{c.nombre}</span>
+            <span className="text-small text-secondary">{textoJugadores(c.jugadores.length)}</span>
+          </li>
+        ))}
+      </ul>
+      {verJugadores && <div><Button variant="secondary" to="/entrenador/jugadores">Ver mis jugadores</Button></div>}
+    </Card>
+  )
+}
 
 function Indicador({ titulo, valor, detalle }) {
   return (
@@ -24,46 +65,65 @@ function Indicador({ titulo, valor, detalle }) {
   )
 }
 
-export default function Inicio() {
+function Resumen({ datos, recargar }) {
+  const modulos = modulosConApi()
+  const visible = (modulo) => opcionVisible({ modulo }, { autenticacionReal, modulos })
+  const { jugadores, horario } = datos
+  const total = jugadores.error ? null : jugadores.jugadores.length
+
   return (
-    <Page title="Hola, Nicolás" subtitle="Tu categoría: Sub-12">
-      <Button to="/entrenador/asistencia" className="md:self-start">Tomar asistencia</Button>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Indicador titulo="Jugadores Sub-12" valor="5" detalle="2 con documentos pendientes" />
-        <Indicador titulo="Asistencia Sub-12" valor="88 %" detalle="Últimas 4 semanas" />
-        <Indicador titulo="Entrenamientos hoy" valor="1" detalle="7:00 p. m. · Horizontes" />
-        <Indicador titulo="Convocados Copa Prado" valor="14 / 18" detalle="Faltan 4 por confirmar" />
+    <>
+      {visible('asistencia') && <Button to="/entrenador/asistencia" className="md:self-start">Tomar asistencia</Button>}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Indicador
+          titulo="Jugadores activos" valor={total ?? '—'}
+          detalle={total === null ? 'No se pudo cargar' : `En ${datos.perfil.categorias.length === 1 ? 'tu categoría' : `tus ${datos.perfil.categorias.length} categorías`}`}
+        />
+        <Indicador
+          titulo="Entrenamientos hoy" valor={horario.error ? '—' : horario.hoy.length}
+          detalle={horario.error ? 'No se pudo cargar' : `${textoEntrenamientos(horario.semana.length)} más esta semana`}
+        />
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card aria-labelledby="semana-titulo" className="flex flex-col gap-3">
-          <h2 id="semana-titulo" className="text-h3">Entrenamientos de la semana</h2>
-          <ul className="flex flex-col gap-3">
-            {semana.map((s) => (
-              <li key={s.lugar + s.cuando} className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words text-body-medium">{s.lugar}</p>
-                  <p className="text-small text-secondary">{s.cuando}</p>
-                </div>
-                <Badge tone={s.tone}>{s.estado}</Badge>
-              </li>
-            ))}
-          </ul>
-        </Card>
-        <Card aria-labelledby="faltas-titulo" className="flex flex-col gap-3">
-          <h2 id="faltas-titulo" className="text-h3">Jugadores con más faltas</h2>
-          <ul className="flex flex-col gap-3">
-            {faltas.map((f) => (
-              <li key={f.nombre} className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words text-body-medium">{f.nombre}</p>
-                  <p className="text-small text-secondary">{f.detalle}</p>
-                </div>
-                <Badge tone={f.tone}>{f.accion}</Badge>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <EstadoDeCarga mensajeError={jugadores.error ? mensajeDeErrorEntrenador(jugadores.error, 'No se pudieron cargar tus jugadores.') : null} onReintentar={recargar}>
+          <Categorias jugadores={jugadores} verJugadores={visible('misjugadores')} />
+        </EstadoDeCarga>
+        <EstadoDeCarga mensajeError={horario.error ? mensajeDeErrorEntrenador(horario.error, 'No se pudo cargar tu horario.') : null} onReintentar={recargar}>
+          <Sesiones id="hoy-titulo" titulo="Entrenamientos de hoy" sesiones={horario.hoy} vacio="No tienes entrenamientos hoy." />
+        </EstadoDeCarga>
       </div>
+      {!horario.error && (
+        <Sesiones id="semana-titulo" titulo="Resto de la semana" sesiones={horario.semana} vacio="No tienes más entrenamientos esta semana." conDia />
+      )}
+    </>
+  )
+}
+
+// Vista pura (sin red): recibe el estado de la carga. La usan el contenedor de abajo y las pruebas.
+export function VistaInicio({ usuario, conectado, cargando, datos, error, onReintentar }) {
+  let vacio = null
+  if (!conectado) vacio = 'Este resumen se calcula con datos reales y el módulo todavía no está conectado a la API.'
+  else if (datos && !datos.perfil) vacio = SIN_VINCULO
+  else if (datos && datos.perfil.categorias.length === 0) vacio = SIN_CATEGORIAS
+
+  return (
+    <Page title={saludoDe(usuario)} subtitle="Resumen de tus categorías">
+      <EstadoDeCarga
+        cargando={cargando}
+        mensajeError={error ? mensajeDeErrorEntrenador(error, 'No se pudo cargar tu resumen.') : null}
+        onReintentar={onReintentar}
+        vacio={vacio}
+        texto="Cargando tu resumen…"
+      >
+        {datos && <Resumen datos={datos} recargar={onReintentar} />}
+      </EstadoDeCarga>
     </Page>
   )
+}
+
+export default function Inicio() {
+  const { usuario } = useAuth()
+  const conectado = inicioEntrenadorPorApi()
+  const { cargando, datos, error, recargar } = useCarga(cargarInicioEntrenador, conectado)
+  return <VistaInicio usuario={usuario} conectado={conectado} cargando={cargando} datos={datos} error={error} onReintentar={recargar} />
 }
