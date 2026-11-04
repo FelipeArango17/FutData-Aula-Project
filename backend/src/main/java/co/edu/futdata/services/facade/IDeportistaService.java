@@ -2,7 +2,10 @@ package co.edu.futdata.services.facade;
 
 import co.edu.futdata.api.dto.DeportistaRequestDTO;
 import co.edu.futdata.api.dto.DeportistaResponseDTO;
+import co.edu.futdata.api.dto.MiJugadorFichaResponseDTO;
+import co.edu.futdata.api.dto.MiJugadorResponseDTO;
 import co.edu.futdata.api.dto.PaginaDTO;
+import java.util.List;
 import java.util.UUID;
 
 public interface IDeportistaService {
@@ -49,4 +52,17 @@ public interface IDeportistaService {
      */
     DeportistaResponseDTO eliminarFoto(UUID id);
     DeportistaResponseDTO consultar(UUID id);
+
+    /**
+     * Los jugadores vinculados al usuario acudiente (el {@code sub} del token), con foto firmada y categoría derivada.
+     * Lista vacía si no tiene fila de acudiente o no tiene hijos.
+     */
+    List<MiJugadorResponseDTO> misJugadores(UUID idUsuario);
+
+    /**
+     * La ficha de uno de sus jugadores.
+     *
+     * @throws RecursoNoEncontradoException no existe o no es de este acudiente, con el mismo mensaje (404)
+     */
+    MiJugadorFichaResponseDTO miJugador(UUID idUsuario, UUID idDeportista);
 }

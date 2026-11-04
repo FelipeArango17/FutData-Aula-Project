@@ -3,6 +3,8 @@ package co.edu.futdata.services.impl;
 import co.edu.futdata.api.dto.DeportistaMapper;
 import co.edu.futdata.api.dto.DeportistaRequestDTO;
 import co.edu.futdata.api.dto.DeportistaResponseDTO;
+import co.edu.futdata.api.dto.MiJugadorFichaResponseDTO;
+import co.edu.futdata.api.dto.MiJugadorResponseDTO;
 import co.edu.futdata.api.dto.PaginaDTO;
 import co.edu.futdata.config.FotosProperties;
 import co.edu.futdata.datasource.external.ArchivoNoEncontradoException;
@@ -14,6 +16,7 @@ import co.edu.futdata.domain.rules.ReglasFoto;
 import co.edu.futdata.persistence.dao.ConsultaDeportistas;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
 import co.edu.futdata.persistence.dao.IDeportistaDAO;
+import co.edu.futdata.persistence.dao.JugadorDeAcudiente;
 import co.edu.futdata.persistence.dao.OrdenDeportista;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
@@ -129,6 +132,34 @@ public class DeportistaServiceImpl implements IDeportistaService {
     public DeportistaResponseDTO consultar(UUID id) {
         Deportista d = buscar(id);
         return respuesta(d, true, urlsDeFotos(List.of(d)));
+    }
+
+    // --- Acudiente ----------------------------------------------------------------------------------------------
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MiJugadorResponseDTO> misJugadores(UUID idUsuario) {
+        List<JugadorDeAcudiente> jugadores = deportistas.listarDeAcudiente(idUsuario, anioActual());
+        Map<String, String> urls = urlsDeFotos(jugadores.stream().map(JugadorDeAcudiente::deportista).toList());
+        return jugadores.stream().map(j -> {
+            Deportista d = j.deportista();
+            return new MiJugadorResponseDTO(d.getId(), d.getNombre(), d.getApellido(), d.getFechaNacimiento(), edad(d),
+                    d.getCategoria(), d.getIdCategoria(), grupoVisible(d), d.getPosicion(), fotoFirmada(d, urls),
+                    j.parentesco(), d.isActivo(), d.getEstadoInscripcion());
+        }).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MiJugadorFichaResponseDTO miJugador(UUID idUsuario, UUID idDeportista) {
+        JugadorDeAcudiente j = deportistas.buscarDeAcudiente(idUsuario, idDeportista, anioActual())
+                .orElseThrow(() -> new RecursoNoEncontradoException(NO_EXISTE));
+        Deportista d = j.deportista();
+        return new MiJugadorFichaResponseDTO(d.getId(), d.getNombre(), d.getApellido(), d.getTipoDocumento(),
+                d.getDocumento(), d.getFechaNacimiento(), edad(d), d.getTelefono(), d.getDireccion(), d.getCategoria(),
+                d.getIdCategoria(), grupoVisible(d), d.getPosicion(), fotoFirmada(d, urlsDeFotos(List.of(d))),
+                j.parentesco(), d.isActivo(), d.getEstadoInscripcion(),
+                deportistas.documentosObligatoriosFaltantes(d.getId()));
     }
 
     // --- Alta y edición -----------------------------------------------------------------------------------------
@@ -268,14 +299,25 @@ public class DeportistaServiceImpl implements IDeportistaService {
      * URL firmada, nunca como ruta.
      */
     private DeportistaResponseDTO respuesta(Deportista d, boolean esAdministrador, Map<String, String> urls) {
-        int edad = d.getFechaNacimiento().until(LocalDate.now(reloj)).getYears();
+        return new DeportistaResponseDTO(d.getId(), d.getNombre(), d.getApellido(), d.getTipoDocumento(),
+                esAdministrador ? d.getDocumento() : null, d.getFechaNacimiento(), edad(d),
+                esAdministrador ? d.getTelefono() : null, esAdministrador ? d.getDireccion() : null,
+                d.getPosicion(), fotoFirmada(d, urls), d.getCategoria(), d.getIdCategoria(), grupoVisible(d),
+                d.isActivo(), esAdministrador ? d.getEstadoInscripcion() : null);
+    }
+
+    private int edad(Deportista d) {
+        return d.getFechaNacimiento().until(LocalDate.now(reloj)).getYears();
+    }
+
+    /** El grupo guardado solo se devuelve si la categoría calculada lo admite. */
+    private static String grupoVisible(Deportista d) {
         boolean admiteGrupo = d.getCategoria() != null && ReglasDeportista.categoriaPorNombre(d.getCategoria())
                 .map(ReglasDeportista.CategoriaClub::admiteGrupo).orElse(false);
-        String foto = d.getFoto() == null ? null : urls.get(d.getFoto());
-        return new DeportistaResponseDTO(d.getId(), d.getNombre(), d.getApellido(), d.getTipoDocumento(),
-                esAdministrador ? d.getDocumento() : null, d.getFechaNacimiento(), edad,
-                esAdministrador ? d.getTelefono() : null, esAdministrador ? d.getDireccion() : null,
-                d.getPosicion(), foto, d.getCategoria(), d.getIdCategoria(), admiteGrupo ? d.getGrupo() : null,
-                d.isActivo(), esAdministrador ? d.getEstadoInscripcion() : null);
+        return admiteGrupo ? d.getGrupo() : null;
+    }
+
+    private static String fotoFirmada(Deportista d, Map<String, String> urls) {
+        return d.getFoto() == null ? null : urls.get(d.getFoto());
     }
 }
