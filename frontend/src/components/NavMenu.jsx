@@ -1,5 +1,8 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { menus } from '../config/menus.js'
+import { autenticacionReal } from '../services/supabaseClient.js'
+import { modulosConApi } from '../services/usarApi.js'
+import { menusVisibles } from '../utils/menusVisibles.js'
 import { useAuth } from '../context/AuthContext.js'
 import { useAccesibilidad } from '../context/AccesibilidadContext.js'
 
@@ -29,7 +32,7 @@ export default function NavMenu({ role, onNavigate, accesibilidadRef }) {
 
   return (
     <nav aria-label="Secciones" className="flex flex-1 flex-col gap-4 p-4">
-      {menus[role].map((group, index) => (
+      {menusVisibles({ menus, role, autenticacionReal, modulos: modulosConApi() }).map((group, index) => (
         <div key={group.title ?? index}>
           {group.title && (
             <h2 className="px-3 pb-2 text-label uppercase texto-atenuado">{group.title}</h2>

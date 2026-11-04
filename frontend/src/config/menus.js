@@ -1,4 +1,4 @@
-// Menús fijos por rol. Cada rol es una lista de grupos { title?, items: [{ label, to }] }.
+// Menús fijos por rol. Cada rol es una lista de grupos { title?, items: [{ label, to, modulo }] }.
 // Si un grupo no tiene title, no se dibuja encabezado.
 export const roles = ['acudiente', 'entrenador', 'tesorero', 'administrador']
 
@@ -21,67 +21,67 @@ export const menus = {
   acudiente: [
     {
       items: [
-        { label: 'Inicio', to: '/acudiente/inicio' },
-        { label: 'Mis jugadores', to: '/acudiente/jugadores' },
-        { label: 'Pagos', to: '/acudiente/pagos' },
-        { label: 'Documentos', to: '/acudiente/documentos' },
-        { label: 'Horarios', to: '/acudiente/horarios' },
-        { label: 'Notificaciones', to: '/acudiente/notificaciones' },
+        { label: 'Inicio', to: '/acudiente/inicio', modulo: 'inicio' },
+        { label: 'Mis jugadores', to: '/acudiente/jugadores', modulo: 'acudientes' },
+        { label: 'Pagos', to: '/acudiente/pagos', modulo: 'pagos' },
+        { label: 'Documentos', to: '/acudiente/documentos', modulo: 'documentos' },
+        { label: 'Horarios', to: '/acudiente/horarios', modulo: 'horarioclub' },
+        { label: 'Notificaciones', to: '/acudiente/notificaciones', modulo: 'avisos' },
       ],
     },
   ],
   entrenador: [
     {
       items: [
-        { label: 'Inicio', to: '/entrenador/inicio' },
-        { label: 'Mis grupos', to: '/entrenador/grupos' },
-        { label: 'Asistencia', to: '/entrenador/asistencia' },
-        { label: 'Horarios', to: '/entrenador/horarios' },
-        { label: 'Torneos', to: '/entrenador/torneos' },
+        { label: 'Inicio', to: '/entrenador/inicio', modulo: 'inicio' },
+        { label: 'Mis grupos', to: '/entrenador/grupos', modulo: 'deportistas' },
+        { label: 'Asistencia', to: '/entrenador/asistencia', modulo: 'asistencia' },
+        { label: 'Horarios', to: '/entrenador/horarios', modulo: 'horarioclub' },
+        { label: 'Torneos', to: '/entrenador/torneos', modulo: 'torneos' },
       ],
     },
   ],
   tesorero: [
     {
       items: [
-        { label: 'Inicio', to: '/tesorero/inicio' },
-        { label: 'Pagos', to: '/tesorero/pagos' },
-        { label: 'Reportes', to: '/tesorero/reportes' },
-        { label: 'Avisos', to: '/tesorero/avisos' },
+        { label: 'Inicio', to: '/tesorero/inicio', modulo: 'inicio' },
+        { label: 'Pagos', to: '/tesorero/pagos', modulo: 'pagos' },
+        { label: 'Reportes', to: '/tesorero/reportes', modulo: 'reportes' },
+        { label: 'Avisos', to: '/tesorero/avisos', modulo: 'avisos' },
       ],
     },
   ],
   administrador: [
     {
-      items: [{ label: 'Dashboard', to: '/administrador/dashboard' }],
+      items: [{ label: 'Dashboard', to: '/administrador/dashboard', modulo: 'inicio' }],
     },
     {
       title: 'Personas',
       items: [
-        { label: 'Deportistas', to: '/administrador/deportistas' },
-        { label: 'Grupos', to: '/administrador/grupos' },
-        { label: 'Documentos', to: '/administrador/documentos' },
-        { label: 'Usuarios y roles', to: '/administrador/usuarios' },
+        { label: 'Deportistas', to: '/administrador/deportistas', modulo: 'deportistas' },
+        { label: 'Grupos', to: '/administrador/grupos', modulo: 'deportistas' },
+        { label: 'Documentos', to: '/administrador/documentos', modulo: 'documentos' },
+        { label: 'Usuarios y roles', to: '/administrador/usuarios', modulo: 'usuarios' },
       ],
     },
     {
       title: 'Deportivo',
       items: [
-        { label: 'Asistencia', to: '/administrador/asistencia' },
-        { label: 'Horarios', to: '/administrador/horarios' },
-        { label: 'Torneos', to: '/administrador/torneos' },
+        { label: 'Asistencia', to: '/administrador/asistencia', modulo: 'asistencia' },
+        { label: 'Horarios', to: '/administrador/horarios', modulo: 'horarioclub' },
+        { label: 'Torneos', to: '/administrador/torneos', modulo: 'torneos' },
       ],
     },
     {
       title: 'Finanzas',
       items: [
-        { label: 'Pagos', to: '/administrador/pagos' },
-        { label: 'Reportes', to: '/administrador/reportes' },
+        { label: 'Pagos', to: '/administrador/pagos', modulo: 'pagos' },
+        { label: 'Reportes', to: '/administrador/reportes', modulo: 'reportes' },
       ],
     },
     {
       title: 'Sistema',
-      items: [{ label: 'Respaldo', to: '/administrador/respaldo' }],
+      items: [{ label: 'Respaldo', to: '/administrador/respaldo', modulo: 'respaldo' }],
     },
   ],
 }
@@ -90,26 +90,27 @@ export const menus = {
 // `icon` es el nombre de un ícono de components/Icon.jsx.
 export const bottomNavs = {
   acudiente: [
-    { label: 'Inicio', to: '/acudiente/inicio', icon: 'home' },
-    { label: 'Jugadores', to: '/acudiente/jugadores', icon: 'users' },
-    { label: 'Pagos', to: '/acudiente/pagos', icon: 'wallet' },
-    { label: 'Avisos', to: '/acudiente/notificaciones', icon: 'bell' },
+    { label: 'Inicio', to: '/acudiente/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Jugadores', to: '/acudiente/jugadores', icon: 'users', modulo: 'acudientes' },
+    { label: 'Pagos', to: '/acudiente/pagos', icon: 'wallet', modulo: 'pagos' },
+    { label: 'Avisos', to: '/acudiente/notificaciones', icon: 'bell', modulo: 'avisos' },
   ],
   entrenador: [
-    { label: 'Inicio', to: '/entrenador/inicio', icon: 'home' },
-    { label: 'Asistencia', to: '/entrenador/asistencia', icon: 'check' },
-    { label: 'Horarios', to: '/entrenador/horarios', icon: 'calendar' },
-    { label: 'Torneos', to: '/entrenador/torneos', icon: 'trophy' },
+    { label: 'Inicio', to: '/entrenador/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Asistencia', to: '/entrenador/asistencia', icon: 'check', modulo: 'asistencia' },
+    { label: 'Horarios', to: '/entrenador/horarios', icon: 'calendar', modulo: 'horarioclub' },
+    { label: 'Torneos', to: '/entrenador/torneos', icon: 'trophy', modulo: 'torneos' },
   ],
   tesorero: [
-    { label: 'Inicio', to: '/tesorero/inicio', icon: 'home' },
-    { label: 'Pagos', to: '/tesorero/pagos', icon: 'wallet' },
-    { label: 'Reportes', to: '/tesorero/reportes', icon: 'chart' },
-    { label: 'Avisos', to: '/tesorero/avisos', icon: 'bell' },
+    { label: 'Inicio', to: '/tesorero/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Pagos', to: '/tesorero/pagos', icon: 'wallet', modulo: 'pagos' },
+    { label: 'Reportes', to: '/tesorero/reportes', icon: 'chart', modulo: 'reportes' },
+    { label: 'Avisos', to: '/tesorero/avisos', icon: 'bell', modulo: 'avisos' },
   ],
 }
 
 // Primera pantalla del menú de un rol: a donde se llega después de iniciar sesión.
+// (Sin filtrar por módulos: la primera opción del menú completo. Para la entrega usa inicioVisibleDe de utils/menusVisibles.js.)
 export const inicioDe = (role) => menus[role][0].items[0].to
 
 export const getItems = (role) => menus[role].flatMap((group) => group.items)
