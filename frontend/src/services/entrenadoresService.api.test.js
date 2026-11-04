@@ -25,6 +25,7 @@ const llamadas = () => fetchSimulado.mock.calls.map(([url, o]) => ({ ruta: url.r
 
 beforeEach(async () => {
   vi.stubEnv('MODE', 'development')
+  vi.stubEnv('VITE_API_MODULOS', 'entrenadores') // hermética: no depende del .env.local
   supabase.auth.getSession.mockReset().mockResolvedValue({ data: { session: { access_token: 'token-de-prueba' } } })
   supabase.auth.signOut.mockReset().mockResolvedValue({ error: null })
   rutas = {}

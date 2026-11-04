@@ -45,6 +45,24 @@ describe('menusVisibles', () => {
     expect(opcionDeRuta(menus, 'administrador', '/administrador/horario-club')).toBeUndefined()
   })
 
+  it('cada rol activa su inicio por separado', () => {
+    const solo = (role, modulos) => inicioVisibleDe({ menus, role, autenticacionReal: true, modulos })
+    expect(solo('tesorero', ['iniciotesorero'])).toBe('/tesorero/inicio')
+    expect(solo('tesorero', ['inicioacudiente', 'dashboard', 'inicio'])).toBeNull()
+    expect(solo('acudiente', ['inicioacudiente'])).toBe('/acudiente/inicio')
+    expect(solo('acudiente', ['iniciotesorero'])).toBeNull()
+    expect(solo('administrador', ['dashboard'])).toBe('/administrador/dashboard')
+    expect(solo('administrador', ['inicio', 'iniciotesorero'])).toBeNull()
+    expect(solo('entrenador', ['inicio'])).toBe('/entrenador/inicio')
+    expect(solo('entrenador', ['dashboard', 'iniciotesorero', 'inicioacudiente'])).toBeNull()
+  })
+
+  it('reportes lo comparten el tesorero y el administrador', () => {
+    const modulo = (role, to) => menus[role].flatMap((g) => g.items).find((i) => i.to === to).modulo
+    expect(modulo('tesorero', '/tesorero/reportes')).toBe('reportes')
+    expect(modulo('administrador', '/administrador/reportes')).toBe('reportes')
+  })
+
   it('mapeo completo: toda opción tiene módulo previsto', () => {
     const items = [...Object.values(menus).flatMap((gs) => gs.flatMap((g) => g.items)), ...Object.values(bottomNavs).flat()]
     for (const item of items) expect(MODULOS_PREVISTOS, item.to).toContain(item.modulo)

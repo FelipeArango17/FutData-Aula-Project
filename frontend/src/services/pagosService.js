@@ -295,6 +295,25 @@ export async function listarCobros({ estado, tipo, periodo, idDeportista, page =
   return { ...pagina, items: pagina.items.map(adaptarCobro) }
 }
 
+// Todos los cobros, para los resúmenes (inicio del tesorero, dashboard, reportes). Recorre GET /api/pagos de a TAMANO_PAGINA_RESUMEN
+// (100 = el máximo que acepta el backend: PagoServiceImpl.TAMANO_MAXIMO) hasta traerlos todos o llegar a MAX_PAGINAS_RESUMEN páginas.
+// Si llega al tope devuelve `truncado: true` y la pantalla lo avisa: los totales serían parciales.
+// PENDIENTE (backend): lo ideal a futuro es un endpoint de resumen que devuelva los totales sin traer todos los cobros.
+export const TAMANO_PAGINA_RESUMEN = 100
+export const MAX_PAGINAS_RESUMEN = 50 // 50 × 100 = 5.000 cobros
+export async function listarTodosLosCobros({ tamano = TAMANO_PAGINA_RESUMEN, maxPaginas = MAX_PAGINAS_RESUMEN } = {}) {
+  exigirApi()
+  const items = []
+  let total = 0
+  for (let page = 0; page < maxPaginas; page += 1) {
+    const pagina = await apiListaPaginada('/pagos', { page, size: tamano, sort: 'vencimiento,desc' })
+    items.push(...pagina.items.map(adaptarCobro))
+    total = pagina.total
+    if (pagina.items.length === 0 || items.length >= total) return { items, total, truncado: false }
+  }
+  return { items, total, truncado: true }
+}
+
 // POST /api/pagos/{id}/aprobar: pago manual. metodo: EFECTIVO o TRANSFERENCIA. Un cobro ya iniciado en Wompi responde 409.
 export async function aprobarPagoManual(idPago, { fechaPago, metodo, nota } = {}) {
   exigirApi()
