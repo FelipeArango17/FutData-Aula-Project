@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Page from '../ui/Page.jsx'
 import Card from '../ui/Card.jsx'
 import Button from '../ui/Button.jsx'
@@ -11,14 +11,15 @@ import Paginacion from '../ui/Paginacion.jsx'
 import TablaCobros from './TablaCobros.jsx'
 import { listarDeportistas } from '../../services/deportistasService.js'
 import {
-  aprobarPagoManual, conciliarCobro, crearCobro, descargarComprobante, generarCiclos, listarCobros, rechazarCobro,
+  aprobarPagoManual, conciliarCobro, crearCobro, descargarComprobante, generarCiclos, listarCobros, listarTodosLosCobros, MAX_PAGINAS_RESUMEN, rechazarCobro,
 } from '../../services/pagosService.js'
 import {
   ETIQUETAS_TIPO, METODOS_MANUALES, TIPOS_COBRO, accionesDeCobro, etiquetaMetodo, mensajeDeErrorPagos, validarAprobacionManual, validarNuevoCobro,
-  CONFIRMACION_GENERAR_CICLOS, MENSAJE_MONTO_NO_CONFIGURADO, NOTA_PERIODO_SOLO_MENSUALIDAD, resumenGeneracionCiclos, tipoUsaPeriodo,
+  CONFIRMACION_GENERAR_CICLOS, MENSAJE_MONTO_NO_CONFIGURADO, NOTA_FILTRO_MES, filtroMesEsLocal, resumenGeneracionCiclos,
 } from '../../utils/pagosApi.js'
 import { descargarBlob } from '../../utils/descargas.js'
 import { hoy } from '../../utils/hoy.js'
+import { claveDeLectura, leerCobros } from '../../utils/lecturaCobros.js'
 import { formatearCOP } from '../../utils/dinero.js'
 
 // Gestión de cobros con la API de pagos (backend: "Pagos con Wompi"): lista paginada con filtros por estado, tipo y periodo y las
@@ -49,7 +50,15 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const [errorAccion, setErrorAccion] = useState(null)
   const [deportistas, setDeportistas] = useState([])
 
-  const clave = `${estado}|${tipo}|${periodo}|${pagina}|${recarga}`
+  // Con el filtro de mes por vencimiento se leen todos los cobros una vez por estado + tipo + mes y se pagina aquí (ver lecturaCobros.js):
+  // cambiar de página no vuelve a pedirlos. `filtros` no incluye la página en ese modo, así el efecto no se dispara.
+  const local = filtroMesEsLocal(tipo, periodo)
+  const paginaDeLectura = local ? 0 : pagina
+  const clave = claveDeLectura({ estado, tipo, periodo, pagina, recarga })
+  const filtros = useMemo(
+    () => ({ estado: ESTADOS[estado], tipo, periodo, pagina: paginaDeLectura, tamano: TAMANO }),
+    [estado, tipo, periodo, paginaDeLectura],
+  )
 
   useEffect(() => {
     tituloRef.current?.focus()
@@ -57,13 +66,13 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
 
   useEffect(() => {
     let activo = true
-    listarCobros({ estado: ESTADOS[estado], tipo, periodo, page: pagina - 1, size: TAMANO })
+    leerCobros(filtros, { listarCobros, listarTodosLosCobros })
       .then((datos) => activo && setCarga({ clave, datos, error: null }))
       .catch((error) => activo && setCarga({ clave, datos: null, error }))
     return () => {
       activo = false
     }
-  }, [estado, tipo, periodo, pagina, clave])
+  }, [filtros, clave])
 
   // El administrador elige a quién crearle un cobro
   useEffect(() => {
@@ -73,8 +82,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
 
   const cargando = carga.clave !== clave
   const datos = carga.datos
-  const totalPaginas = Math.max(1, Math.ceil((datos?.total ?? 0) / TAMANO))
-  const cobros = datos?.items ?? []
+  const total = local ? (datos?.items.length ?? 0) : (datos?.total ?? 0)
+  const totalPaginas = Math.max(1, Math.ceil(total / TAMANO))
+  const cobros = local ? (datos?.items ?? []).slice((pagina - 1) * TAMANO, pagina * TAMANO) : (datos?.items ?? [])
   const mensajeError = !cargando && carga.error ? mensajeDeErrorPagos(carga.error, 'No se pudieron cargar los cobros.') : null
 
   const cerrarConfirmacion = useCallback(() => setConfirmar(false), [])
@@ -224,12 +234,6 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const campoMes = (id, label) => (
     <SelectorMes label={label} id={id} requerido value={valores[id] ?? ''} error={erroresCampos[id]} onChange={(v) => cambiar(id, v)} />
   )
-  const periodoActivo = tipoUsaPeriodo(tipo)
-  const cambiarTipoFiltro = (nuevo) => {
-    setTipo(nuevo)
-    if (!tipoUsaPeriodo(nuevo)) setPeriodo('') // un periodo viejo no se queda aplicado a un tipo que no lo usa
-    setPagina(1)
-  }
 
   return (
     <Page title={titulo} subtitle={subtitulo} tituloRef={tituloRef}>
@@ -294,24 +298,29 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
 
       <FilterChips label="Estado del cobro" options={Object.keys(ESTADOS)} value={estado} onChange={filtrar(setEstado)} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Tipo de cobro" id="filtro-tipo" as="select" value={tipo} onChange={(e) => cambiarTipoFiltro(e.target.value)}>
+        <Field label="Tipo de cobro" id="filtro-tipo" as="select" value={tipo} onChange={(e) => filtrar(setTipo)(e.target.value)}>
           <option value="">Todos los tipos</option>
           {TIPOS_COBRO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO[t]}</option>)}
         </Field>
         <div className="flex flex-col gap-1">
-          <SelectorMes label="Periodo (mes)" id="filtro-periodo" value={periodo} disabled={!periodoActivo} describedBy={periodoActivo ? undefined : 'nota-periodo'} onChange={filtrar(setPeriodo)} />
-          {!periodoActivo && <p id="nota-periodo" className="text-body text-secondary">{NOTA_PERIODO_SOLO_MENSUALIDAD}</p>}
+          <SelectorMes label="Mes" id="filtro-periodo" value={periodo} describedBy="nota-periodo" onChange={filtrar(setPeriodo)} />
+          <p id="nota-periodo" className="text-body text-secondary">{NOTA_FILTRO_MES}</p>
         </div>
       </div>
 
       <TablaCobros cargando={cargando} mensajeError={mensajeError} onReintentar={() => setRecarga((n) => n + 1)} cobros={cobros} accionesDe={accionesDe} />
+      {!cargando && !mensajeError && local && datos?.truncado && (
+        <p role="status" className="rounded-lg bg-warning p-4 text-body-medium text-warning">
+          Hay más de {MAX_PAGINAS_RESUMEN * 100} cobros y solo se leyeron los más recientes: la lista del mes puede estar incompleta.
+        </p>
+      )}
       {!cargando && !mensajeError && (
         <Paginacion
           pagina={pagina}
           totalPaginas={totalPaginas}
-          desde={datos?.total ? (pagina - 1) * TAMANO + 1 : 0}
+          desde={total ? (pagina - 1) * TAMANO + 1 : 0}
           hasta={(pagina - 1) * TAMANO + cobros.length}
-          total={datos?.total ?? 0}
+          total={total}
           onCambiar={setPagina}
         />
       )}

@@ -199,9 +199,11 @@ export function validarNuevoCobro({ idDeportista, tipo, concepto, monto, fechaVe
 
 export const validarPeriodo = (periodo) => (MES.test(String(periodo ?? '')) ? null : 'Elige el mes.')
 
-// El periodo (mes) solo existe en las mensualidades: con otro tipo de cobro el filtro no aplica.
-export const tipoUsaPeriodo = (tipo) => !tipo || tipo === 'MENSUALIDAD'
-export const NOTA_PERIODO_SOLO_MENSUALIDAD = 'El periodo aplica solo a mensualidades'
+// Filtro "Mes" de la lista de cobros. En mensualidades filtra el backend por periodo (GET /pagos?periodo=). El backend no filtra por
+// vencimiento, así que con cualquier otro tipo (o con todos) se trae la lista y se filtra aquí por el mes de fechaVencimiento.
+export const NOTA_FILTRO_MES = 'En mensualidades, el periodo cobrado; en los demás, el mes de vencimiento'
+export const filtroMesEsLocal = (tipo, periodo) => Boolean(periodo) && tipo !== 'MENSUALIDAD'
+export const filtrarPorMesDeVencimiento = (cobros, periodo) => cobros.filter((c) => String(c.fechaVencimiento ?? '').slice(0, 7) === periodo)
 
 export const CONFIRMACION_GENERAR_CICLOS = {
   titulo: 'Generar cobros del ciclo',

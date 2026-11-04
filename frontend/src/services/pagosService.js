@@ -301,12 +301,13 @@ export async function listarCobros({ estado, tipo, periodo, idDeportista, page =
 // PENDIENTE (backend): lo ideal a futuro es un endpoint de resumen que devuelva los totales sin traer todos los cobros.
 export const TAMANO_PAGINA_RESUMEN = 100
 export const MAX_PAGINAS_RESUMEN = 50 // 50 × 100 = 5.000 cobros
-export async function listarTodosLosCobros({ tamano = TAMANO_PAGINA_RESUMEN, maxPaginas = MAX_PAGINAS_RESUMEN } = {}) {
+// estado y tipo (opcionales) se pasan al backend para traer solo esos cobros.
+export async function listarTodosLosCobros({ tamano = TAMANO_PAGINA_RESUMEN, maxPaginas = MAX_PAGINAS_RESUMEN, estado, tipo } = {}) {
   exigirApi()
   const items = []
   let total = 0
   for (let page = 0; page < maxPaginas; page += 1) {
-    const pagina = await apiListaPaginada('/pagos', { page, size: tamano, sort: 'vencimiento,desc' })
+    const pagina = await apiListaPaginada('/pagos', { page, size: tamano, sort: 'vencimiento,desc', estado, tipo })
     items.push(...pagina.items.map(adaptarCobro))
     total = pagina.total
     if (pagina.items.length === 0 || items.length >= total) return { items, total, truncado: false }

@@ -117,6 +117,12 @@ describe('tesorero y administrador', () => {
     expect(r.items).toHaveLength(3)
   })
 
+  it('listarTodosLosCobros pasa estado y tipo al backend para traer solo esos cobros', async () => {
+    api.apiListaPaginada.mockResolvedValue({ items: [dto()], total: 1, pagina: 0, tamano: 100 })
+    await servicio.listarTodosLosCobros({ estado: 'PENDIENTE', tipo: 'TORNEO' })
+    expect(api.apiListaPaginada).toHaveBeenCalledWith('/pagos', expect.objectContaining({ estado: 'PENDIENTE', tipo: 'TORNEO' }))
+  })
+
   it('listarTodosLosCobros sin cobros devuelve lista vacía y no pide más páginas', async () => {
     api.apiListaPaginada.mockResolvedValue({ items: [], total: 0, pagina: 0, tamano: 100 })
     expect(await servicio.listarTodosLosCobros()).toEqual({ items: [], total: 0, truncado: false })

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../services/pagosService.js', () => ({
-  aprobarPagoManual: vi.fn(), conciliarCobro: vi.fn(), crearCobro: vi.fn(), descargarComprobante: vi.fn(), generarCiclos: vi.fn(), listarCobros: vi.fn(), rechazarCobro: vi.fn(),
+  aprobarPagoManual: vi.fn(), conciliarCobro: vi.fn(), crearCobro: vi.fn(), descargarComprobante: vi.fn(), generarCiclos: vi.fn(), listarCobros: vi.fn(), listarTodosLosCobros: vi.fn(), MAX_PAGINAS_RESUMEN: 50, rechazarCobro: vi.fn(),
 }))
 vi.mock('../../services/deportistasService.js', () => ({ listarDeportistas: vi.fn() }))
 
@@ -11,7 +11,7 @@ vi.mock('react-dom', async (original) => ({ ...(await original()), createPortal:
 
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import GestionCobros from './GestionCobros.jsx'
-import { CONFIRMACION_GENERAR_CICLOS, MENSAJE_MONTO_NO_CONFIGURADO, NOTA_PERIODO_SOLO_MENSUALIDAD, resumenGeneracionCiclos, tipoUsaPeriodo } from '../../utils/pagosApi.js'
+import { CONFIRMACION_GENERAR_CICLOS, MENSAJE_MONTO_NO_CONFIGURADO, filtrarPorMesDeVencimiento, filtroMesEsLocal, resumenGeneracionCiclos } from '../../utils/pagosApi.js'
 
 const html = (props) => renderToStaticMarkup(<MemoryRouter><GestionCobros titulo="Pagos" subtitulo="x" {...props} /></MemoryRouter>)
 
@@ -27,18 +27,28 @@ describe('botón "Generar cobros del ciclo"', () => {
   })
 })
 
-describe('filtro de periodo', () => {
-  it('con "Todos los tipos" está activo y sin nota', () => {
+describe('filtro "Mes"', () => {
+  it('siempre activo, con la etiqueta "Mes" y su nota ligada; ya no hay nota de "solo mensualidades"', () => {
     const h = html({})
     expect(h).toContain('id="filtro-periodo"')
     expect(h).not.toMatch(/<fieldset[^>]*id="filtro-periodo"[^>]*disabled/)
-    expect(h).not.toContain(NOTA_PERIODO_SOLO_MENSUALIDAD)
+    expect(h).toMatch(/<legend[^>]*>Mes<\/legend>/)
+    expect(h).toContain('aria-describedby="nota-periodo"')
+    expect(h).toContain(`id="nota-periodo"`)
+    expect(h).toContain('En mensualidades, el periodo cobrado; en los demás, el mes de vencimiento')
+    expect(h).not.toContain('El periodo aplica solo a mensualidades')
   })
 
-  it('el periodo aplica solo a Todos y Mensualidad', () => {
-    expect(tipoUsaPeriodo('')).toBe(true)
-    expect(tipoUsaPeriodo('MENSUALIDAD')).toBe(true)
-    for (const t of ['INSCRIPCION', 'TORNEO', 'UNIFORME']) expect(tipoUsaPeriodo(t)).toBe(false)
+  it('con Mensualidad filtra el backend por periodo; con otro tipo o todos, se filtra aquí por vencimiento', () => {
+    expect(filtroMesEsLocal('MENSUALIDAD', '2026-11')).toBe(false)
+    for (const t of ['', 'INSCRIPCION', 'TORNEO', 'UNIFORME']) expect(filtroMesEsLocal(t, '2026-11')).toBe(true)
+    for (const t of ['', 'MENSUALIDAD', 'TORNEO']) expect(filtroMesEsLocal(t, '')).toBe(false) // sin mes no hay filtro
+  })
+
+  it('filtrarPorMesDeVencimiento deja solo los cobros que vencen en ese mes', () => {
+    const cobros = [{ id: 1, fechaVencimiento: '2026-11-05' }, { id: 2, fechaVencimiento: '2026-11-30' }, { id: 3, fechaVencimiento: '2026-12-01' }, { id: 4, fechaVencimiento: '2025-11-05' }, { id: 5 }]
+    expect(filtrarPorMesDeVencimiento(cobros, '2026-11').map((c) => c.id)).toEqual([1, 2])
+    expect(filtrarPorMesDeVencimiento(cobros, '2027-01')).toEqual([])
   })
 })
 
