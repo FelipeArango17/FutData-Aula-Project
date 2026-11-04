@@ -205,7 +205,7 @@ export const NOTA_PERIODO_SOLO_MENSUALIDAD = 'El periodo aplica solo a mensualid
 
 export const CONFIRMACION_GENERAR_CICLOS = {
   titulo: 'Generar cobros del ciclo',
-  descripcion: 'Se crearán los cobros que correspondan hoy y se avisará por correo a los acudientes. ¿Continuar?',
+  descripcion: 'Crea los cobros que le tocan a cada jugador según su fecha de ingreso, hasta 5 días antes de su fecha de cobro. Los que ya existen no se repiten. Esto también se hace solo cada día a las 6:00 a. m. ¿Continuar?',
   boton: 'Generar',
 }
 export const MENSAJE_MONTO_NO_CONFIGURADO = 'No se pudieron generar los cobros porque el valor de la mensualidad no está configurado. Pide que lo configuren y vuelve a intentarlo.'

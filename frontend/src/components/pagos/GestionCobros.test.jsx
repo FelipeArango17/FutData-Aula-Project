@@ -31,7 +31,7 @@ describe('filtro de periodo', () => {
   it('con "Todos los tipos" está activo y sin nota', () => {
     const h = html({})
     expect(h).toContain('id="filtro-periodo"')
-    expect(h).not.toMatch(/<input[^>]*id="filtro-periodo"[^>]*disabled/)
+    expect(h).not.toMatch(/<fieldset[^>]*id="filtro-periodo"[^>]*disabled/)
     expect(h).not.toContain(NOTA_PERIODO_SOLO_MENSUALIDAD)
   })
 
@@ -81,7 +81,7 @@ describe('confirmación antes de generar los cobros del ciclo', () => {
     expect(h).toContain('aria-modal="true"')
     expect(h).toMatch(/aria-labelledby="[^"]+"/)
     expect(h).toMatch(/aria-describedby="[^"]+"/)
-    expect(h).toContain('Se crearán los cobros que correspondan hoy y se avisará por correo a los acudientes. ¿Continuar?')
+    expect(h).toContain('Crea los cobros que le tocan a cada jugador según su fecha de ingreso, hasta 5 días antes de su fecha de cobro. Los que ya existen no se repiten. Esto también se hace solo cada día a las 6:00 a. m. ¿Continuar?')
     expect(h).toMatch(/>Cancelar</)
     expect(h).toMatch(/>Generar</)
     vi.unstubAllGlobals()

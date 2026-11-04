@@ -3,6 +3,7 @@ import Page from '../ui/Page.jsx'
 import Card from '../ui/Card.jsx'
 import Button from '../ui/Button.jsx'
 import Field from '../ui/Field.jsx'
+import SelectorMes from '../ui/SelectorMes.jsx'
 import FilterChips from '../ui/FilterChips.jsx'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
@@ -221,7 +222,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   }[panel.tipo] ?? {}
 
   const campoMes = (id, label) => (
-    <Field label={label} id={id} type="month" requerido value={valores[id] ?? ''} error={erroresCampos[id]} onChange={(e) => cambiar(id, e.target.value)} />
+    <SelectorMes label={label} id={id} requerido value={valores[id] ?? ''} error={erroresCampos[id]} onChange={(v) => cambiar(id, v)} />
   )
   const periodoActivo = tipoUsaPeriodo(tipo)
   const cambiarTipoFiltro = (nuevo) => {
@@ -298,7 +299,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
           {TIPOS_COBRO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO[t]}</option>)}
         </Field>
         <div className="flex flex-col gap-1">
-          <Field label="Periodo (mes)" id="filtro-periodo" type="month" value={periodo} disabled={!periodoActivo} describedBy={periodoActivo ? undefined : 'nota-periodo'} onChange={(e) => filtrar(setPeriodo)(e.target.value)} />
+          <SelectorMes label="Periodo (mes)" id="filtro-periodo" value={periodo} disabled={!periodoActivo} describedBy={periodoActivo ? undefined : 'nota-periodo'} onChange={filtrar(setPeriodo)} />
           {!periodoActivo && <p id="nota-periodo" className="text-body text-secondary">{NOTA_PERIODO_SOLO_MENSUALIDAD}</p>}
         </div>
       </div>
