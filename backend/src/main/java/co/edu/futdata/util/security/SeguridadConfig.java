@@ -1,5 +1,6 @@
 package co.edu.futdata.util.security;
 
+import co.edu.futdata.config.CronProperties;
 import co.edu.futdata.config.SupabaseProperties;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +31,8 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthen
  *       completado el 2FA ({@code 403 2FA_REQUERIDA}).</li>
  *   <li>Los roles se exigen en cada controlador con {@code @PreAuthorize} (por ejemplo, entrenadores solo para
  *       {@code ADMINISTRADOR}). Sin el rol: {@code 403}.</li>
+ *   <li>Excepción acotada: {@code POST /api/pagos/generar-ciclos} también acepta la cabecera {@code X-Cron-Token}
+ *       ({@link CronTokenFilter}), solo si {@code N8N_CRON_TOKEN} está definida; ningún otro endpoint la acepta.</li>
  *   <li>Sin estado: no hay sesión de servidor ni cookie de sesión, así que no aplica la protección CSRF. La cookie
  *       de "Recordar este equipo" (HU-002) solo identifica el equipo y siempre va junto con el JWT.</li>
  * </ul>
@@ -40,7 +43,7 @@ public class SeguridadConfig {
 
     @Bean
     public SecurityFilterChain cadenaDeSeguridad(HttpSecurity http, JwtValidator validador, RespuestasSeguridad respuestas,
-                                                 SesionVerificadaFilter sesionVerificada, Environment entorno)
+                                                 SesionVerificadaFilter sesionVerificada, CronProperties cron, Environment entorno)
             throws Exception {
         boolean documentacion = entorno.acceptsProfiles(Profiles.of(RutasSin2FA.PERFIL_DOCUMENTACION));
         return http
@@ -56,6 +59,8 @@ public class SeguridadConfig {
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(validador))
                         .authenticationEntryPoint(respuestas)
                         .accessDeniedHandler(respuestas))
+                // Tarea programada de n8n: solo POST /api/pagos/generar-ciclos y solo si N8N_CRON_TOKEN está definida
+                .addFilterBefore(new CronTokenFilter(cron), BearerTokenAuthenticationFilter.class)
                 .addFilterAfter(sesionVerificada, BearerTokenAuthenticationFilter.class)
                 .exceptionHandling(errores -> errores
                         .authenticationEntryPoint(respuestas)

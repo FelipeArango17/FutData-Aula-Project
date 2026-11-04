@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record FrontendProperties(String url) {
 
     static final String RUTA_CREAR_CONTRASENA = "/crear-contrasena";
+    static final String RUTA_PAGOS_ACUDIENTE = "/acudiente/pagos";
 
     public FrontendProperties {
         url = url == null || url.isBlank() ? null : url.strip().replaceAll("/+$", "");
@@ -40,5 +41,18 @@ public record FrontendProperties(String url) {
             throw new IllegalArgumentException("El token es obligatorio");
         }
         return url + RUTA_CREAR_CONTRASENA + "?token=" + URLEncoder.encode(token, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Enlace a la pantalla de pagos del acudiente ({@code {FRONTEND_URL}/acudiente/pagos}) para los recordatorios de pago.
+     * No lleva datos secretos.
+     *
+     * @throws IllegalStateException si {@code FRONTEND_URL} no está configurada
+     */
+    public String enlacePagos() {
+        if (!configurada()) {
+            throw new IllegalStateException("FRONTEND_URL no está configurada");
+        }
+        return url + RUTA_PAGOS_ACUDIENTE;
     }
 }

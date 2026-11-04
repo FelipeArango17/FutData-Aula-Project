@@ -1,48 +1,82 @@
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
-import Badge from '../../components/ui/Badge.jsx'
 import Button from '../../components/ui/Button.jsx'
-import Avatar from '../../components/ui/Avatar.jsx'
+import EstadoDeCarga from '../../components/pagos/EstadoDeCarga.jsx'
+import { EstadoPago } from '../../components/pagos/ListaPagos.jsx'
+import useCarga from '../../hooks/useCarga.js'
+import { useAuth } from '../../context/AuthContext.js'
+import { obtenerEstadoCuenta, pagosPorApi } from '../../services/pagosService.js'
+import { autenticacionReal } from '../../services/supabaseClient.js'
+import { modulosConApi } from '../../services/usarApi.js'
+import { mensajeDeErrorPagos } from '../../utils/pagosApi.js'
+import { opcionVisible } from '../../utils/menusVisibles.js'
+import { formatearCOP } from '../../utils/dinero.js'
+import { fechaLargaConAnio } from '../../utils/fechas.js'
+import { resumenAcudiente } from '../../utils/resumenCartera.js'
+import { saludoDe } from '../../utils/saludo.js'
 
-const pendientes = [
-  { concepto: 'Uniforme (2.º pago)', detalle: '$ 90.000 · venció 10 oct.', estado: 'Vencido', tone: 'danger' },
-  { concepto: 'Mensualidad octubre', detalle: '$ 90.000 · vence 30 oct.', estado: 'Pendiente', tone: 'warning' },
-]
+// GET /api/pagos/mis-pagos: el backend filtra por la sesión, no hace falta pasar al acudiente.
+const cargarMisPagos = () => obtenerEstadoCuenta({})
+
+function Lista({ id, titulo, pagos, vacio, detalle }) {
+  return (
+    <Card aria-labelledby={id} className="flex flex-col gap-3">
+      <h2 id={id} className="text-h3">{titulo}</h2>
+      {pagos.length === 0 ? (
+        <p className="text-body text-secondary">{vacio}</p>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {pagos.map((p) => (
+            <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="break-words text-body-medium">{p.nombreDeportista} · {p.concepto}</p>
+                <p className="text-small text-secondary">{formatearCOP(p.monto)} · {detalle(p)}</p>
+              </div>
+              <EstadoPago estado={p.estado} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
 
 export default function Inicio() {
+  const { usuario } = useAuth()
+  const conectado = pagosPorApi()
+  const { cargando, datos, error, recargar } = useCarga(cargarMisPagos, conectado)
+  const resumen = datos ? resumenAcudiente(datos) : null
+  const verPagos = opcionVisible({ modulo: 'pagos' }, { autenticacionReal, modulos: modulosConApi() })
+
   return (
-    <Page title="Hola, María" subtitle="Resumen de tus jugadores">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Card aria-label="Santiago Ríos" className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <Avatar name="Santiago Ríos" />
-            <div className="min-w-0">
-              <h2 className="break-words text-h3">Santiago Ríos</h2>
-              <p className="text-small text-secondary">Cachorros · Prado FC</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="warning">Pago pendiente</Badge>
-            <Badge tone="success">Asistencia 90 %</Badge>
-          </div>
-          <p className="text-body text-secondary">Sábado 9:00 a. m. · Horizontes</p>
-          <Button to="/acudiente/pagos">Pagar ahora</Button>
-        </Card>
-        <Card aria-labelledby="pendientes-titulo" className="flex flex-col gap-3">
-          <h2 id="pendientes-titulo" className="text-h3">Pendientes</h2>
-          <ul className="flex flex-col gap-3">
-            {pendientes.map((p) => (
-              <li key={p.concepto} className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="break-words text-body-medium">{p.concepto}</p>
-                  <p className="text-small text-secondary">{p.detalle}</p>
-                </div>
-                <Badge tone={p.tone}>{p.estado}</Badge>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+    <Page title={saludoDe(usuario)} subtitle="Resumen de tus pagos">
+      {!conectado ? (
+        <EstadoDeCarga vacio="Este resumen se calcula con tus pagos y el módulo de pagos todavía no está conectado a la API." />
+      ) : (
+        <EstadoDeCarga
+          cargando={cargando}
+          mensajeError={error ? mensajeDeErrorPagos(error, 'No se pudieron cargar tus pagos.') : null}
+          onReintentar={recargar}
+          vacio={resumen && !resumen.hayPagos ? 'Aún no hay pagos registrados.' : null}
+          texto="Cargando tus pagos…"
+        >
+          {resumen && (
+            <>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Lista
+                  id="proximos-titulo" titulo="Próximos pagos" pagos={resumen.proximos} vacio="No tienes pagos pendientes."
+                  detalle={(p) => (p.estado === 'vencido' ? 'venció' : 'vence') + ` el ${fechaLargaConAnio(p.fechaVencimiento)}`}
+                />
+                <Lista
+                  id="pagados-titulo" titulo="Últimos pagos" pagos={resumen.ultimosPagados} vacio="Aún no has realizado pagos."
+                  detalle={(p) => `pagado el ${fechaLargaConAnio(p.fechaPago)}`}
+                />
+              </div>
+              {verPagos && <div><Button to="/acudiente/pagos">Ver mis pagos</Button></div>}
+            </>
+          )}
+        </EstadoDeCarga>
+      )}
     </Page>
   )
 }

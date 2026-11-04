@@ -1,6 +1,7 @@
 package co.edu.futdata.persistence.dao;
 
 import co.edu.futdata.domain.entities.Pago;
+import co.edu.futdata.domain.entities.TipoPago;
 import co.edu.futdata.util.reports.ComprobantePagoDTO.MetodoPago;
 import java.time.LocalDate;
 import java.util.List;
@@ -42,6 +43,26 @@ public interface IPagoDAO {
     List<UUID> idsDeportistas();
 
     boolean existeMensualidadNoRechazada(UUID idDeportista, LocalDate periodo);
+
+    // --- Cobros por ciclo de ingreso ---
+
+    /**
+     * Los deportistas a los que se les cobra por ciclo: activos y con estado de inscripción PENDIENTE o ACTIVA (no RETIRADA).
+     * Más antiguos primero.
+     */
+    List<DeportistaDeCiclo> deportistasParaCiclo();
+
+    /** Una mensualidad de ese periodo en CUALQUIER estado (incluido RECHAZADO). */
+    boolean existeMensualidad(UUID idDeportista, LocalDate periodo);
+
+    /** Un cobro del tipo dado en CUALQUIER estado (incluido RECHAZADO). */
+    boolean existeCobroDeTipo(UUID idDeportista, TipoPago tipo);
+
+    /** {@code SELECT ... FOR UPDATE} sobre el deportista: dos ejecuciones simultáneas no crean los mismos cobros a la vez. */
+    void bloquearDeportista(UUID idDeportista);
+
+    /** Los acudientes del deportista que tienen correo (sin repetir correos), para el aviso. */
+    List<AcudienteConCorreo> acudientesConCorreo(UUID idDeportista);
 
     /** Cobros PENDIENTES del mismo deportista y tipo, con el mismo periodo (mensualidad) o concepto, distintos de {@code pago}. */
     List<Pago> hermanosPendientes(Pago pago);

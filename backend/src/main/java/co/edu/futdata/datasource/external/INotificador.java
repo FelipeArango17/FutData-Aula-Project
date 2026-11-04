@@ -34,6 +34,16 @@ public interface INotificador {
     String ENLACE_CONTRASENA = "ENLACE_CONTRASENA";
 
     /**
+     * Recordatorio de un cobro de mensualidad creado con anticipación (cobros por ciclo de ingreso). Un correo por acudiente.
+     * Respuesta asíncrona: recibido, no entregado.
+     *
+     * <p>Datos: {@code correo}, {@code nombreAcudiente}, {@code nombreDeportista}, {@code concepto}, {@code monto} (pesos
+     * enteros), {@code fechaVencimiento} ({@code AAAA-MM-DD}), {@code diasRestantes} y {@code enlacePagos}
+     * ({@code {FRONTEND_URL}/acudiente/pagos}, sin datos secretos).
+     */
+    String RECORDATORIO_PAGO = "RECORDATORIO_PAGO";
+
+    /**
      * Pide el envío de una notificación. Retorna normalmente si n8n la aceptó ({@code 200} o {@code 202}).
      * No reintenta.
      *

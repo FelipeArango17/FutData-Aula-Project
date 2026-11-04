@@ -3,7 +3,9 @@ package co.edu.futdata.persistence.impl;
 import co.edu.futdata.domain.entities.EstadoPago;
 import co.edu.futdata.domain.entities.Pago;
 import co.edu.futdata.domain.entities.TipoPago;
+import co.edu.futdata.persistence.dao.AcudienteConCorreo;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
+import co.edu.futdata.persistence.dao.DeportistaDeCiclo;
 import co.edu.futdata.persistence.dao.FiltroPagos;
 import co.edu.futdata.persistence.dao.IPagoDAO;
 import co.edu.futdata.persistence.dao.PaginaPagos;
@@ -144,6 +146,47 @@ public class PagoDAOImpl implements IPagoDAO {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM pago WHERE id_deportista = :d AND tipo_pago = 'MENSUALIDAD' AND periodo = :periodo
                                   AND estado_pago <> 'RECHAZADO')""", Map.of("d", idDeportista, "periodo", periodo), Boolean.class));
+    }
+
+    @Override
+    public List<DeportistaDeCiclo> deportistasParaCiclo() {
+        // activo = false es como queda un deportista retirado desde la migración 008; estado_inscripcion (heredada) se respeta también
+        return jdbc.query("""
+                SELECT id_deportista, nombre || ' ' || apellido AS nombre, fecha_registro FROM deportista
+                 WHERE activo AND estado_inscripcion IN ('PENDIENTE', 'ACTIVA')
+                 ORDER BY fecha_registro, id_deportista""", Map.of(),
+                (f, n) -> new DeportistaDeCiclo(f.getObject("id_deportista", UUID.class), f.getString("nombre"),
+                        f.getObject("fecha_registro", LocalDate.class)));
+    }
+
+    @Override
+    public boolean existeMensualidad(UUID idDeportista, LocalDate periodo) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pago WHERE id_deportista = :d AND tipo_pago = 'MENSUALIDAD' AND periodo = :periodo)",
+                Map.of("d", idDeportista, "periodo", periodo), Boolean.class));
+    }
+
+    @Override
+    public boolean existeCobroDeTipo(UUID idDeportista, TipoPago tipo) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM pago WHERE id_deportista = :d AND tipo_pago = :tipo)",
+                Map.of("d", idDeportista, "tipo", tipo.name()), Boolean.class));
+    }
+
+    @Override
+    public void bloquearDeportista(UUID idDeportista) {
+        jdbc.queryForList("SELECT id_deportista FROM deportista WHERE id_deportista = :d FOR UPDATE", Map.of("d", idDeportista), UUID.class);
+    }
+
+    @Override
+    public List<AcudienteConCorreo> acudientesConCorreo(UUID idDeportista) {
+        List<AcudienteConCorreo> todos = jdbc.query("""
+                SELECT a.nombre || ' ' || a.apellido AS nombre, btrim(a.correo) AS correo
+                  FROM acudiente_deportista ad JOIN acudiente a ON a.id_acudiente = ad.id_acudiente
+                 WHERE ad.id_deportista = :d AND a.correo IS NOT NULL AND btrim(a.correo) <> ''
+                 ORDER BY a.apellido, a.nombre, a.id_acudiente""", Map.of("d", idDeportista),
+                (f, n) -> new AcudienteConCorreo(f.getString("nombre"), f.getString("correo")));
+        java.util.Set<String> vistos = new java.util.HashSet<>();
+        return todos.stream().filter(a -> vistos.add(a.correo().toLowerCase(java.util.Locale.ROOT))).toList();
     }
 
     @Override

@@ -1,0 +1,1295 @@
+{
+  "name": "FutData · Notificaciones",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "futdata/notificaciones",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9d2569b0-34a8-4207-b097-9160b7761152",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "webhookId": "b7c1e3f0-2fa0-4036-9a51-f17da7a00036",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nbvt7jGs14on9ww7",
+          "name": "FutData webhook token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000000-0000-4000-8000-000000000001",
+              "leftValue": "={{ $env.N8N_WEBHOOK_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000000-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.headers['x-futdata-token'] }}",
+              "rightValue": "={{ $env.N8N_WEBHOOK_TOKEN }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6570030f-d6da-431d-85ea-254f149a2e53",
+      "name": "Validar token",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        400
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000001-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.body.evento }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000001-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.body.datos }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "86c8bf8c-ae67-4227-a0b8-bbd8a341ee66",
+      "name": "Validar estructura",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000001",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "CODIGO_2FA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CODIGO_2FA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000002",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "CAMBIO_ENTRENAMIENTO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "CAMBIO_ENTRENAMIENTO"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000003",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "ENLACE_CONTRASENA",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ENLACE_CONTRASENA"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000004",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "RECORDATORIO_PAGO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "RECORDATORIO_PAGO"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "No soportado"
+        }
+      },
+      "id": "c28d4f35-708d-40a1-a2b5-47e990a8a9f0",
+      "name": "Evento",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000003-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.body.datos.correo }}",
+              "rightValue": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000002",
+              "leftValue": "={{ $json.body.datos.nombre }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.datos.codigo }}",
+              "rightValue": "^\\d{6}$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            },
+            {
+              "id": "c0000003-0000-4000-8000-000000000004",
+              "leftValue": "={{ $json.body.datos.vigenciaMinutos }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4bcb8405-6b34-4c93-a5ac-d57a73db42fa",
+      "name": "Validar datos CODIGO_2FA",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "FutData <futdatanotifications@gmail.com>",
+        "toEmail": "={{ $('Webhook').item.json.body.datos.correo }}",
+        "subject": "Tu código de verificación de FutData",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $('Webhook').item.json.body.datos.nombre }}:\n\nRecibimos una solicitud para ingresar a tu cuenta de FutData.\nEscribe este código de verificación para continuar:\n\n    {{ $('Webhook').item.json.body.datos.codigo }}\n\nEl código vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n\n¿No intentaste ingresar? Ignora este correo; nadie podrá entrar a tu\ncuenta sin este código.\nNunca compartas este código con nadie. El personal de FutData jamás te\nlo pedirá.\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Tu código de verificación de FutData</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nUsa este código para terminar de ingresar a FutData. Vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ String($('Webhook').item.json.body.datos.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;') }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">Recibimos una solicitud para ingresar a tu cuenta de FutData. Escribe este código de verificación para continuar:</p>\n          </td>\n        </tr>\n        <!-- Código -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#EAF0F7; border:1px solid #E5E7EB; border-radius:8px;\">\n              <tr>\n                <td align=\"center\" style=\"padding:16px 24px 16px 36px; font-family:'Courier New', Courier, monospace; font-size:36px; font-weight:700; line-height:44px; letter-spacing:12px; color:#0F2C4C;\">{{ $('Webhook').item.json.body.datos.codigo }}</td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <tr>\n          <td align=\"center\" style=\"padding:16px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#1F7A29; font-weight:600;\">\n            El código vence en {{ $('Webhook').item.json.body.datos.vigenciaMinutos }} minutos.\n          </td>\n        </tr>\n        <!-- Aviso de seguridad -->\n        <tr>\n          <td style=\"padding:0 32px 32px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>¿No intentaste ingresar?</strong> Ignora este correo; nadie podrá entrar a tu cuenta sin este código.<br>\n                  <strong>Nunca compartas este código</strong> con nadie. El personal de FutData jamás te lo pedirá.\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b787fa85-c8e5-4884-b2bd-8233ef2e13b5",
+      "name": "Enviar correo 2FA",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1344,
+        0
+      ],
+      "webhookId": "e2a1c0de-2fa0-4036-9a51-f17da7a00036",
+      "credentials": {
+        "smtp": {
+          "id": "9sYcTJjryXWzOeBt",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"aceptado\": true\n}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "99e25432-f08a-4710-9952-4a0fd31d310b",
+      "name": "Responder 202 2FA",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        80
+      ],
+      "notes": "Responde antes de enviar: el SMTP tarda ~3 s y el backend espera máximo 5 s. Una falla del envío solo queda en el registro de fallas."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0000001-0000-4000-8000-000000000001",
+              "name": "fecha",
+              "value": "={{ $now.setZone('America/Bogota').toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000002",
+              "name": "evento",
+              "value": "={{ String($('Webhook').first().json.body.evento) }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000003",
+              "name": "correoEnmascarado",
+              "value": "={{ /^[^@\\s]+@[^@\\s]+$/.test(String($json.correo ?? $('Webhook').first().json.body.datos.correo)) ? String($json.correo ?? $('Webhook').first().json.body.datos.correo).replace(/^([^@])(?:[^@]+([^@])|[^@]?)@/, '$1***$2@') : '***' }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000004",
+              "name": "error",
+              "value": "={{ String($json.error || 'Error desconocido').replace(/https?:\\/\\/[^\\s\"'<>]+/gi, '[enlace]').replace(/token=[^\\s&\"'<>]*/gi, '[enlace]').replace(/[^\\s@<>\"'(),;:\\[\\]]+@[^\\s@<>\"'(),;:\\[\\]]+/g, '[correo]').replace(/\\b\\d{6}\\b/g, '[código]').slice(0, 500) }}",
+              "type": "string"
+            },
+            {
+              "id": "d0000001-0000-4000-8000-000000000005",
+              "name": "idEjecucion",
+              "value": "={{ String($execution.id) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4f96e8f2-62eb-4188-b368-7dfeee5258e6",
+      "name": "Armar registro de falla",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1344,
+        192
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Solo datos no sensibles: nunca el código, el nombre, el correo completo, el enlace (ni \"token=...\"), el token del webhook ni el cuerpo."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d0000002-0000-4000-8000-000000000001",
+              "name": "linea",
+              "value": "={{ JSON.stringify($json) + '\\n' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ddf7c5bf-d72f-4f4f-ab47-afac5b5e4ae5",
+      "name": "Serializar línea JSONL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        192
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "linea",
+        "options": {
+          "fileName": "fallas-notificaciones.jsonl"
+        }
+      },
+      "id": "77f13bc7-9558-4d6b-97d1-eab895e81b51",
+      "name": "Convertir a archivo",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1792,
+        192
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/opt/futdata/logs/fallas-notificaciones.jsonl",
+        "options": {
+          "append": true
+        }
+      },
+      "id": "c3683bff-ea0a-4855-8bf7-75151981e592",
+      "name": "Guardar falla en log",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        192
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Si el registro falla, el flujo sigue: la respuesta 502 sale de todas formas."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"No se pudo enviar el correo\"\n}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "b59f94fe-40c3-4e33-9745-1c478d360c52",
+      "name": "Responder 502",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de CAMBIO_ENTRENAMIENTO y depura los destinatarios (sin duplicados por\n// correo, sin mayúsculas, y sin correos inválidos). Nunca lanza errores: devuelve\n// { valido, detalle, destinatarios } y el nodo IF siguiente responde 202 o 400.\n// \"detalle\" explica el primer problema y nunca incluye correos ni nombres.\nconst TIPOS = ['CREADO', 'MODIFICADO', 'CANCELADO'];\nconst MAX_DESTINATARIOS = 200;\nconst MAX_TEXTO = 120;\nconst MAX_MOTIVO = 500;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_FECHA = /^\\d{4}-\\d{2}-\\d{2}$/;\nconst RE_HORA = /^([01]\\d|2[0-3]):[0-5]\\d$/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst vacio = (v) => v === undefined || v === null;\nconst textoValido = (v, max) => typeof v === 'string' && v.trim() !== '' && v.trim().length <= max;\nconst fechaValida = (v) =>\n  typeof v === 'string' && RE_FECHA.test(v) && DateTime.fromISO(v, { zone: 'America/Bogota' }).isValid;\nconst horaValida = (v) => typeof v === 'string' && RE_HORA.test(v);\n\n// Reglas de cada campo del entrenamiento; \"anterior\" usa las mismas.\nconst CAMPOS = {\n  categoria: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n  fecha: [fechaValida, 'debe ser una fecha con el formato AAAA-MM-DD'],\n  horaInicio: [horaValida, 'debe tener el formato HH:mm (00:00 a 23:59)'],\n  lugar: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n  entrenador: [(v) => textoValido(v, MAX_TEXTO), `es obligatorio (máximo ${MAX_TEXTO} caracteres)`],\n};\n\nfunction validar(datos) {\n  if (!TIPOS.includes(datos.tipoCambio)) return 'tipoCambio debe ser CREADO, MODIFICADO o CANCELADO';\n  if (!esObjeto(datos.entrenamiento)) return 'falta el objeto entrenamiento';\n  for (const [campo, [valido, regla]] of Object.entries(CAMPOS)) {\n    if (!valido(datos.entrenamiento[campo])) return `entrenamiento.${campo} ${regla}`;\n  }\n  // \"anterior\" solo cuenta en MODIFICADO; con otro tipo se ignora sin validarlo.\n  if (datos.tipoCambio === 'MODIFICADO' && !vacio(datos.anterior)) {\n    if (!esObjeto(datos.anterior)) return 'anterior debe ser un objeto';\n    for (const campo of ['fecha', 'horaInicio', 'lugar', 'entrenador']) {\n      const [valido, regla] = CAMPOS[campo];\n      if (!vacio(datos.anterior[campo]) && !valido(datos.anterior[campo])) return `anterior.${campo} ${regla}`;\n    }\n  }\n  if (!vacio(datos.motivo) && (typeof datos.motivo !== 'string' || datos.motivo.trim().length > MAX_MOTIVO)) {\n    return `motivo debe ser texto de máximo ${MAX_MOTIVO} caracteres`;\n  }\n  if (\n    !Array.isArray(datos.destinatarios) ||\n    datos.destinatarios.length < 1 ||\n    datos.destinatarios.length > MAX_DESTINATARIOS\n  ) {\n    return `destinatarios debe tener entre 1 y ${MAX_DESTINATARIOS} elementos`;\n  }\n  return null;\n}\n\nfunction depurar(lista) {\n  const vistos = new Set();\n  const destinatarios = [];\n  for (const d of lista) {\n    if (!esObjeto(d) || typeof d.correo !== 'string') continue;\n    const correo = d.correo.trim();\n    if (correo.length > 254 || !RE_CORREO.test(correo)) continue;\n    const clave = correo.toLowerCase();\n    if (vistos.has(clave)) continue;\n    vistos.add(clave);\n    destinatarios.push({ correo, nombre: textoValido(d.nombre, MAX_TEXTO) ? d.nombre.trim() : '' });\n  }\n  return destinatarios;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  const destinatarios = detalle ? [] : depurar(datos.destinatarios);\n  if (detalle) {\n    resultado = { valido: false, detalle, destinatarios };\n  } else if (destinatarios.length === 0) {\n    resultado = { valido: false, detalle: 'destinatarios no tiene ningún correo válido', destinatarios };\n  } else {\n    resultado = { valido: true, detalle: '', destinatarios };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido', destinatarios: [] };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "9647f281-f42b-44e5-9467-b19df9c34e6e",
+      "name": "Validar datos CAMBIO_ENTRENAMIENTO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        688
+      ],
+      "notes": "Valida los datos, quita destinatarios duplicados (sin distinguir mayúsculas) y descarta correos inválidos."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000004-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f0aef7c9-5cfd-45a4-96c5-e9212db402b2",
+      "name": "¿Datos de entrenamiento válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: true, destinatarios: $json.destinatarios.length }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "a978e851-ebeb-4b21-bb56-d9dfd1663864",
+      "name": "Responder 202",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        608
+      ],
+      "notes": "Responde antes de enviar: el backend espera máximo 5 s y el aviso a muchos destinatarios tarda más."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "3d3cde8c-be2a-4b6a-ad6d-e22ead2879dd",
+      "name": "Responder 400 entrenamiento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Arma un correo por destinatario con las plantillas n8n/plantillas/cambio-entrenamiento.*\n// (copias abajo; si cambias la plantilla, actualiza también estas constantes).\n// Los datos ya vienen validados por \"Validar datos CAMBIO_ENTRENAMIENTO\".\nconst PLANTILLA_HTML = \"<!DOCTYPE html>\\n<html lang=\\\"es\\\" xmlns=\\\"http://www.w3.org/1999/xhtml\\\">\\n<head>\\n<meta charset=\\\"UTF-8\\\">\\n<meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\\\">\\n<meta name=\\\"x-apple-disable-message-reformatting\\\">\\n<meta name=\\\"color-scheme\\\" content=\\\"light\\\">\\n<meta name=\\\"supported-color-schemes\\\" content=\\\"light\\\">\\n<title>{{asunto}}</title>\\n</head>\\n<body style=\\\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\\\">\\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\\n<div style=\\\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\\\">\\n{{vistaPrevia}}\\n</div>\\n<table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"background-color:#F7F8FA;\\\">\\n  <tr>\\n    <td align=\\\"center\\\" style=\\\"padding:32px 16px;\\\">\\n      <table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\\\">\\n        <!-- Encabezado -->\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\\\">\\n            <span style=\\\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\\\">Fut<span style=\\\"color:#3CB043;\\\">Data</span></span>\\n          </td>\\n        </tr>\\n        <!-- Cuerpo -->\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\\\">\\n            <!-- Etiqueta del tipo de cambio -->\\n            <table role=\\\"presentation\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"margin:0 0 20px 0;\\\">\\n              <tr>\\n                <td style=\\\"background-color:{{etiquetaFondo}}; border-radius:999px; padding:6px 14px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:18px; font-weight:700; color:{{etiquetaTexto}};\\\">{{etiqueta}}</td>\\n              </tr>\\n            </table>\\n            <p style=\\\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\\\">{{saludo}}</p>\\n            <p style=\\\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\\\">{{intro}}</p>\\n          </td>\\n        </tr>\\n        <!-- Datos del entrenamiento -->\\n        <tr>\\n          <td style=\\\"padding:0 32px 24px 32px;\\\">\\n            <table role=\\\"presentation\\\" width=\\\"100%\\\" cellpadding=\\\"0\\\" cellspacing=\\\"0\\\" border=\\\"0\\\" style=\\\"border:1px solid #E5E7EB; border-radius:8px;\\\">\\n{{filasDetalle}}\\n            </table>\\n          </td>\\n        </tr>\\n{{bloqueMotivo}}\\n        <tr>\\n          <td align=\\\"left\\\" style=\\\"padding:0 32px 32px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#4B5563;\\\">\\n            Si tienes preguntas, comunícate con el entrenador o con el club.\\n          </td>\\n        </tr>\\n        <!-- Pie -->\\n        <tr>\\n          <td align=\\\"center\\\" style=\\\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\\\">\\n            Recibes este aviso porque estás registrado en la categoría {{categoria}} como entrenador, jugador o acudiente.<br>\\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\\n            Este es un correo automático, por favor no lo respondas.\\n          </td>\\n        </tr>\\n      </table>\\n    </td>\\n  </tr>\\n</table>\\n</body>\\n</html>\\n\";\nconst PLANTILLA_TEXTO = \"{{saludo}}\\n\\n{{intro}}\\n\\n{{detalle}}\\n{{motivo}}\\nSi tienes preguntas, comunícate con el entrenador o con el club.\\n\\n--\\nRecibes este aviso porque estás registrado en la categoría {{categoria}}\\ncomo entrenador, jugador o acudiente.\\nAsociación Deportiva Prado Fútbol Club · FutData\\nEste es un correo automático, por favor no lo respondas.\\n\";\n\nconst DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];\nconst DIAS_CORTOS = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];\nconst MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];\nconst MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];\nconst TIPOS = {\n  CREADO: { etiqueta: 'Nuevo entrenamiento', asunto: 'Nuevo entrenamiento', fondo: '#E8F7E8', texto: '#1F7A29' },\n  MODIFICADO: { etiqueta: 'Entrenamiento modificado', asunto: 'Cambio en el entrenamiento', fondo: '#FEF3E2', texto: '#7A4B00' },\n  CANCELADO: { etiqueta: 'Entrenamiento cancelado', asunto: 'Entrenamiento cancelado', fondo: '#FDECEA', texto: '#B3261E' },\n};\nconst FUENTE = \"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif;\";\n\n// Una sola línea, sin saltos (evita encabezados rotos en el asunto).\nconst limpiar = (v) => String(v ?? '').replace(/\\s+/g, ' ').trim();\nconst escapar = (v) =>\n  limpiar(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n// fecha y horaInicio son hora local de Colombia; no se convierten.\nconst momento = (fecha, hora = '00:00') => DateTime.fromISO(`${fecha}T${hora}`, { zone: 'America/Bogota' });\nconst hora12 = (dt) => `${dt.hour % 12 || 12}:${String(dt.minute).padStart(2, '0')} ${dt.hour < 12 ? 'a. m.' : 'p. m.'}`;\nconst fechaLarga = (dt) => `${DIAS[dt.weekday - 1]} ${dt.day} de ${MESES[dt.month - 1]} de ${dt.year}`;\nconst fechaCorta = (dt) => `${DIAS_CORTOS[dt.weekday - 1]} ${dt.day} ${MESES_CORTOS[dt.month - 1]}`;\n// Reemplaza {{marcador}} en una sola pasada: un texto de la petición con \"{{...}}\" no se vuelve a procesar.\nconst llenar = (plantilla, valores) => plantilla.replace(/\\{\\{(\\w+)\\}\\}/g, (_, clave) => valores[clave] ?? '');\n\nconst datos = $('Webhook').first().json.body.datos;\nconst destinatarios = $input.first().json.destinatarios;\nconst tipo = datos.tipoCambio;\nconst e = datos.entrenamiento;\nconst anterior = tipo === 'MODIFICADO' && datos.anterior && typeof datos.anterior === 'object' ? datos.anterior : {};\nconst cambio = (campo) => anterior[campo] != null && limpiar(anterior[campo]) !== limpiar(e[campo]);\nconst actual = momento(e.fecha, e.horaInicio);\nconst categoria = limpiar(e.categoria);\nconst motivo = tipo === 'CREADO' ? '' : limpiar(datos.motivo);\nconst t = TIPOS[tipo];\n\n// [etiqueta, valor actual, valor anterior (solo si cambió)]\nconst filas = [\n  ['Categoría', categoria, null],\n  ['Fecha', fechaLarga(actual), cambio('fecha') ? fechaLarga(momento(anterior.fecha)) : null],\n  ['Hora', `${hora12(actual)}, hora de Colombia`, cambio('horaInicio') ? hora12(momento(e.fecha, anterior.horaInicio)) : null],\n  ['Lugar', limpiar(e.lugar), cambio('lugar') ? limpiar(anterior.lugar) : null],\n  ['Entrenador', limpiar(e.entrenador), cambio('entrenador') ? limpiar(anterior.entrenador) : null],\n];\nconst hayCambios = filas.some((f) => f[2] !== null);\n\nconst filaHtml = ([etiqueta, valor, antes], i) => {\n  const borde = i < filas.length - 1 ? ' border-bottom:1px solid #E5E7EB;' : '';\n  const contenido =\n    antes === null\n      ? escapar(valor)\n      : `<span style=\"font-size:12px; color:#4B5563;\">Antes:</span> <span style=\"color:#4B5563; text-decoration:line-through;\">${escapar(antes)}</span><br>` +\n        `<span style=\"font-size:12px; color:#1F7A29;\">Ahora:</span> <strong style=\"color:#1F7A29;\">${escapar(valor)}</strong>`;\n  return [\n    '              <tr>',\n    `                <td width=\"110\" valign=\"top\" style=\"padding:12px 16px;${borde} ${FUENTE} font-size:13px; line-height:22px; font-weight:600; color:#4B5563;\">${etiqueta}</td>`,\n    `                <td valign=\"top\" style=\"padding:12px 16px;${borde}${antes === null ? '' : ' background-color:#E8F7E8;'} ${FUENTE} font-size:15px; line-height:22px; color:#1A2332;\">${contenido}</td>`,\n    '              </tr>',\n  ].join('\\n');\n};\nconst filaTexto = ([etiqueta, valor, antes]) => `${`${etiqueta}:`.padEnd(12)}${valor}${antes === null ? '' : ` (antes: ${antes})`}`;\n\nconst intro = {\n  CREADO: [`Se programó un nuevo entrenamiento para la categoría ${categoria}.`],\n  MODIFICADO: hayCambios\n    ? [\n        `Cambiaron los datos del entrenamiento de la categoría ${categoria}. Lo que cambió aparece resaltado:`,\n        `Cambiaron los datos del entrenamiento de la categoría ${categoria}. Lo que cambió muestra el valor anterior entre paréntesis:`,\n      ]\n    : [`Se actualizó el entrenamiento de la categoría ${categoria}. Estos son sus datos:`],\n  CANCELADO: [`Se canceló el entrenamiento de la categoría ${categoria}. No se realizará en la fecha y hora indicadas:`],\n}[tipo];\nconst introHtml = intro[0];\nconst introTexto = intro[1] ?? intro[0];\n\nconst bloqueMotivo = motivo\n  ? [\n      '        <tr>',\n      '          <td style=\"padding:0 32px 24px 32px;\">',\n      '            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">',\n      '              <tr>',\n      `                <td style=\"padding:16px; ${FUENTE} font-size:14px; line-height:22px; color:#7A4B00;\">`,\n      `                  <strong>Motivo:</strong> ${escapar(motivo)}`,\n      '                </td>',\n      '              </tr>',\n      '            </table>',\n      '          </td>',\n      '        </tr>',\n    ].join('\\n')\n  : '';\n\nconst asunto = `${t.asunto} ${categoria} · ${fechaCorta(actual)}, ${hora12(actual)}`;\nconst comunes = {\n  asunto: escapar(asunto),\n  vistaPrevia: escapar(`${t.etiqueta}: ${fechaLarga(actual)}, ${hora12(actual)}, ${limpiar(e.lugar)}.`),\n  etiqueta: t.etiqueta,\n  etiquetaFondo: t.fondo,\n  etiquetaTexto: t.texto,\n  intro: escapar(introHtml),\n  filasDetalle: filas.map(filaHtml).join('\\n'),\n  bloqueMotivo,\n  categoria: escapar(categoria),\n};\nconst comunesTexto = {\n  intro: introTexto,\n  detalle: filas.map(filaTexto).join('\\n'),\n  motivo: motivo ? `\\nMotivo: ${motivo}\\n` : '',\n  categoria,\n};\n\nreturn destinatarios.map((d) => ({\n  json: {\n    correo: d.correo,\n    asunto,\n    html: llenar(PLANTILLA_HTML, { ...comunes, saludo: d.nombre ? `Hola, ${escapar(d.nombre)}:` : 'Hola:' }),\n    texto: llenar(PLANTILLA_TEXTO, { ...comunesTexto, saludo: d.nombre ? `Hola, ${limpiar(d.nombre)}:` : 'Hola:' }),\n  },\n}));\n"
+      },
+      "id": "01b38ac9-8963-4fff-9cbe-8a0c449d199a",
+      "name": "Armar un correo por destinatario",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        608
+      ],
+      "notes": "Copia de n8n/plantillas/cambio-entrenamiento.html y .txt. Un ítem por destinatario."
+    },
+    {
+      "parameters": {
+        "fromEmail": "FutData <futdatanotifications@gmail.com>",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "={{ $json.asunto }}",
+        "emailFormat": "both",
+        "text": "={{ $json.texto }}",
+        "html": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "c9b8748e-2621-4522-932b-08a5f987a62f",
+      "name": "Enviar aviso de entrenamiento",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1760,
+        608
+      ],
+      "webhookId": "e2a1c0de-0338-4026-9a51-f17da7a00338",
+      "credentials": {
+        "smtp": {
+          "id": "9sYcTJjryXWzOeBt",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Un correo por ítem (un destinatario en \"Para\"). Una falla va a la salida de error y no frena a los demás."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000005-0000-4000-8000-000000000001",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "CAMBIO_ENTRENAMIENTO",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "c0000005-0000-4000-8000-000000000002",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "CODIGO_2FA",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "14d2f76b-3749-4787-8d31-589da68b340c",
+      "name": "¿Responder 502?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2224,
+        192
+      ],
+      "onError": "continueRegularOutput",
+      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA) ya respondieron 202: solo registran la falla. Los síncronos (ENLACE_CONTRASENA) siguen a Responder 502."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Faltan campos o tienen un formato inválido\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "d168fff2-91f8-4f88-acbf-37619b970771",
+      "name": "Responder 400 datos",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Evento no soportado\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "7d9165c7-ff25-4e74-9e60-a056973a073c",
+      "name": "Responder 400 evento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"Token inválido\"\n}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "id": "e14ec0a5-00a7-4082-92df-7207aae28ba9",
+      "name": "Responder 401",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        448,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": false,\n  \"error\": \"El cuerpo debe tener evento y datos\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "e594987f-d366-4757-b914-7e039e0e02f3",
+      "name": "Responder 400 estructura",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de ENLACE_CONTRASENA (síncrono: 200 enviado, 400 datos, 502 si el SMTP falla).\n// Devuelve { valido, detalle, ... } y el IF siguiente envía el correo o responde 400.\n// \"detalle\" explica el primer problema y nunca incluye el correo, el nombre ni el enlace.\n// Plantillas permitidas: cada una tiene su texto en el nodo de envío (hoy solo BIENVENIDA_ENTRENADOR).\nconst PLANTILLAS = ['BIENVENIDA_ENTRENADOR'];\nconst MAX_NOMBRE = 120;\nconst MAX_ENLACE = 2000;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_ENLACE = /^https?:\\/\\/[^\\s\"'<>]+$/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst html = (v) =>\n  String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n\nfunction validar(d) {\n  if (!PLANTILLAS.includes(d.plantilla)) return 'plantilla debe ser una de: ' + PLANTILLAS.join(', ');\n  if (typeof d.correo !== 'string' || d.correo.trim().length > 254 || !RE_CORREO.test(d.correo.trim())) {\n    return 'correo no tiene un formato válido';\n  }\n  if (typeof d.nombre !== 'string' || d.nombre.trim() === '' || d.nombre.trim().length > MAX_NOMBRE) {\n    return `nombre es obligatorio (máximo ${MAX_NOMBRE} caracteres)`;\n  }\n  if (typeof d.enlace !== 'string' || d.enlace.length > MAX_ENLACE || !RE_ENLACE.test(d.enlace)) {\n    return 'enlace debe empezar por http:// o https:// y no tener espacios';\n  }\n  if (typeof d.vigenciaHoras !== 'number' || !Number.isFinite(d.vigenciaHoras) || d.vigenciaHoras <= 0) {\n    return 'vigenciaHoras debe ser un número mayor que 0';\n  }\n  return null;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  if (detalle) {\n    resultado = { valido: false, detalle };\n  } else {\n    const horas = datos.vigenciaHoras;\n    resultado = {\n      valido: true,\n      detalle: '',\n      correo: datos.correo.trim(),\n      nombre: datos.nombre.trim(),\n      nombreHtml: html(datos.nombre.trim()),\n      enlace: datos.enlace,\n      enlaceHtml: html(datos.enlace),\n      vigencia: horas === 1 ? '1 hora' : horas + ' horas',\n    };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido' };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "de08bcc8-0e24-4214-9ff0-193aca17320e",
+      "name": "Validar datos ENLACE_CONTRASENA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        992
+      ],
+      "notes": "Valida los datos (plantilla permitida, correo, nombre, enlace http(s), vigenciaHoras > 0) y escapa el nombre y el enlace para el HTML."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000007-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0e06e93a-a635-411d-a843-bcc46c08dfbd",
+      "name": "¿Datos de enlace válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "FutData <futdatanotifications@gmail.com>",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "Bienvenido a FutData: crea tu contraseña",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $json.nombre }}:\n\nEl administrador de la Asociación Deportiva Prado Fútbol Club te registró\ncomo entrenador en FutData. Para entrar, primero crea tu contraseña en\neste enlace:\n\n    {{ $json.enlace }}\n\nEste enlace vence en {{ $json.vigencia }}; si venció, pide al administrador que te lo reenvíe.\n\n¿No esperabas este correo? Ignóralo; nadie podrá entrar a la cuenta sin\ncrear la contraseña con este enlace.\nEl enlace es personal y sirve una sola vez: no lo reenvíes.\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Bienvenido a FutData: crea tu contraseña</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nCrea tu contraseña para entrar a FutData. El enlace vence en {{ $json.vigencia }}.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ $json.nombreHtml }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">El administrador de la Asociación Deportiva Prado Fútbol Club te registró como entrenador en FutData. Para entrar, primero crea tu contraseña:</p>\n          </td>\n        </tr>\n        <!-- Botón -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n              <tr>\n                <td align=\"center\" style=\"background-color:#3CB043; border-radius:8px;\">\n                  <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-block; padding:14px 28px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:8px;\">Crear mi contraseña</a>\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <tr>\n          <td align=\"center\" style=\"padding:16px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#1F7A29; font-weight:600;\">\n            Este enlace vence en {{ $json.vigencia }}; si venció, pide al administrador que te lo reenvíe.\n          </td>\n        </tr>\n        <!-- Enlace en texto, por si el botón no funciona -->\n        <tr>\n          <td align=\"left\" style=\"padding:8px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#4B5563;\">\n            Si el botón no funciona, copia y pega este enlace en tu navegador:<br>\n            <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"color:#0F2C4C; word-break:break-all;\">{{ $json.enlaceHtml }}</a>\n          </td>\n        </tr>\n        <!-- Aviso de seguridad -->\n        <tr>\n          <td style=\"padding:0 32px 32px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>¿No esperabas este correo?</strong> Ignóralo; nadie podrá entrar a la cuenta sin crear la contraseña con este enlace.<br>\n                  <strong>El enlace es personal</strong> y sirve una sola vez: no lo reenvíes.\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "31031f80-1467-4b20-8557-4785cd48550a",
+      "name": "Enviar correo enlace",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1328,
+        928
+      ],
+      "webhookId": "e2a1c0de-0e1a-4ce0-9a51-f17da7a00027",
+      "credentials": {
+        "smtp": {
+          "id": "9sYcTJjryXWzOeBt",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Plantilla BIENVENIDA_ENTRENADOR (n8n/plantillas/bienvenida-entrenador.*). Síncrono: responde después de enviar."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"enviado\": true\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "6be9ddcd-94af-4c6f-9f4f-b8c9c4fffc04",
+      "name": "Responder 200 enlace",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1552,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ enviado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "9de768c1-953c-4fff-833c-7957283d82ba",
+      "name": "Responder 400 enlace",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de RECORDATORIO_PAGO (asíncrono: 202 antes de enviar el correo; 400 si los datos no sirven).\n// Devuelve { valido, detalle, ... } y el IF siguiente responde 202 y envía el correo, o responde 400.\n// \"detalle\" explica el primer problema y nunca incluye el correo, los nombres ni el enlace.\nconst MAX_CORREO = 254;\nconst MAX_TEXTO = 120;\nconst MAX_ENLACE = 2000;\nconst MAX_DIAS = 60;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_ENLACE = /^https?:\\/\\/[^\\s\"'<>]+$/;\nconst RE_FECHA = /^(\\d{4})-(\\d{2})-(\\d{2})$/;\nconst RE_CONTROL = /[\\u0000-\\u001f\\u007f]/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst html = (v) =>\n  String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n\n// Texto obligatorio de una línea: no vacío, hasta MAX_TEXTO caracteres y sin saltos de línea ni otros caracteres de control.\nconst textoValido = (v) =>\n  typeof v === 'string' && v.trim() !== '' && v.trim().length <= MAX_TEXTO && !RE_CONTROL.test(v);\n\n// AAAA-MM-DD y una fecha que existe en el calendario (2026-02-30 no).\nfunction fechaReal(v) {\n  if (typeof v !== 'string') return false;\n  const m = RE_FECHA.exec(v);\n  if (!m) return false;\n  const anio = Number(m[1]);\n  const mes = Number(m[2]);\n  const dia = Number(m[3]);\n  const f = new Date(Date.UTC(anio, mes - 1, dia));\n  return f.getUTCFullYear() === anio && f.getUTCMonth() === mes - 1 && f.getUTCDate() === dia;\n}\n\nfunction validar(d) {\n  if (typeof d.correo !== 'string' || d.correo.trim().length > MAX_CORREO || !RE_CORREO.test(d.correo.trim())) {\n    return 'correo no tiene un formato válido';\n  }\n  if (!textoValido(d.nombreAcudiente)) return `nombreAcudiente es obligatorio (máximo ${MAX_TEXTO} caracteres)`;\n  if (!textoValido(d.nombreDeportista)) return `nombreDeportista es obligatorio (máximo ${MAX_TEXTO} caracteres)`;\n  if (!textoValido(d.concepto)) return `concepto es obligatorio (máximo ${MAX_TEXTO} caracteres)`;\n  if (typeof d.monto !== 'number' || !Number.isSafeInteger(d.monto) || d.monto <= 0) {\n    return 'monto debe ser un número entero mayor que 0';\n  }\n  if (!fechaReal(d.fechaVencimiento)) return 'fechaVencimiento debe ser una fecha real con formato AAAA-MM-DD';\n  if (typeof d.diasRestantes !== 'number' || !Number.isInteger(d.diasRestantes) || d.diasRestantes < 0 || d.diasRestantes > MAX_DIAS) {\n    return `diasRestantes debe ser un número entero entre 0 y ${MAX_DIAS}`;\n  }\n  if (typeof d.enlacePagos !== 'string' || d.enlacePagos.length > MAX_ENLACE || !RE_ENLACE.test(d.enlacePagos)) {\n    return 'enlacePagos debe empezar por http:// o https:// y no tener espacios';\n  }\n  return null;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  if (detalle) {\n    resultado = { valido: false, detalle };\n  } else {\n    const nombreAcudiente = datos.nombreAcudiente.trim();\n    const nombreDeportista = datos.nombreDeportista.trim();\n    const concepto = datos.concepto.trim();\n    const dias = datos.diasRestantes;\n    const [anio, mes, dia] = datos.fechaVencimiento.split('-');\n    resultado = {\n      valido: true,\n      detalle: '',\n      correo: datos.correo.trim(),\n      nombreAcudiente,\n      nombreAcudienteHtml: html(nombreAcudiente),\n      nombreDeportista,\n      nombreDeportistaHtml: html(nombreDeportista),\n      concepto,\n      conceptoHtml: html(concepto),\n      montoTexto: '$' + String(datos.monto).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.'),\n      fechaTexto: `${dia}/${mes}/${anio}`,\n      vence: dias === 0 ? 'hoy' : dias === 1 ? 'mañana' : `en ${dias} días`,\n      enlace: datos.enlacePagos,\n      enlaceHtml: html(datos.enlacePagos),\n    };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido' };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "5e7c2b1a-3f40-4d8e-9a16-b0c4d2e8f701",
+      "name": "Validar datos RECORDATORIO_PAGO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1280
+      ],
+      "notes": "Valida los datos (correo, nombres y concepto, monto entero, fecha real, diasRestantes 0-60, enlace http(s)), escapa el HTML y calcula montoTexto, fechaTexto y vence."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000008-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6f8d3c2b-4a51-4e9f-8b27-c1d5e3f9a812",
+      "name": "¿Datos de recordatorio válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"aceptado\": true\n}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "7a9e4d3c-5b62-4fa0-9c38-d2e6f4a0b923",
+      "name": "Responder 202 recordatorio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        1200
+      ],
+      "notes": "Responde antes de enviar: el backend espera máximo 5 s y el SMTP tarda más. Una falla del envío solo queda en el registro de fallas."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "8baf5e4d-6c73-40b1-8d49-e3f7a5b1ca34",
+      "name": "Responder 400 recordatorio",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "FutData <futdatanotifications@gmail.com>",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "=Recordatorio: la mensualidad de {{ $json.nombreDeportista }} vence {{ $json.vence }}",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $json.nombreAcudiente }}:\n\nLa mensualidad de {{ $json.nombreDeportista }} ({{ $json.concepto }}, {{ $json.montoTexto }}) vence {{ $json.vence }}, el {{ $json.fechaTexto }}.\n\nPuedes pagarla en:\n\n    {{ $json.enlace }}\n\nSi ya realizaste el pago, ignora este recordatorio.\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Recordatorio de pago en FutData</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nLa mensualidad de {{ $json.nombreDeportistaHtml }} vence {{ $json.vence }}, el {{ $json.fechaTexto }}.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ $json.nombreAcudienteHtml }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">La mensualidad de <strong>{{ $json.nombreDeportistaHtml }}</strong> ({{ $json.conceptoHtml }}, {{ $json.montoTexto }}) vence <strong>{{ $json.vence }}</strong>, el {{ $json.fechaTexto }}. Puedes pagarla aquí:</p>\n          </td>\n        </tr>\n        <!-- Botón -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n              <tr>\n                <td align=\"center\" style=\"background-color:#3CB043; border-radius:8px;\">\n                  <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-block; padding:14px 28px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:8px;\">Ir a mis pagos</a>\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Enlace en texto, por si el botón no funciona -->\n        <tr>\n          <td align=\"left\" style=\"padding:16px 32px 24px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#4B5563;\">\n            Si el botón no funciona, copia y pega este enlace en tu navegador:<br>\n            <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"color:#0F2C4C; word-break:break-all;\">{{ $json.enlaceHtml }}</a>\n          </td>\n        </tr>\n        <!-- Aviso -->\n        <tr>\n          <td style=\"padding:0 32px 32px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>¿Ya pagaste?</strong> Ignora este recordatorio.\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "9cb06f5e-7d84-41c2-9e5a-f4a8b6c2db45",
+      "name": "Enviar recordatorio de pago",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1552,
+        1200
+      ],
+      "webhookId": "e2a1c0de-4a7d-4b2e-9a51-f17da7a00045",
+      "credentials": {
+        "smtp": {
+          "id": "9sYcTJjryXWzOeBt",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Recordatorio de pago de la mensualidad (RECORDATORIO_PAGO). Asíncrono: se responde 202 antes de enviar. Una falla va a 'Armar registro de falla' (sin correo completo ni enlace)."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validar token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar token": {
+      "main": [
+        [
+          {
+            "node": "Validar estructura",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 401",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar estructura": {
+      "main": [
+        [
+          {
+            "node": "Evento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 estructura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento": {
+      "main": [
+        [
+          {
+            "node": "Validar datos CODIGO_2FA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar datos CAMBIO_ENTRENAMIENTO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar datos ENLACE_CONTRASENA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar datos RECORDATORIO_PAGO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos CODIGO_2FA": {
+      "main": [
+        [
+          {
+            "node": "Responder 202 2FA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 datos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 202 2FA": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo 2FA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo 2FA": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar registro de falla": {
+      "main": [
+        [
+          {
+            "node": "Serializar línea JSONL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Serializar línea JSONL": {
+      "main": [
+        [
+          {
+            "node": "Convertir a archivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir a archivo": {
+      "main": [
+        [
+          {
+            "node": "Guardar falla en log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar falla en log": {
+      "main": [
+        [
+          {
+            "node": "¿Responder 502?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Responder 502?": {
+      "main": [
+        [
+          {
+            "node": "Responder 502",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos CAMBIO_ENTRENAMIENTO": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de entrenamiento válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de entrenamiento válidos?": {
+      "main": [
+        [
+          {
+            "node": "Responder 202",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 entrenamiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 202": {
+      "main": [
+        [
+          {
+            "node": "Armar un correo por destinatario",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar un correo por destinatario": {
+      "main": [
+        [
+          {
+            "node": "Enviar aviso de entrenamiento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar aviso de entrenamiento": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos ENLACE_CONTRASENA": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de enlace válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de enlace válidos?": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo enlace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 enlace",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo enlace": {
+      "main": [
+        [
+          {
+            "node": "Responder 200 enlace",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos RECORDATORIO_PAGO": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de recordatorio válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de recordatorio válidos?": {
+      "main": [
+        [
+          {
+            "node": "Responder 202 recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 recordatorio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 202 recordatorio": {
+      "main": [
+        [
+          {
+            "node": "Enviar recordatorio de pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar recordatorio de pago": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a895e56b-89df-4704-9bea-f6d95b262140",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e642fad47933dd14a07c0b0d615a2500f7db7eb036faeda1281214dd60a6657f"
+  },
+  "nodeGroups": [],
+  "id": "00OIrCHiKI4nj94w",
+  "tags": []
+}

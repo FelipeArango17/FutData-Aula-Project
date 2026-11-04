@@ -1,5 +1,6 @@
 package co.edu.futdata.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -45,6 +46,17 @@ class VerificadorVariablesProdTest {
         assertThatThrownBy(() -> verificador.postProcessEnvironment(entorno, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Perfil prod: faltan las variables de entorno " + variable + ". Ver backend/.env.example.");
+    }
+
+    /** N8N_CRON_TOKEN es opcional: sin ella la vía por token queda deshabilitada, pero prod arranca. */
+    @Test
+    void elTokenDeCronNoEsObligatorio() {
+        assertThat(VerificadorVariablesProd.OBLIGATORIAS).doesNotContain("N8N_CRON_TOKEN");
+        MockEnvironment entorno = new MockEnvironment();
+        VerificadorVariablesProd.OBLIGATORIAS.forEach(variable -> entorno.setProperty(variable, "valor"));
+        entorno.setActiveProfiles("prod");
+
+        assertThatCode(() -> verificador.postProcessEnvironment(entorno, null)).doesNotThrowAnyException();
     }
 
     @Test

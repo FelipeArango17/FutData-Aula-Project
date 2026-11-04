@@ -21,7 +21,7 @@ export const menus = {
   acudiente: [
     {
       items: [
-        { label: 'Inicio', to: '/acudiente/inicio', modulo: 'inicio' },
+        { label: 'Inicio', to: '/acudiente/inicio', modulo: 'inicioacudiente' },
         { label: 'Mis jugadores', to: '/acudiente/jugadores', modulo: 'acudientes' },
         { label: 'Pagos', to: '/acudiente/pagos', modulo: 'pagos' },
         { label: 'Documentos', to: '/acudiente/documentos', modulo: 'documentos' },
@@ -44,7 +44,7 @@ export const menus = {
   tesorero: [
     {
       items: [
-        { label: 'Inicio', to: '/tesorero/inicio', modulo: 'inicio' },
+        { label: 'Inicio', to: '/tesorero/inicio', modulo: 'iniciotesorero' },
         { label: 'Pagos', to: '/tesorero/pagos', modulo: 'pagos' },
         { label: 'Reportes', to: '/tesorero/reportes', modulo: 'reportes' },
         { label: 'Avisos', to: '/tesorero/avisos', modulo: 'avisos' },
@@ -53,7 +53,7 @@ export const menus = {
   ],
   administrador: [
     {
-      items: [{ label: 'Dashboard', to: '/administrador/dashboard', modulo: 'inicio' }],
+      items: [{ label: 'Dashboard', to: '/administrador/dashboard', modulo: 'dashboard' }],
     },
     {
       title: 'Personas',
@@ -90,7 +90,7 @@ export const menus = {
 // `icon` es el nombre de un ícono de components/Icon.jsx.
 export const bottomNavs = {
   acudiente: [
-    { label: 'Inicio', to: '/acudiente/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Inicio', to: '/acudiente/inicio', icon: 'home', modulo: 'inicioacudiente' },
     { label: 'Jugadores', to: '/acudiente/jugadores', icon: 'users', modulo: 'acudientes' },
     { label: 'Pagos', to: '/acudiente/pagos', icon: 'wallet', modulo: 'pagos' },
     { label: 'Avisos', to: '/acudiente/notificaciones', icon: 'bell', modulo: 'avisos' },
@@ -102,7 +102,7 @@ export const bottomNavs = {
     { label: 'Torneos', to: '/entrenador/torneos', icon: 'trophy', modulo: 'torneos' },
   ],
   tesorero: [
-    { label: 'Inicio', to: '/tesorero/inicio', icon: 'home', modulo: 'inicio' },
+    { label: 'Inicio', to: '/tesorero/inicio', icon: 'home', modulo: 'iniciotesorero' },
     { label: 'Pagos', to: '/tesorero/pagos', icon: 'wallet', modulo: 'pagos' },
     { label: 'Reportes', to: '/tesorero/reportes', icon: 'chart', modulo: 'reportes' },
     { label: 'Avisos', to: '/tesorero/avisos', icon: 'bell', modulo: 'avisos' },
