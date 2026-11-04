@@ -114,6 +114,17 @@ futdata:
     monto: ${FUTDATA_MENSUALIDAD_MONTO:0}
     dia-vencimiento: ${FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO:5}
     generacion-automatica: ${FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA:false}
+  cobros:
+    # Cobros por ciclo de ingreso (config.CobrosCicloProperties): inscripción y uniforme al ingresar, días de anticipación del
+    # cobro del ciclo y ventana (días desde el registro) en que se considera un ingreso nuevo. La mensualidad usa mensualidad.monto.
+    inscripcion-monto: ${FUTDATA_COBROS_INSCRIPCION_MONTO:150000}
+    uniforme-monto: ${FUTDATA_COBROS_UNIFORME_MONTO:90000}
+    dias-anticipacion: ${FUTDATA_COBROS_DIAS_ANTICIPACION:5}
+    ventana-ingreso-dias: ${FUTDATA_COBROS_VENTANA_INGRESO_DIAS:7}
+  cron:
+    # Token de la tarea diaria de n8n para POST /api/pagos/generar-ciclos (cabecera X-Cron-Token). OPCIONAL: sin valor, esa vía
+    # queda deshabilitada y solo entra el administrador con su JWT. No es obligatoria en prod (config.CronProperties).
+    token: ${N8N_CRON_TOKEN:}
   fotos:
     # Fotos de los deportistas (config.FotosProperties): bucket privado de la migración 007 y vigencia de la URL
     # firmada que va en las respuestas (de 10s a 60m). Separada de la de los comprobantes, que es corta.

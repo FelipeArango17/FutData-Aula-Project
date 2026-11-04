@@ -9,11 +9,13 @@ import co.edu.futdata.api.dto.MiPagoResponseDTO;
 import co.edu.futdata.api.dto.PaginaResponseDTO;
 import co.edu.futdata.api.dto.PagoResponseDTO;
 import co.edu.futdata.api.dto.RechazarPagoRequestDTO;
+import co.edu.futdata.api.dto.ResultadoCiclosDTO;
 import co.edu.futdata.api.dto.ResultadoGeneracionDTO;
 import co.edu.futdata.domain.entities.EstadoPago;
 import co.edu.futdata.domain.entities.TipoPago;
 import co.edu.futdata.persistence.dao.FiltroPagos;
 import co.edu.futdata.services.facade.DatosInvalidosException;
+import co.edu.futdata.services.facade.ICobrosCicloService;
 import co.edu.futdata.services.facade.IPagoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -21,6 +23,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
@@ -56,9 +59,13 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class PagoController {
 
     private final IPagoService pagos;
+    private final ICobrosCicloService ciclos;
+    private final Clock reloj;
 
-    public PagoController(IPagoService pagos) {
+    public PagoController(IPagoService pagos, ICobrosCicloService ciclos, Clock reloj) {
         this.pagos = pagos;
+        this.ciclos = ciclos;
+        this.reloj = reloj;
     }
 
     @PostMapping
@@ -160,12 +167,32 @@ public class PagoController {
                 .body(pdf);
     }
 
+    /**
+     * @deprecated Generación manual por calendario. La reemplaza {@link #generarCiclos}, que cobra por ciclo de ingreso de cada
+     *             deportista. Se mantiene sin cambios mientras el frontend migra.
+     */
+    @Deprecated
     @PostMapping("/generar-mensualidades")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
-    @Operation(summary = "Generar las mensualidades de un periodo",
-            description = "Crea la mensualidad PENDIENTE de cada deportista que no la tenga; idempotente")
+    @Operation(summary = "Generar las mensualidades de un periodo (obsoleto: usa generar-ciclos)", deprecated = true,
+            description = "Crea la mensualidad PENDIENTE de cada deportista que no la tenga; idempotente. "
+                    + "Obsoleto: los cobros se generan por ciclo de ingreso con POST /api/pagos/generar-ciclos")
     public ResultadoGeneracionDTO generarMensualidades(@AuthenticationPrincipal Jwt jwt, @RequestBody GenerarMensualidadesRequestDTO datos) {
         return pagos.generarMensualidades(usuario(jwt), datos == null ? null : datos.periodo());
+    }
+
+    @PostMapping("/generar-ciclos")
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'CRON')")
+    @Operation(summary = "Generar los cobros por ciclo de ingreso",
+            description = "Crea la mensualidad del ciclo vigente de cada deportista activo (ancla: fecha de registro; se crea hasta "
+                    + "5 días antes) y, a los ingresos recientes, la inscripción y el uniforme. Avisa por correo de los cobros "
+                    + "anticipados. Idempotente. Lo llama el administrador (JWT) o la tarea diaria de n8n con la cabecera "
+                    + "X-Cron-Token (solo si N8N_CRON_TOKEN está definida)")
+    @ApiResponse(responseCode = "409", description = "La mensualidad no está configurada (FUTDATA_MENSUALIDAD_MONTO)",
+            content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
+    public ResultadoCiclosDTO generarCiclos(@AuthenticationPrincipal Jwt jwt) {
+        // Con X-Cron-Token no hay JWT: quien actúa es el sistema (usuario null en la auditoría)
+        return ciclos.generarCobrosDeCiclo(LocalDate.now(reloj), jwt == null ? null : usuario(jwt));
     }
 
     private static UUID usuario(Jwt jwt) {

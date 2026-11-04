@@ -70,6 +70,9 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `WOMPI_PUBLIC_KEY`, `WOMPI_PRIVATE_KEY`, `WOMPI_EVENTS_SECRET`, `WOMPI_INTEGRITY_SECRET` | Llaves de Wompi ([Pagos con Wompi](#pagos-con-wompi)). **Secretas** (menos la pública) | vacías: la app arranca, pero los endpoints de Wompi responden `503 PAGOS_NO_CONFIGURADOS` | Opcionales (sin ellas no hay pagos en línea) |
 | `WOMPI_BASE_URL`, `WOMPI_REDIRECT_URL` | URL de la API de Wompi y a dónde vuelve el usuario tras pagar | sandbox `https://sandbox.wompi.co/v1`; sin redirección | Igual |
 | `FUTDATA_MENSUALIDAD_MONTO`, `FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO`, `FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA` | Cobro mensual: monto en pesos (**pendiente: lo define el club**), día de vencimiento y si se genera solo cada día | `0` (sin configurar), `5`, `false` | Igual |
+| `FUTDATA_COBROS_INSCRIPCION_MONTO`, `FUTDATA_COBROS_UNIFORME_MONTO` | Cobros de ingreso por ciclo: pesos de la inscripción y del uniforme ([Cobros por ciclo de ingreso](#cobros-por-ciclo-de-ingreso)) | `150000`, `90000` | Igual |
+| `FUTDATA_COBROS_DIAS_ANTICIPACION`, `FUTDATA_COBROS_VENTANA_INGRESO_DIAS` | Días de anticipación del cobro del ciclo y días desde el registro en que se cobran inscripción y uniforme | `5`, `7` | Igual |
+| `N8N_CRON_TOKEN` | Secreto de la tarea diaria de n8n para `POST /api/pagos/generar-ciclos` (cabecera `X-Cron-Token`). **Secreto.** Sin ella esa vía queda deshabilitada | vacía | **Opcional** (no la exige el perfil `prod`) |
 | `FOTOS_BUCKET`, `FOTOS_VIGENCIA_URL_FIRMADA` | Bucket de las fotos de los deportistas y vigencia de su URL firmada, de 10 s a 60 min ([Foto](#foto)) | `fotos`, `60m` | Igual |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
@@ -868,7 +871,8 @@ Ver la tabla de [Variables de entorno](#variables-de-entorno) y `backend/.env.ex
 | `POST /api/pagos/{id}/aprobar` | `ADMINISTRADOR`, `TESORERO` | Pago manual: `fechaPago` y `metodo` (`EFECTIVO` o `TRANSFERENCIA`) obligatorios |
 | `POST /api/pagos/{id}/rechazar` | `ADMINISTRADOR`, `TESORERO` | Rechaza un cobro `PENDIENTE` (nota opcional) |
 | `GET /api/pagos/{id}/comprobante` | dueño, `ADMINISTRADOR`, `TESORERO` | PDF (`application/pdf`) solo de un cobro `APROBADO` |
-| `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` | `{ "periodo": "2026-11" }`: crea la mensualidad `PENDIENTE` de cada deportista que no la tenga |
+| `POST /api/pagos/generar-ciclos` | `ADMINISTRADOR` (JWT) o tarea de n8n (`X-Cron-Token`) | Crea los cobros que tocan hoy por ciclo de ingreso. Ver [Cobros por ciclo de ingreso](#cobros-por-ciclo-de-ingreso) |
+| `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` | **Obsoleto** (usa `generar-ciclos`). `{ "periodo": "2026-11" }`: crea la mensualidad `PENDIENTE` de cada deportista que no la tenga |
 
 ```bash
 # Crear una mensualidad (administrador)
@@ -919,7 +923,57 @@ El frontend abre el Web Checkout con esos valores: `https://checkout.wompi.co/p/
 - `aprobar` solo acepta `EFECTIVO` y `TRANSFERENCIA`; los pagos en línea los confirma Wompi (o `conciliar`). Un cobro que **ya se inició en Wompi** (tiene referencia) no se aprueba a mano: `409`, porque un pago en línea posterior quedaría sin cobro al cual aplicarse. Se concilia o se rechaza primero.
 - `conciliar` consulta `GET {WOMPI_BASE_URL}/transactions?reference=...` con `WOMPI_PRIVATE_KEY` **antes** de abrir la transacción (no se mantiene un bloqueo mientras se espera la red) y aplica la máquina de estados a cada transacción de esa referencia. Sirve cuando el webhook no llegó o llegó incompleto. Si Wompi no responde: `503`.
 
-### Cobros mensuales automáticos
+### Cobros por ciclo de ingreso
+
+Reemplaza a la generación manual por calendario: cada deportista se cobra en el **aniversario mensual de su registro**, como en un gimnasio. Lo hace `ICobrosCicloService` (`CobrosCicloServiceImpl`); las fechas las calcula la función pura `domain.rules.CiclosDeCobro`.
+
+**Regla.**
+
+1. **Ancla:** `deportista.fecha_registro`. La fecha de cobro *n* es la fecha de registro (n = 0) o, si n ≥ 1, el mismo día del mes *n* meses después, acotado al último día de ese mes (`YearMonth.atEndOfMonth`). Siempre se calcula desde la fecha de registro, nunca desde el cobro anterior: registro el 31 de octubre → 31 oct, 30 nov, 31 dic, 31 ene, 28 feb (29 en bisiesto).
+2. **Mensualidad:** el periodo es el primer día del mes de la fecha de cobro (cumple `pago_periodo_ck` y el índice único por deportista y periodo). `fecha_vencimiento` es la fecha de cobro; si el generador corre tarde y ya pasó, vence hoy.
+3. **Ciclo vigente:** la fecha de cobro más reciente menor o igual a *hoy + `FUTDATA_COBROS_DIAS_ANTICIPACION`* (5). Se crea la mensualidad de ese ciclo si el deportista no tiene **ninguna** de ese periodo, **en cualquier estado** (un `RECHAZADO` a propósito no se regenera). Nunca se crean ciclos anteriores.
+4. **Ingreso:** si `fecha_registro` ≥ *hoy − `FUTDATA_COBROS_VENTANA_INGRESO_DIAS`* (7), se crean además una vez `INSCRIPCION` ("Inscripción AAAA") y `UNIFORME`, si no tiene ya un cobro de ese tipo (en cualquier estado), con vencimiento hoy. Un monto en `0` desactiva ese cobro.
+5. **Alcance:** deportistas con `activo = true` y `estado_inscripcion` `PENDIENTE` o `ACTIVA`. `RETIRADA` se excluye (la migración 008 ya los dejó inactivos; `activo` es lo que cambia hoy la aplicación).
+6. **Monto de la mensualidad:** `FUTDATA_MENSUALIDAD_MONTO`. En `0` el endpoint responde `409` y no crea nada.
+
+**Endpoint.** `POST /api/pagos/generar-ciclos`, sin cuerpo. Usa "hoy" del reloj de Colombia (`Clock` en `America/Bogota`). Es idempotente: se puede llamar todos los días o dos veces seguidas.
+
+```json
+{ "creadas": 5, "yaExistentes": 2, "avisosEnviados": 4, "avisosFallidos": 1, "deportistasConError": 0 }
+```
+
+- `creadas`: cobros creados (mensualidades, inscripciones y uniformes). `yaExistentes`: cobros que tocaba crear y ya existían (incluye el choque con el índice único por una ejecución simultánea).
+- Cada deportista se procesa en **su propia transacción** (con su fila bloqueada): el fallo de uno no aborta a los demás; los que fallan por un error inesperado se cuentan en `deportistasConError` y se registran en el log (solo el id).
+- Autorización: el administrador con su JWT, **o** la cabecera `X-Cron-Token` igual a `N8N_CRON_TOKEN`. La comparación es en tiempo constante (se comparan los SHA-256). La vía por token funciona **solo** en esta ruta y método, no abre ningún otro endpoint, y si la variable no está definida queda deshabilitada (solo el administrador). `N8N_CRON_TOKEN` es opcional y **no** la exige `VerificadorVariablesProd`. Si la petición trae `Authorization`, manda el JWT.
+- Si el proceso diario viejo está activo (`FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA=true`, calendario) conviene apagarlo cuando n8n llame a `generar-ciclos`: crean mensualidades del mismo periodo y el índice único evita duplicados, pero los criterios de fecha son distintos.
+
+**Aviso por correo.** Por cada **mensualidad** creada con **anticipación** (fecha de cobro posterior a hoy), el backend pide a n8n un `RECORDATORIO_PAGO` por cada acudiente vinculado (`acudiente_deportista`) con correo (sin repetir correos). No se avisa de inscripción ni uniforme. Los avisos salen **después** del commit de cada deportista; si n8n falla, el cobro **no** se revierte: se cuenta en `avisosFallidos` y se registra en el log con el correo enmascarado (`m***@dominio`) y el tipo de falla.
+
+Evento `RECORDATORIO_PAGO` (`INotificador.RECORDATORIO_PAGO`; asíncrono como `CODIGO_2FA`: `200` o `202`):
+
+```json
+{
+  "evento": "RECORDATORIO_PAGO",
+  "datos": {
+    "correo": "maria@ejemplo.com",
+    "nombreAcudiente": "María Torres",
+    "nombreDeportista": "Pedro Gómez",
+    "concepto": "Mensualidad noviembre 2026",
+    "monto": 90000,
+    "fechaVencimiento": "2026-11-14",
+    "diasRestantes": 4,
+    "enlacePagos": "https://futdata.example/acudiente/pagos"
+  }
+}
+```
+
+`monto` en pesos enteros; `fechaVencimiento` `AAAA-MM-DD`; `diasRestantes` entero ≥ 1; `enlacePagos` = `{FRONTEND_URL}/acudiente/pagos` (sin datos secretos). **Pendiente en n8n:** agregar el evento al flujo de notificaciones y su plantilla; hasta entonces n8n responde `400 Evento no soportado` y el aviso cuenta como fallido (el cobro se crea igual). Y una tarea diaria en n8n que llame a `POST /api/pagos/generar-ciclos` con `X-Cron-Token`.
+
+**Pruebas.** `CiclosDeCobroTest` (fechas y ciclo vigente), `CobrosCicloServiceImplTest` (reglas con DAO simulados), `CobrosCicloConPostgresTest` (alcance por estado, idempotencia, `RECHAZADO`, índice único, avisos; requiere Docker) y `PagoCiclosControllerTest` / `PagoCiclosSinTokenTest` (JWT, token, roles y vía deshabilitada).
+
+### Cobros mensuales automáticos (obsoleto)
+
+> **Obsoleto:** lo reemplazan los [cobros por ciclo de ingreso](#cobros-por-ciclo-de-ingreso). `generar-mensualidades` y el proceso diario por calendario se mantienen sin cambios mientras el frontend migra.
 
 `POST /api/pagos/generar-mensualidades` y, si `FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA=true`, un proceso diario a las 6:00 (hora de Colombia) crean la mensualidad `PENDIENTE` del mes de cada deportista que no la tenga (los rechazados no cuentan), con el monto y el día de vencimiento configurados (si el mes es más corto, el último día). Son idempotentes. **Pendiente:** el club debe definir `FUTDATA_MENSUALIDAD_MONTO`; en `0` no se genera nada. Hoy se generan para **todos** los deportistas porque la tabla no tiene un estado activo/inactivo (ver el bloque 2B en `docs/PRESENTACION-TECNICA.md`).
 
@@ -984,6 +1038,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 | `/api/deportistas/**` (incluidos `PUT` y `/foto`) | `ADMINISTRADOR`; `GET /api/deportistas` (la lista) también `ENTRENADOR`, sin documento, teléfono, dirección ni estado de la inscripción |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
 | `POST /api/pagos`, `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` |
+| `POST /api/pagos/generar-ciclos` | `ADMINISTRADOR` con JWT, o la cabecera `X-Cron-Token` (solo si `N8N_CRON_TOKEN` está definida; solo esta ruta) |
 | `GET /api/pagos`, `POST /api/pagos/{id}/conciliar`, `/aprobar`, `/rechazar` | `ADMINISTRADOR`, `TESORERO` |
 | `GET /api/pagos/mis-pagos`, `POST /api/pagos/{id}/iniciar-wompi`, `/reintentar` | `ACUDIENTE` (solo sus deportistas; de otro, `404`) |
 | `GET /api/pagos/{id}/comprobante` | `ADMINISTRADOR`, `TESORERO`, y el `ACUDIENTE` del deportista |
@@ -1053,7 +1108,7 @@ Los correos los envía n8n. El backend se los pide con `INotificador.notificar(e
 | Cuerpo | `{"evento": ..., "datos": {...}}` |
 | Timeout | 5 s de conexión y 5 s de lectura (`futdata.n8n.timeout`); **15 s solo para `ENLACE_CONTRASENA`** (`futdata.n8n.timeout-enlace`, `N8N_TIMEOUT_ENLACE`), que es síncrono |
 | Reintentos | Ninguno. Si n8n recibió la petición y solo se demoró, un reintento enviaría el correo dos veces |
-| Eventos | `INotificador.CODIGO_2FA`, `INotificador.CAMBIO_ENTRENAMIENTO` e `INotificador.ENLACE_CONTRASENA` (constantes; no escribir la cadena a mano) |
+| Eventos | `INotificador.CODIGO_2FA`, `INotificador.CAMBIO_ENTRENAMIENTO`, `INotificador.ENLACE_CONTRASENA` e `INotificador.RECORDATORIO_PAGO` (constantes; no escribir la cadena a mano) |
 
 `N8nClient` **no arma los `datos`**: cada servicio construye los de su evento (HU-002 el código 2FA, HU-026 el aviso de entrenamiento) y depende solo de la interfaz `INotificador`, inyectada por constructor.
 
