@@ -13,6 +13,9 @@ public interface IEntrenadorDAO {
 
     Optional<Entrenador> buscarPorId(UUID id);
 
+    /** El entrenador ligado a esa cuenta ({@code id_usuario}), con sus categorías; vacío si ninguno lo está. */
+    Optional<Entrenador> buscarPorIdUsuario(UUID idUsuario);
+
     /**
      * {@code true} si otro entrenador tiene el mismo tipo y número de documento.
      *

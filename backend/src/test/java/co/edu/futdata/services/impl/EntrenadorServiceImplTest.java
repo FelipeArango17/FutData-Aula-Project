@@ -555,6 +555,11 @@ class EntrenadorServiceImplTest {
             filas.add(new Categoria(UUID.randomUUID(), nombre, minima, maxima, idEntrenador));
         }
 
+        @Override
+        public List<Categoria> listarPorEntrenador(UUID idEntrenador) {
+            return listar().stream().filter(c -> idEntrenador.equals(c.getIdEntrenador())).toList();
+        }
+
         List<String> de(UUID idEntrenador) {
             return listar().stream().filter(c -> idEntrenador.equals(c.getIdEntrenador())).map(Categoria::getNombre).toList();
         }
@@ -616,6 +621,11 @@ class EntrenadorServiceImplTest {
         @Override
         public Optional<Entrenador> buscarPorId(UUID id) {
             return Optional.ofNullable(filas.get(id)).map(this::copia);
+        }
+
+        @Override
+        public Optional<Entrenador> buscarPorIdUsuario(UUID idUsuario) {
+            return filas.values().stream().filter(e -> idUsuario.equals(e.getIdUsuario())).findFirst().map(this::copia);
         }
 
         @Override

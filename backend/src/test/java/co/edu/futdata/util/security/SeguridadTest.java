@@ -219,7 +219,7 @@ class SeguridadTest {
         pedir("/api/usuarios/yo", "token-" + ENTRENADOR)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("2FA_REQUERIDA"));
-        verify(usuariosServicio, never()).consultar(any());
+        verify(usuariosServicio, never()).perfil(any());
     }
 
     @Test
@@ -271,7 +271,7 @@ class SeguridadTest {
         error(mvc.perform(post("/api/auth/2fa/codigo").header(HttpHeaders.AUTHORIZATION, "Bearer token-" + INACTIVO)),
                 403, RespuestasSeguridad.SIN_PERMISO, "/api/auth/2fa/codigo");
         verify(codigos, never()).solicitar(any());
-        verify(usuariosServicio, never()).consultar(any());
+        verify(usuariosServicio, never()).perfil(any());
     }
 
     @Test

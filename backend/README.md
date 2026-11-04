@@ -403,6 +403,45 @@ Todos los errores de validación salen juntos en un solo `400`, con `campos`.
 
 Al desactivar un entrenador, sus franjas se conservan con él y salen con `entrenadorActivo: false` (decidido en el bloque 5): el administrador decide si las reasigna.
 
+## Horario de la semana y bloque `entrenador` en `/yo` (bloque 4B-1)
+
+Las franjas fijas del club puestas en las fechas de una semana, y el dato que el frontend necesita para saber sobre qué categorías actúa un entrenador. Solo franjas: las cancelaciones y los extras llegan con el 4B-2 (migración 010).
+
+### Endpoints
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `GET /api/horario-semana?fecha=AAAA-MM-DD` | La semana de lunes a sábado (sin `fecha`, la de hoy en Bogotá) | los cuatro roles | `200`, `400`, `401`, `403` |
+| `GET /api/usuarios/yo` | El perfil de siempre, más el bloque `entrenador` | cualquier rol | `200`, `401`, `403`, `404` |
+
+**La semana.** Cualquier día sirve para pedirla. El domingo no hay entrenamientos, así que `ReglasSemana.lunesDeLaSemana` devuelve el lunes **siguiente** (igual que `semanaEnCurso` del frontend); la usan la semana por defecto, la fecha pedida y el chequeo del acudiente. "Hoy" sale del `Clock` de Bogotá. `hasta` es el sábado (lunes + 5) y la fecha de cada franja es el lunes + `dia` - 1.
+
+```json
+{"desde": "2026-11-02", "hasta": "2026-11-07", "sesiones": [
+  {"tipo": "FRANJA", "estado": "ACTIVO", "idFranja": "0b8e…", "idExcepcion": null, "fecha": "2026-11-03", "dia": 2,
+   "horaInicio": "16:30", "horaFin": "18:00", "idCategoria": "6f1c…", "categoria": "Semillero", "sede": "UVA El Paraíso",
+   "idEntrenador": null, "entrenador": null, "entrenadorActivo": null, "grupo": "tarde", "motivo": null,
+   "puedeGestionar": false}]}
+```
+
+- Ordenadas por `fecha`, `horaInicio`, categoría oficial y grupo. Los campos de la franja se llaman igual que en `/api/horario-club` (se reutiliza `IFranjaHorarioDAO.listar` y `FranjaHorarioMapper`).
+- En el 4B-1 `tipo` es siempre `FRANJA`, `estado` `ACTIVO`, `idExcepcion` y `motivo` `null` y `puedeGestionar` `false`.
+- **El acudiente solo ve la semana en curso:** otra da `403` "Solo puedes consultar la semana en curso" (`SemanaNoPermitidaException`). El rol sale de las autoridades de `Authentication`. Los demás roles piden cualquier semana.
+- `fecha` se recibe como texto y se valida en el servicio: si no es una fecha real `AAAA-MM-DD`, `400` con `campos: ["fecha"]`.
+- Sin la sesión 2FA verificada: `403` con `codigo: "2FA_REQUERIDA"`; `401` solo sin token, con token inválido o sin `session_id`.
+
+**El bloque `entrenador`.** `GET /api/usuarios/yo` responde ahora `UsuarioYoResponseDTO` (los campos de `UsuarioResponseDTO` más `entrenador`); `/api/usuarios`, `/api/usuarios/{id}` y los demás no cambian.
+
+```json
+{"id": "…", "nombre": "Luis", "apellido": "Pérez", "correo": "luis@pradofc.co", "rol": "entrenador", "activo": true,
+ "creadoEn": "…", "entrenador": {"idEntrenador": "e000…", "categorias": [{"idCategoria": "6f1c…", "nombre": "Semillero"}]}}
+```
+
+- La clave `entrenador` **siempre va** en el JSON. Es `null` para ADMINISTRADOR, TESORERO y ACUDIENTE, y para un ENTRENADOR sin fila en `entrenador` vinculada por `id_usuario`.
+- `categorias` son las que tiene a cargo (`categoria.id_entrenador`) en el orden oficial (`edad_minima`); `[]` si no tiene ninguna. Un entrenador inactivo recibe el bloque con las categorías que conserve.
+- Consultas nuevas: `IEntrenadorDAO.buscarPorIdUsuario` e `ICategoriaDAO.listarPorEntrenador`.
+- `/api/auth/2fa/verificar` sigue devolviendo el perfil sin este bloque: el frontend lo obtiene con `GET /api/usuarios/yo`.
+
 ## Usuarios y roles (HU-004)
 
 La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`, `entrenador` y `acudiente`). Al crear un usuario, el backend crea la cuenta en Supabase Auth mediante la invitación por correo y luego registra su perfil en `public.usuario` y `public.usuario_rol`. La llave `SUPABASE_SERVICE_ROLE_KEY` solo se usa en el backend.
@@ -410,7 +449,7 @@ La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`
 | Método y ruta | Descripción | Respuestas |
 | :--- | :--- | :--- |
 | `GET /api/usuarios` | Lista usuarios y su rol | `200` |
-| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado (exige el 2FA completado) | `200`, `403`, `404` |
+| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado (exige el 2FA completado); para ENTRENADOR trae el bloque `entrenador` ([4B-1](#horario-de-la-semana-y-bloque-entrenador-en-yo-bloque-4b-1)) | `200`, `403`, `404` |
 | `GET /api/usuarios/{id}` | Consulta un usuario | `200`, `400`, `404` |
 | `POST /api/usuarios` | Crea e invita un usuario | `201`, `400`, `409` |
 | `PUT /api/usuarios/{id}/rol` | Cambia el rol | `200`, `400`, `404`, `409` |

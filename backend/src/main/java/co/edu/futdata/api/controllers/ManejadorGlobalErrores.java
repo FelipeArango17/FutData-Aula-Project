@@ -13,6 +13,7 @@ import co.edu.futdata.datasource.external.NotificacionException;
 import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
 import co.edu.futdata.datasource.external.WompiNoDisponibleException;
 import co.edu.futdata.services.facade.ConflictoException;
+import co.edu.futdata.services.facade.SemanaNoPermitidaException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
 import co.edu.futdata.services.facade.CodigoVerificacionException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
@@ -295,6 +296,12 @@ public class ManejadorGlobalErrores {
         log.warn("Restricción de la base de datos en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(),
                 restriccion.find() ? restriccion.group(1) : "(sin nombre)");
         return responder(HttpStatus.CONFLICT, CHOCA_CON_DATOS, peticion);
+    }
+
+    /** Un acudiente pidió una semana que no es la en curso: 403 con el mensaje de la excepción. */
+    @ExceptionHandler(SemanaNoPermitidaException.class)
+    public ResponseEntity<ErrorResponseDTO> semanaNoPermitida(SemanaNoPermitidaException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.FORBIDDEN, e.getMessage(), peticion);
     }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
