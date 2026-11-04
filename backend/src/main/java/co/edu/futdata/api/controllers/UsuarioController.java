@@ -3,6 +3,7 @@ package co.edu.futdata.api.controllers;
 import co.edu.futdata.api.dto.ErrorResponseDTO;
 import co.edu.futdata.api.dto.UsuarioRequestDTO;
 import co.edu.futdata.api.dto.UsuarioResponseDTO;
+import co.edu.futdata.api.dto.UsuarioYoResponseDTO;
 import co.edu.futdata.services.facade.IUsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,8 +37,8 @@ public class UsuarioController {
 
     @GetMapping("/yo")
     @Operation(summary = "Consultar el perfil del usuario autenticado")
-    public UsuarioResponseDTO yo(@AuthenticationPrincipal Jwt jwt) {
-        return usuarios.consultar(UUID.fromString(jwt.getSubject()));
+    public UsuarioYoResponseDTO yo(@AuthenticationPrincipal Jwt jwt) {
+        return usuarios.perfil(UUID.fromString(jwt.getSubject()));
     }
 
     @GetMapping

@@ -54,12 +54,21 @@ public class EntrenadorDAOImpl implements IEntrenadorDAO {
 
     @Override
     public Optional<Entrenador> buscarPorId(UUID id) {
-        Map<String, Object> parametros = Map.of("id", id);
+        return buscarUno("id_entrenador = :id", id);
+    }
+
+    @Override
+    public Optional<Entrenador> buscarPorIdUsuario(UUID idUsuario) {
+        return buscarUno("id_usuario = :id", idUsuario);
+    }
+
+    private Optional<Entrenador> buscarUno(String condicion, UUID valor) {
         Optional<Entrenador> encontrado = jdbc.query(
-                "SELECT " + COLUMNAS + " FROM entrenador WHERE id_entrenador = :id", parametros, FILA_A_ENTIDAD)
+                "SELECT " + COLUMNAS + " FROM entrenador WHERE " + condicion, Map.of("id", valor), FILA_A_ENTIDAD)
                 .stream().findFirst();
         encontrado.ifPresent(e -> e.setCategorias(jdbc.queryForList(
-                "SELECT nombre FROM categoria WHERE id_entrenador = :id ORDER BY edad_minima", parametros, String.class)));
+                "SELECT nombre FROM categoria WHERE id_entrenador = :id ORDER BY edad_minima",
+                Map.of("id", e.getId()), String.class)));
         return encontrado;
     }
 

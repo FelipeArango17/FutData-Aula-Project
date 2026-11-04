@@ -1,12 +1,17 @@
 package co.edu.futdata.services.impl;
 
+import co.edu.futdata.api.dto.CategoriaYoDTO;
+import co.edu.futdata.api.dto.EntrenadorYoDTO;
 import co.edu.futdata.api.dto.UsuarioMapper;
 import co.edu.futdata.api.dto.UsuarioRequestDTO;
 import co.edu.futdata.api.dto.UsuarioResponseDTO;
+import co.edu.futdata.api.dto.UsuarioYoResponseDTO;
 import co.edu.futdata.datasource.external.ISupabaseAuthAdmin;
 import co.edu.futdata.domain.entities.Usuario;
 import co.edu.futdata.domain.rules.ReglasUsuario;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
+import co.edu.futdata.persistence.dao.ICategoriaDAO;
+import co.edu.futdata.persistence.dao.IEntrenadorDAO;
 import co.edu.futdata.persistence.dao.ISesionVerificadaDAO;
 import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.ConflictoException;
@@ -30,12 +35,17 @@ public class UsuarioServiceImpl implements IUsuarioService {
     private final IUsuarioDAO usuarios;
     private final ISupabaseAuthAdmin auth;
     private final ISesionVerificadaDAO sesiones;
+    private final IEntrenadorDAO entrenadores;
+    private final ICategoriaDAO categorias;
 
     @Autowired
-    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth, ISesionVerificadaDAO sesiones) {
+    public UsuarioServiceImpl(IUsuarioDAO usuarios, ISupabaseAuthAdmin auth, ISesionVerificadaDAO sesiones,
+                              IEntrenadorDAO entrenadores, ICategoriaDAO categorias) {
         this.usuarios = usuarios;
         this.auth = auth;
         this.sesiones = sesiones;
+        this.entrenadores = entrenadores;
+        this.categorias = categorias;
     }
 
     @Override
@@ -48,6 +58,20 @@ public class UsuarioServiceImpl implements IUsuarioService {
     @Transactional(readOnly = true)
     public UsuarioResponseDTO consultar(UUID id) {
         return UsuarioMapper.toDTO(buscar(id));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UsuarioYoResponseDTO perfil(UUID id) {
+        Usuario usuario = buscar(id);
+        EntrenadorYoDTO entrenador = null;
+        if ("ENTRENADOR".equals(usuario.getRol())) {
+            entrenador = entrenadores.buscarPorIdUsuario(id)
+                    .map(e -> new EntrenadorYoDTO(e.getId(), categorias.listarPorEntrenador(e.getId()).stream()
+                            .map(c -> new CategoriaYoDTO(c.getId(), c.getNombre())).toList()))
+                    .orElse(null);
+        }
+        return UsuarioMapper.toYoDTO(usuario, entrenador);
     }
 
     @Override

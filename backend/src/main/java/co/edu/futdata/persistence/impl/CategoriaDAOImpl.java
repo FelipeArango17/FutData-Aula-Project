@@ -38,6 +38,15 @@ public class CategoriaDAOImpl implements ICategoriaDAO {
     }
 
     @Override
+    public List<Categoria> listarPorEntrenador(UUID idEntrenador) {
+        return jdbc.query("""
+                SELECT id_categoria, nombre, edad_minima, edad_maxima, id_entrenador
+                  FROM categoria
+                 WHERE id_entrenador = :id
+                 ORDER BY edad_minima""", new MapSqlParameterSource("id", idEntrenador), FILA_A_ENTIDAD);
+    }
+
+    @Override
     public List<Categoria> listarParaActualizar() {
         return jdbc.query(SELECT + " FOR UPDATE", FILA_A_ENTIDAD);
     }

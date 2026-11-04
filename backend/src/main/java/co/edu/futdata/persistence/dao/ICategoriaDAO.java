@@ -11,6 +11,9 @@ public interface ICategoriaDAO {
     /** Todas las categorías, en el orden oficial (por edad mínima). */
     List<Categoria> listar();
 
+    /** Las categorías a cargo de ese entrenador, en el orden oficial (por edad mínima); vacío si no tiene. */
+    List<Categoria> listarPorEntrenador(UUID idEntrenador);
+
     /**
      * Igual que {@link #listar()}, pero bloquea las filas ({@code FOR UPDATE}) hasta que termine la transacción,
      * para que dos asignaciones al mismo tiempo no se pisen. Solo tiene sentido dentro de una transacción.

@@ -263,4 +263,61 @@ class EntrenadorDAOImplTest {
                         org.assertj.core.groups.Tuple.tuple("Semillero", mora));
         assertThat(entrenadores.buscarPorId(mora).orElseThrow().getCategorias()).containsExactly("Semillero");
     }
+
+    private UUID cuenta(String correo) {
+        UUID id = UUID.randomUUID();
+        jdbc.update("INSERT INTO auth.users (id) VALUES (:id)", Map.of("id", id));
+        jdbc.update("INSERT INTO usuario (id_usuario, nombre, apellido, correo) VALUES (:id, 'Ana', 'Prueba', :c)",
+                Map.of("id", id, "c", correo));
+        return id;
+    }
+
+    @Test
+    void buscaAlEntrenadorPorSuCuentaConSusCategorias() {
+        UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
+        PostgresDePrueba.entrenador("Carlos", "Díaz", "71654321", "carlos.diaz@pradofc.co");
+        PostgresDePrueba.categoria("Sub-12", mora);
+        PostgresDePrueba.categoria("Semillero", mora);
+        UUID cuenta = cuenta("entrenador-yo-1@pradofc.co");
+        assertThat(entrenadores.vincularUsuario(mora, cuenta)).isTrue();
+
+        Entrenador leido = entrenadores.buscarPorIdUsuario(cuenta).orElseThrow();
+
+        assertThat(leido.getId()).isEqualTo(mora);
+        assertThat(leido.getIdUsuario()).isEqualTo(cuenta);
+        assertThat(leido.getCategorias()).containsExactly("Semillero", "Sub-12");
+    }
+
+    @Test
+    void unaCuentaSinEntrenadorVinculadoNoDevuelveNada() {
+        PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
+        UUID cuenta = cuenta("entrenador-yo-2@pradofc.co");
+
+        assertThat(entrenadores.buscarPorIdUsuario(cuenta)).isEmpty();
+        assertThat(entrenadores.buscarPorIdUsuario(UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void listaLasCategoriasDeUnEntrenadorConIdYEnOrdenOficial() {
+        UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
+        UUID diaz = PostgresDePrueba.entrenador("Carlos", "Díaz", "71654321", "carlos.diaz@pradofc.co");
+        UUID sub16 = PostgresDePrueba.categoria("Sub-16", mora);
+        UUID cachorros = PostgresDePrueba.categoria("Cachorros", mora);
+        UUID sub12 = PostgresDePrueba.categoria("Sub-12", mora);
+        PostgresDePrueba.categoria("Semillero", diaz);
+
+        assertThat(categorias.listarPorEntrenador(mora)).extracting(Categoria::getId, Categoria::getNombre)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(cachorros, "Cachorros"),
+                        org.assertj.core.groups.Tuple.tuple(sub12, "Sub-12"),
+                        org.assertj.core.groups.Tuple.tuple(sub16, "Sub-16"));
+        assertThat(categorias.listarPorEntrenador(diaz)).extracting(Categoria::getNombre).containsExactly("Semillero");
+    }
+
+    @Test
+    void unEntrenadorSinCategoriasOInexistenteDevuelveListaVacia() {
+        UUID mora = PostgresDePrueba.entrenador("Andrés", "Mora", "1017234567", "andres.mora@pradofc.co");
+
+        assertThat(categorias.listarPorEntrenador(mora)).isEmpty();
+        assertThat(categorias.listarPorEntrenador(UUID.randomUUID())).isEmpty();
+    }
 }
