@@ -403,15 +403,19 @@ Todos los errores de validación salen juntos en un solo `400`, con `campos`.
 
 Al desactivar un entrenador, sus franjas se conservan con él y salen con `entrenadorActivo: false` (decidido en el bloque 5): el administrador decide si las reasigna.
 
-## Horario de la semana y bloque `entrenador` en `/yo` (bloque 4B-1)
+## Horario de la semana y bloque `entrenador` en `/yo` (bloques 4B-1 y 4B-2)
 
-Las franjas fijas del club puestas en las fechas de una semana, y el dato que el frontend necesita para saber sobre qué categorías actúa un entrenador. Solo franjas: las cancelaciones y los extras llegan con el 4B-2 (migración 010).
+Las franjas fijas del club puestas en las fechas de una semana, con sus **excepciones por fecha** (cancelaciones y extras, tabla `excepcion_horario`, migración 010), y el dato que el frontend necesita para saber sobre qué categorías actúa un entrenador.
 
 ### Endpoints
 
 | Método y ruta | Descripción | Roles | Respuestas |
 | :--- | :--- | :--- | :--- |
-| `GET /api/horario-semana?fecha=AAAA-MM-DD` | La semana de lunes a sábado (sin `fecha`, la de hoy en Bogotá) | los cuatro roles | `200`, `400`, `401`, `403` |
+| `GET /api/horario-semana?fecha=AAAA-MM-DD` | La semana de lunes a sábado (sin `fecha`, la de hoy en Bogotá), con cancelaciones y extras | los cuatro roles | `200`, `400`, `401`, `403` |
+| `POST /api/horario-semana/cancelaciones` | Cancela una franja en una fecha | `ADMINISTRADOR`, `ENTRENADOR` | `201`, `400`, `401`, `403`, `404`, `409` |
+| `DELETE /api/horario-semana/cancelaciones/{idExcepcion}` | Deshace una cancelación | `ADMINISTRADOR`, `ENTRENADOR` | `200`, `400`, `401`, `403`, `404` |
+| `POST /api/horario-semana/extras` | Crea un entrenamiento extra | `ADMINISTRADOR`, `ENTRENADOR` | `201`, `400`, `401`, `403`, `404`, `409` |
+| `DELETE /api/horario-semana/extras/{idExcepcion}` | Elimina un extra | `ADMINISTRADOR`, `ENTRENADOR` | `200`, `400`, `401`, `403`, `404` |
 | `GET /api/usuarios/yo` | El perfil de siempre, más el bloque `entrenador` | cualquier rol | `200`, `401`, `403`, `404` |
 
 **La semana.** Cualquier día sirve para pedirla. El domingo no hay entrenamientos, así que `ReglasSemana.lunesDeLaSemana` devuelve el lunes **siguiente** (igual que `semanaEnCurso` del frontend); la usan la semana por defecto, la fecha pedida y el chequeo del acudiente. "Hoy" sale del `Clock` de Bogotá. `hasta` es el sábado (lunes + 5) y la fecha de cada franja es el lunes + `dia` - 1.
@@ -425,10 +429,83 @@ Las franjas fijas del club puestas en las fechas de una semana, y el dato que el
 ```
 
 - Ordenadas por `fecha`, `horaInicio`, categoría oficial y grupo. Los campos de la franja se llaman igual que en `/api/horario-club` (se reutiliza `IFranjaHorarioDAO.listar` y `FranjaHorarioMapper`).
-- En el 4B-1 `tipo` es siempre `FRANJA`, `estado` `ACTIVO`, `idExcepcion` y `motivo` `null` y `puedeGestionar` `false`.
+- `tipo` es `FRANJA` o `EXTRA`; `estado`, `ACTIVO` o `CANCELADO`. Una franja cancelada ese día sale con `estado` `CANCELADO`, su `idExcepcion` y su `motivo` (sigue siendo `FRANJA`). Un extra sale con `idFranja` `null`, su propio `idExcepcion` y su `dia` calculado de la fecha. Una cancelación cuyo día de la semana ya no coincide con el de su franja (el 4A la cambió de día) no se aplica.
+- `puedeGestionar`: el administrador, en todo; el entrenador, en las franjas de sus categorías o que él dirige y, en un extra, solo si la categoría es suya (ser el asignado no basta); el acudiente y el tesorero, nunca. Se calcula en memoria con una sola lectura de las categorías del entrenador por petición. **En una fecha anterior a hoy es `false` para todos**, administrador incluido (hoy no cuenta como pasada).
 - **El acudiente solo ve la semana en curso:** otra da `403` "Solo puedes consultar la semana en curso" (`SemanaNoPermitidaException`). El rol sale de las autoridades de `Authentication`. Los demás roles piden cualquier semana.
 - `fecha` se recibe como texto y se valida en el servicio: si no es una fecha real `AAAA-MM-DD`, `400` con `campos: ["fecha"]`.
 - Sin la sesión 2FA verificada: `403` con `codigo: "2FA_REQUERIDA"`; `401` solo sin token, con token inválido o sin `session_id`.
+
+### Cancelar, deshacer y extras (bloque 4B-2)
+
+Solo `ADMINISTRADOR` y `ENTRENADOR` (acudiente y tesorero reciben `403` por rol). Todas responden `{ "sesion": …, "avisoEnviado": … }`: `201` en los `POST` y `200` en los `DELETE`. La escritura corre en una transacción que se confirma **antes** de avisar (`TransactionOperations`, sin `@Transactional` en el método). `creado_por` es el `sub` del JWT.
+
+**Cancelar una franja.** `POST /api/horario-semana/cancelaciones`
+
+```json
+{"fecha": "2026-11-10", "idFranja": "0b8e1f6a-2c3d-4e5f-9a8b-7c6d5e4f3a2b", "motivo": "Lluvia"}
+```
+
+```json
+{"sesion": {"tipo": "FRANJA", "estado": "CANCELADO", "idFranja": "0b8e…", "idExcepcion": "9d41…", "fecha": "2026-11-10", "dia": 2,
+            "horaInicio": "16:30", "horaFin": "18:00", "idCategoria": "6f1c…", "categoria": "Sub-12", "sede": "Horizontes",
+            "idEntrenador": "e000…", "entrenador": "Luis Pérez", "entrenadorActivo": true, "grupo": null, "motivo": "Lluvia",
+            "puedeGestionar": true},
+ "avisoEnviado": true}
+```
+
+**Crear un extra.** `POST /api/horario-semana/extras` (`idEntrenador` `null` = "por turnos"; `grupo` y `motivo` opcionales)
+
+```json
+{"idCategoria": "6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b", "fecha": "2026-11-11", "horaInicio": "18:00", "horaFin": "19:30",
+ "sede": "UVA El Paraíso", "idEntrenador": "e0000000-0000-0000-0000-00000000000a", "grupo": null, "motivo": "Partido amistoso"}
+```
+
+```json
+{"sesion": {"tipo": "EXTRA", "estado": "ACTIVO", "idFranja": null, "idExcepcion": "c3a9…", "fecha": "2026-11-11", "dia": 3,
+            "horaInicio": "18:00", "horaFin": "19:30", "idCategoria": "6f1c…", "categoria": "Sub-12", "sede": "UVA El Paraíso",
+            "idEntrenador": "e000…", "entrenador": "Luis Pérez", "entrenadorActivo": true, "grupo": null,
+            "motivo": "Partido amistoso", "puedeGestionar": true},
+ "avisoEnviado": null}
+```
+
+**Deshacer y eliminar.** `DELETE /api/horario-semana/cancelaciones/{idExcepcion}` responde la franja otra vez `ACTIVO` ese día (`idExcepcion` y `motivo` en `null`). `DELETE /api/horario-semana/extras/{idExcepcion}` responde `{ "sesion": null, "avisoEnviado": … }`.
+
+**Orden de las validaciones y errores** (el primero que falla):
+
+| Operación | Orden |
+| :--- | :--- |
+| `POST` cancelaciones | cuerpo `400` (todos los campos juntos: `fecha`, `idFranja`, `motivo` máx. 200) → franja inexistente `404` → fecha pasada `400` (`campos: ["fecha"]`) → día distinto al de la franja `400` (`campos: ["fecha"]`) → permiso `403` → ya cancelada ese día `409` "Esa franja ya está cancelada en esa fecha" (`campos: ["fecha"]`) |
+| `DELETE` cancelaciones | no existe o es un extra `404` → fecha pasada `400` → permiso `403` (un id que no es UUID da `400`) |
+| `POST` extras | cuerpo `400` (todos los campos juntos: UUID, fecha, horas `HH:mm`, `horaFin` > `horaInicio`, sede, `grupo` solo en Cachorros y Semillero, `motivo` máx. 200) → categoría inexistente `404` → fecha pasada `400` → domingo `400` → permiso `403` → entrenador inexistente o inactivo `400` (`campos: ["idEntrenador"]`) → cruce `409` "Ese entrenador ya tiene otra franja que se cruza con este horario" (`campos: ["idEntrenador"]`) |
+| `DELETE` extras | no existe o es una cancelación `404` → fecha pasada `400` → permiso `403` |
+
+- **Fecha pasada = antes de hoy;** hoy es válido. Un extra es de lunes a sábado.
+- **Permiso del entrenador, decidido en SQL** (`403` "Solo puedes modificar el horario de tus categorías"): para cancelar o deshacer, ser el entrenador de la categoría de la franja o el de la franja (`esDuenoDeFranja` / `esDuenoDeExcepcion`); una franja "por turnos" solo la gestiona el dueño de la categoría. Para crear o eliminar un **extra**, solo el dueño de la categoría (`esDuenoDeCategoria`). El administrador se salta la consulta por su rol.
+- **Cruce de un extra** (solo si tiene entrenador; "por turnos" no se compara): en **una** transacción se bloquea la fila del entrenador (`SELECT … FOR UPDATE`), se busca una franja suya, del mismo día de la semana, que se solape y **no esté cancelada** esa fecha, y se inserta. El cruce con otro extra lo decide la exclusión `excepcion_horario_cruce_entrenador_ex`. Un extra en el horario de una franja cancelada ese día se permite, y tocarse en un extremo (una termina cuando empieza la otra) no es cruzarse.
+- Se puede cancelar una franja de un entrenador inactivo; asignar un entrenador inactivo a un extra, no.
+
+**`avisoEnviado` y los avisos.** Después del commit se avisa a n8n con el evento `CAMBIO_ENTRENAMIENTO` (nunca dentro de la transacción):
+
+| Acción | `tipoCambio` | `motivo` |
+| :--- | :--- | :--- |
+| Cancelar una franja | `CANCELADO` | el de la cancelación |
+| Deshacer una cancelación | `CREADO` | no se manda (n8n lo ignora en `CREADO`) |
+| Crear un extra | `CREADO` | no se manda |
+| Eliminar un extra | `CANCELADO` | el del extra (se lee antes de borrar) |
+
+- `entrenamiento`: `categoria` (con el grupo si lo hay: `Cachorros (mañana)`), `fecha`, `horaInicio`, `lugar` (la sede) y `entrenador` (nombre y apellido, o `Por turnos`). Sin `horaFin` ni `anterior`. Los textos se recortan a 120 caracteres, el límite que valida el flujo de n8n.
+- **Destinatarios:** los acudientes con correo de los deportistas **activos** de la categoría (calculada por año de nacimiento con el `Clock` de Bogotá), sin correos repetidos y sin distinguir mayúsculas; no se filtra por grupo ni se avisa al entrenador. Los correos que n8n descartaría (formato o más de 254 caracteres) no se envían.
+- `true`: n8n aceptó todas las llamadas (`202`; no garantiza que el correo llegue). `false`: alguna llamada lanzó cualquier excepción (o no se pudieron leer los destinatarios); **la operación ya quedó hecha** y la respuesta sigue siendo `201` o `200`. `null`: no había a quién avisar y no se llamó a n8n.
+- Más de 200 destinatarios: una llamada por bloque de 200. Si un bloque falla, los siguientes no se envían. No se reintenta. El log es un `WARN` con el evento, el tipo de excepción y el número de destinatarios, sin correos ni nombres.
+
+**Limitaciones conocidas.**
+
+- Deshacer una cancelación no revisa cruces con extras: si el entrenador recibió un extra en ese horario mientras la franja estaba cancelada, quedan solapados.
+- El `PUT /api/horario-club/{id}` (4A) no revisa cruces con extras ya creados ni la fecha de las cancelaciones existentes (una cancelación cuyo día ya no coincide simplemente no se aplica).
+- Borrar una franja borra sus cancelaciones (`on delete cascade`).
+- El aviso se hace en la misma petición: si n8n tarda, la respuesta puede demorar hasta 5 s por bloque.
+- Si la sesión tiene grupo, el aviso va a **todos** los acudientes de la categoría.
+- Editar un extra (`PUT`, con `tipoCambio` `MODIFICADO`) no está en esta versión.
 
 **El bloque `entrenador`.** `GET /api/usuarios/yo` responde ahora `UsuarioYoResponseDTO` (los campos de `UsuarioResponseDTO` más `entrenador`); `/api/usuarios`, `/api/usuarios/{id}` y los demás no cambian.
 
@@ -449,7 +526,7 @@ La API administra las cuentas de acceso y sus roles (`administrador`, `tesorero`
 | Método y ruta | Descripción | Respuestas |
 | :--- | :--- | :--- |
 | `GET /api/usuarios` | Lista usuarios y su rol | `200` |
-| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado (exige el 2FA completado); para ENTRENADOR trae el bloque `entrenador` ([4B-1](#horario-de-la-semana-y-bloque-entrenador-en-yo-bloque-4b-1)) | `200`, `403`, `404` |
+| `GET /api/usuarios/yo` | Consulta el perfil del usuario autenticado (exige el 2FA completado); para ENTRENADOR trae el bloque `entrenador` ([4B-1](#horario-de-la-semana-y-bloque-entrenador-en-yo-bloques-4b-1-y-4b-2)) | `200`, `403`, `404` |
 | `GET /api/usuarios/{id}` | Consulta un usuario | `200`, `400`, `404` |
 | `POST /api/usuarios` | Crea e invita un usuario | `201`, `400`, `409` |
 | `PUT /api/usuarios/{id}/rol` | Cambia el rol | `200`, `400`, `404`, `409` |
