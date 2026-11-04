@@ -11,10 +11,11 @@ import { categoriaDeSesion, rangoDeSesion } from '../../components/horario/forma
 import { DialogoCambiarEntrenador, DialogoCancelar, DialogoExtra } from '../../components/horario/DialogosHorario.jsx'
 import { useRole } from '../../context/RoleContext.js'
 import * as servicio from '../../services/semanaService.js'
+import { perfilEntrenador } from '../../services/entrenadorService.js'
 import { entrenadorDeCategoria } from '../../services/horarioClubData.js'
-import { NOMBRES_CATEGORIAS } from '../../utils/categorias.js'
 import { diaLargo, diasDeSemana, lunesDe, rangoSemana, sumarDias } from '../../utils/fechas.js'
 import { hoy } from '../../utils/hoy.js'
+import { VISTA_CLUB, VISTA_MIS, esDeMisCategorias, estadoPerfil, opcionesDeCategoria } from '../../utils/horarioEntrenador.js'
 import { SEDES_CLUB, accionesDe, categoriasCreables, puedeCrearExtra, semanaEnCurso, textoAviso } from '../../utils/semana.js'
 
 
@@ -44,7 +45,11 @@ export default function Horarios() {
   const capacidades = useMemo(() => servicio.capacidades(), [])
   const navega = role === 'administrador' || role === 'entrenador'
   const identidad = role === 'entrenador' ? servicio.identidadEntrenador() : null
-  const propias = identidad?.categorias ?? null
+  // Modo API: el entrenador se identifica con GET /api/usuarios/yo (idEntrenador y categorías con id). En ejemplo, con identidadEntrenador().
+  const perfilPorApi = role === 'entrenador' && servicio.semanaPorApi()
+  const [intentoPerfil, setIntentoPerfil] = useState(0)
+  const [cargaPerfil, setCargaPerfil] = useState({ intento: null, perfil: null, error: false })
+  const [vista, setVista] = useState(VISTA_MIS)
   const hoyTexto = hoy()
   const lunesActual = semanaEnCurso(hoyTexto)
 
@@ -75,6 +80,17 @@ export default function Horarios() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `clave` ya resume lunes e intento
   }, [clave])
 
+  useEffect(() => {
+    if (!perfilPorApi) return undefined
+    let activo = true
+    perfilEntrenador()
+      .then((perfil) => activo && setCargaPerfil({ intento: intentoPerfil, perfil, error: false }))
+      .catch(() => activo && setCargaPerfil({ intento: intentoPerfil, perfil: null, error: true }))
+    return () => {
+      activo = false
+    }
+  }, [perfilPorApi, intentoPerfil])
+
   // Los entrenadores solo hacen falta para cambiar el entrenador de una franja o asignar un extra. En la API solo el
   // administrador puede listarlos; los demás roles usan lo que trae cada franja.
   const necesitaEntrenadores = role === 'administrador' || (role === 'entrenador' && !servicio.semanaPorApi())
@@ -100,12 +116,22 @@ export default function Horarios() {
   }, [])
 
   const recargar = () => setIntento((n) => n + 1)
-  const cargando = carga.clave !== clave
+  const cargandoSemana = carga.clave !== clave
   const dias = diasDeSemana(lunes)
-  const conMisCategorias = role === 'entrenador' && Boolean(propias)
-  const filtroActivo = filtro === MIS_CATEGORIAS && !conMisCategorias ? TODAS : filtro
+  const cargandoPerfil = perfilPorApi && cargaPerfil.intento !== intentoPerfil
+  const cargando = cargandoSemana || cargandoPerfil
+  const perfil = perfilPorApi && !cargandoPerfil ? cargaPerfil.perfil : null
+  const estado = perfilPorApi ? estadoPerfil({ cargando: cargandoPerfil, error: cargaPerfil.error, perfil }) : null
+  const conVista = estado === 'ok'
+  const soloMias = conVista && vista === VISTA_MIS
+  const propias = perfilPorApi ? (perfil ? perfil.categorias.map((c) => c.nombre) : null) : identidad?.categorias ?? null
+  const esPropia = (s) => esDeMisCategorias(s, perfil)
+  const conMisCategorias = role === 'entrenador' && !perfilPorApi && Boolean(propias)
+  const opcionesCategoria = soloMias ? opcionesDeCategoria({ soloMias, perfil }) : [...(conMisCategorias ? [MIS_CATEGORIAS] : []), ...opcionesDeCategoria({ soloMias: false })]
+  const filtroActivo = opcionesCategoria.includes(filtro) ? filtro : TODAS
   const visibles = carga.sesiones.filter(
-    (s) => (filtroActivo === TODAS || (filtroActivo === MIS_CATEGORIAS ? propias.includes(s.categoria) : s.categoria === filtroActivo))
+    (s) => (!soloMias || esPropia(s))
+      && (filtroActivo === TODAS || (filtroActivo === MIS_CATEGORIAS ? propias.includes(s.categoria) : s.categoria === filtroActivo))
       && (!sede || s.sede === sede),
   )
   const filtrando = filtroActivo !== TODAS || Boolean(sede)
@@ -173,7 +199,7 @@ export default function Horarios() {
     contenido = (
       <AvisoEstado aviso={{ texto: 'No se pudo cargar el horario.', accion: { texto: 'Reintentar', onClick: recargar } }} rol="alert" tono="danger" enfocar={false} />
     )
-  } else if (cargando && carga.sesiones.length === 0) {
+  } else if (cargando && (carga.sesiones.length === 0 || cargandoPerfil)) {
     contenido = <Mensaje icono="clock"><p role="status">Cargando el horario…</p></Mensaje>
   } else if (visibles.length === 0) {
     contenido = (
@@ -190,6 +216,8 @@ export default function Horarios() {
         hoy={hoyTexto}
         modo={compacta ? 'lista' : 'cuadricula'}
         accionesDe={acciones}
+        miId={perfil?.idEntrenador ?? null}
+        esPropia={conVista && vista === VISTA_CLUB ? esPropia : undefined}
         onCancelar={(s) => { setAviso(null); setErrorAccion(null); setPorCancelar(s) }}
         onReactivar={(s) => ejecutar(() => servicio.reactivar(s.idExcepcion), 'Entrenamiento reactivado.', 'No se pudo reactivar el entrenamiento. Intenta de nuevo.')}
         onRotar={(s) => { setAviso(null); setErrorAccion(null); setPorRotar(s) }}
@@ -217,9 +245,25 @@ export default function Horarios() {
         </div>
       )}
 
+      {estado === 'error' && (
+        <AvisoEstado
+          aviso={{ texto: 'No se pudo cargar tu perfil de entrenador, por eso se muestra todo el club.', accion: { texto: 'Reintentar', onClick: () => setIntentoPerfil((n) => n + 1) } }}
+          rol="alert"
+          tono="danger"
+          enfocar={false}
+        />
+      )}
+      {estado === 'sin-categorias' && (
+        <AvisoEstado
+          aviso={{ texto: perfil ? 'Tu cuenta no tiene categorías asignadas, por eso se muestra todo el club.' : 'Tu cuenta no tiene un entrenador vinculado, por eso se muestra todo el club.' }}
+          tono="warning"
+          enfocar={false}
+        />
+      )}
+      {conVista && <FilterChips label="Vista del horario" options={[VISTA_MIS, VISTA_CLUB]} value={vista} onChange={setVista} />}
       <FilterChips
         label="Categoría"
-        options={[...(conMisCategorias ? [MIS_CATEGORIAS] : []), TODAS, ...NOMBRES_CATEGORIAS]}
+        options={opcionesCategoria}
         value={filtroActivo}
         onChange={setFiltro}
       />
