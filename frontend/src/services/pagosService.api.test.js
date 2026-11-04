@@ -96,6 +96,38 @@ describe('tesorero y administrador', () => {
     expect(api.apiListaPaginada).toHaveBeenCalledWith('/pagos', expect.objectContaining({ page: 0, size: 20, sort: 'vencimiento,desc' }))
   })
 
+  it('listarTodosLosCobros recorre las páginas de 100 hasta traerlos todos', async () => {
+    api.apiListaPaginada
+      .mockResolvedValueOnce({ items: [dto({ id: 'a' }), dto({ id: 'b' })], total: 3, pagina: 0, tamano: 100 })
+      .mockResolvedValueOnce({ items: [dto({ id: 'c' })], total: 3, pagina: 1, tamano: 100 })
+    const r = await servicio.listarTodosLosCobros()
+    expect(api.apiListaPaginada).toHaveBeenCalledTimes(2)
+    expect(api.apiListaPaginada).toHaveBeenNthCalledWith(1, '/pagos', { page: 0, size: 100, sort: 'vencimiento,desc' })
+    expect(api.apiListaPaginada).toHaveBeenNthCalledWith(2, '/pagos', { page: 1, size: 100, sort: 'vencimiento,desc' })
+    expect(r.items.map((c) => c.id)).toEqual(['a', 'b', 'c'])
+    expect(r).toMatchObject({ total: 3, truncado: false })
+    expect(r.items[0].estado).toBe('pendiente') // vienen adaptados
+  })
+
+  it('listarTodosLosCobros se detiene en el tope de páginas y avisa con truncado', async () => {
+    api.apiListaPaginada.mockResolvedValue({ items: [dto()], total: 1000, pagina: 0, tamano: 100 })
+    const r = await servicio.listarTodosLosCobros({ maxPaginas: 3 })
+    expect(api.apiListaPaginada).toHaveBeenCalledTimes(3)
+    expect(r).toMatchObject({ truncado: true, total: 1000 })
+    expect(r.items).toHaveLength(3)
+  })
+
+  it('listarTodosLosCobros sin cobros devuelve lista vacía y no pide más páginas', async () => {
+    api.apiListaPaginada.mockResolvedValue({ items: [], total: 0, pagina: 0, tamano: 100 })
+    expect(await servicio.listarTodosLosCobros()).toEqual({ items: [], total: 0, truncado: false })
+    expect(api.apiListaPaginada).toHaveBeenCalledTimes(1)
+  })
+
+  it('listarTodosLosCobros no come el error de la API', async () => {
+    api.apiListaPaginada.mockRejectedValue(Object.assign(new Error('x'), { estado: 503 }))
+    await expect(servicio.listarTodosLosCobros()).rejects.toMatchObject({ estado: 503 })
+  })
+
   it('aprobarPagoManual usa POST /aprobar con fecha, método y nota', async () => {
     api.apiRequest.mockResolvedValue(dto({ estado: 'APROBADO' }))
     const r = await servicio.aprobarPagoManual(ID, { fechaPago: '2026-11-02', metodo: 'EFECTIVO', nota: ' En sede ' })

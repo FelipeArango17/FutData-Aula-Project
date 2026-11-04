@@ -3,8 +3,8 @@
 Sistema de gestión deportiva para la Asociación Deportiva Prado Fútbol Club (PPI, sexto semestre).
 
 > **Esta es la fuente de verdad del proyecto.** El documento PPI ya no se modifica: lo que se decida desde el 1 de noviembre de 2026 se registra aquí. Se actualiza con cada cambio (ver el registro de cambios al final).
-> Última actualización: 2 de noviembre de 2026 (versión 2: alcance de la entrega final; bloque 5).
-> **Entrega final al jurado: sábado 7 de noviembre de 2026.** Para esa fecha toda la aplicación debe funcionar con datos reales, con los cuatro roles y sin maquetas.
+> Última actualización: 3 de noviembre de 2026 (versión 3: estado real de `develop` tras la auditoría del documento).
+> **Congelamiento: viernes 6 de noviembre de 2026. Entrega final al jurado: sábado 7 de noviembre de 2026.** Para esa fecha toda la aplicación debe funcionar con datos reales, con los cuatro roles y sin maquetas.
 
 ## 1. Qué es FutData
 
@@ -18,8 +18,8 @@ Una aplicación **sin maquetas**: cada pantalla del menú de cada rol se conecta
 
 | Quién | Responsabilidad |
 |---|---|
-| Omar Támara | Backend (Spring Boot, base de datos, n8n, Wompi) |
-| Felipe Arango | Frontend y, por definir, módulos de backend (ver sección 9) |
+| Omar Támara | Backend (Spring Boot, base de datos, n8n) |
+| Felipe Arango | Frontend y backend de pagos (Wompi) |
 | Juan Sebastián | Apoyo: colección Postman (HU-057) y revisión de PR. Ya no está en la ruta crítica |
 
 Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-Aula-Project`), ramas desde `develop`, un PR por bloque.
@@ -33,7 +33,8 @@ Trabajo distribuido en Azure DevOps. Código en GitHub (`FelipeArango17/FutData-
 - **Archivos:** Supabase Storage con buckets privados (`fotos`, `documentos`, y el de comprobantes). Solo el backend entra con la llave `service_role` y entrega URL firmadas.
 - **Correos y automatización:** n8n (código 2FA, enlace de contraseña, aviso de documento rechazado).
 - **Frontend:** React.
-- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual, contado con `./mvnw clean test`: **1030 pruebas, 0 fallos, 9 omitidas** (las 9 manuales, que necesitan n8n o Supabase reales: n8n local, Storage, fotos y el enlace de crear contraseña contra el proyecto de prueba). El "874" que figuraba antes era un error de conteo: al sumar los reportes `.txt` de surefire no se contaban las clases `@Nested`. El total real antes del bloque 5 era **928**.
+- **Despliegue (lo verificado en el repositorio):** el backend se empaqueta en un contenedor Docker (`backend/Dockerfile`, perfil `prod`) y está documentado como desplegado en Render, con Cloudflare por delante (por eso la IP del cliente se toma de `CF-Connecting-IP`; ver `backend/README.md`). El frontend se publica en Vercel (`frontend/vercel.json`). n8n corre en **n8n Cloud**: el workflow está publicado, el webhook se autentica con *Header Auth* (cabecera `X-FutData-Token`) y el remitente de los correos es fijo. Se probó con el backend en local contra Cloud; **falta apuntar el backend de Render a esa instancia** (ver 9.5). El `docker-compose` de `n8n/` sigue sirviendo para desarrollo local. El CI de GitHub Actions (`.github/workflows/ci.yml`) prueba y compila, pero no despliega.
+- **Pruebas:** JUnit con Testcontainers (PostgreSQL 17 en Docker). Estado actual de `develop`, contado con `./mvnw clean test`: **1030 pruebas, 0 fallos, 9 omitidas**. El total ya incluye las pruebas del backend de pagos con Wompi. Las 9 omitidas son las manuales, que necesitan n8n o Supabase reales: n8n local, Storage, fotos y el enlace de crear contraseña contra el proyecto de prueba. El "874" que figuraba antes era un error de conteo: al sumar los reportes `.txt` de surefire no se contaban las clases `@Nested`. El total real antes del bloque 5 era **928**.
 
 ## 4. Modelo de datos (resumen)
 
@@ -66,7 +67,7 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 1. **Categoría automática** desde la fecha de nacimiento (regla de año). Se rechaza a quien quede fuera de 4–16.
 2. **Documentos del deportista:** TI, RC, CE y PASAPORTE.
 3. **Sedes:** Horizontes y UVA El Paraíso. La sede va **por franja**, no por categoría.
-4. **Horario:** lunes a sábado. Varias categorías pueden coincidir en hora y sede. Un mismo entrenador no puede tener dos franjas ni dos entrenamientos que se solapen. No hay entrenamientos en fechas pasadas.
+4. **Horario:** lunes a sábado. Varias categorías pueden coincidir en hora y sede. Un mismo entrenador no puede tener dos franjas ni dos entrenamientos que se solapen. No hay entrenamientos en fechas pasadas: esta parte empieza a aplicar con el bloque 4B-2 (cancelaciones y extras), porque hoy ninguna API usa la tabla `entrenamiento`.
 5. **Grupo mañana/tarde** (Cachorros y Semillero, martes y jueves): la franja lo guarda y **el grupo de cada deportista también se guarda en la base** (columna `deportista.grupo`, migración 008). Lo elige el administrador al inscribir o editar; el backend solo lo acepta en Cachorros y Semillero. No cambia el horario ni las categorías.
 6. **Por turnos:** Párvulos, Cachorros y Semillero no tienen entrenador fijo (el club rota quién dirige).
 7. **Documentos de la inscripción (7 tipos):**
@@ -74,7 +75,7 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
    - Si aplica: `PAZ_Y_SALVO`, `CARTA_RENUNCIA`, `TRASPASO_NACIONAL`.
    - La "foto tipo documento" es la **foto del deportista**, no un tipo de documento. La ficha médica ya no existe.
    - Archivos PDF, JPG o PNG, máximo 5 MB, validados por su contenido real (no por la extensión).
-8. **Validación de documentos:** el administrador revisa. Mientras no los haya validado, **la inscripción queda pendiente**. Al rechazar un documento el comentario es obligatorio y se envía por correo al acudiente (n8n).
+8. **Validación de documentos:** el administrador revisa. Mientras no los haya validado, **la inscripción queda pendiente**. Al rechazar un documento el comentario es obligatorio y se envía por correo al acudiente (n8n). El correo llega con el bloque 3: hoy el flujo de n8n solo tiene los eventos `CODIGO_2FA`, `ENLACE_CONTRASENA` y `CAMBIO_ENTRENAMIENTO`.
 9. **Alta de entrenador y de acudiente:** sin contraseña temporal ni cambio forzado. Se envía un enlace para que cada persona cree su propia contraseña. Hecho para el entrenador (bloque 5); el acudiente llega con la inscripción (2B).
    - **Enlace:** vence en **1 hora** (Supabase Auth, `mailer_otp_exp = 3600`) y sirve una sola vez; un enlace nuevo invalida el anterior. Si vence, el administrador lo reenvía. Nunca se registra en logs ni sale en una respuesta de la API.
    - **Contraseña:** entre 8 y 72 caracteres, como mucho 72 bytes en UTF-8 (una ñ o una tilde ocupan 2), con al menos una letra y un número. Mismo mensaje en el frontend y el backend: "La contraseña debe tener entre 8 y 72 caracteres, con al menos una letra y un número."
@@ -84,7 +85,17 @@ Detalle completo en `docs/info-sprints/sprint-1/diccionario-datos.md`.
 10. **Inscripción pendiente:** el estado de la inscripción **se calcula** (no es una columna): está *pendiente* mientras alguno de los 4 documentos obligatorios no esté APROBADO. La API lo devuelve como `estadoInscripcion`. Mientras esté pendiente, el deportista queda **activo**, para que el administrador lo vea en la lista y valide sus documentos.
 11. **Parentesco** (acudiente–deportista): `Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio`, `Otro` (migración 008). El frontend lo muestra con tilde y lo envía sin tilde.
 12. **Protección de pantallas:** sin sesión verificada, cualquier ruta de la aplicación lleva a `/login`; con la sesión de un rol, las rutas de otro rol llevan al inicio del propio.
-13. **Cobros por ciclo de ingreso** (como un gimnasio; reemplaza la generación manual de mensualidades por calendario):
+13. **Pagos (bloque 6, Wompi).** Fuente: `ReglasPago`, `MensualidadProperties`, `GeneradorMensualidades`, `AplicadorTransaccionWompi`, `WompiFirmas` y los `@PreAuthorize` de `PagoController`.
+   - **Moneda y montos:** pesos colombianos (`COP`); a Wompi se envían en centavos. Monto máximo de un cobro: 999.999.999. Concepto de hasta 250 caracteres. Los montos salen siempre de la base, nunca del frontend.
+   - **Tipos de cobro:** `MENSUALIDAD`, `INSCRIPCION`, `TORNEO` y `UNIFORME`. El periodo (primer día del mes) solo es obligatorio en la mensualidad, y no puede haber dos mensualidades no rechazadas del mismo deportista y periodo (`409`).
+   - **Referencia:** `FD-<id del cobro>`, única por cobro y solo con letras, números, guion y guion bajo (lo que Wompi admite).
+   - **Estados guardados:** `PENDIENTE`, `APROBADO` y `RECHAZADO`. "Vencido" no se guarda: es un `PENDIENTE` con vencimiento anterior a hoy.
+   - **Transiciones con Wompi** (las mismas en el webhook y en la conciliación): transacción `APPROVED` sobre un `PENDIENTE` con el mismo monto → `APROBADO` (con fecha, medio de pago, id de la transacción y aviso al acudiente); con monto distinto, no cambia y queda en auditoría. `DECLINED`, `ERROR` o `VOIDED` sobre un `PENDIENTE` → `RECHAZADO` con aviso (no crea un cobro nuevo: para eso está "Reintentar"). `VOIDED` sobre un `APROBADO` con el mismo id → `RECHAZADO` y auditoría. `APPROVED` sobre un `RECHAZADO` (el checkout aprobó después de un rechazo): si ya hay otro cobro equivalente aprobado, no cambia nada y queda en auditoría como posible pago duplicado; si no, los cobros pendientes equivalentes pasan a `RECHAZADO` ("Reemplazado") y este se aprueba. Un evento repetido (mismo id de transacción) se ignora. `PENDING` no cambia nada.
+   - **Medios de pago de Wompi:** tarjeta (`CARD`), Nequi, PSE, QR Bancolombia y botón Bancolombia; cualquier otro queda como "Wompi (otro medio)". La aprobación manual es para efectivo o transferencia.
+   - **Quién hace qué:** el administrador crea cobros y genera mensualidades; el administrador y el tesorero listan, concilian con Wompi, aprueban pagos manuales y rechazan cobros pendientes; el acudiente ve los cobros de sus deportistas, inicia el pago en Wompi y reintenta un cobro rechazado (de un deportista que no es suyo recibe `404`, no `403`); el comprobante en PDF (solo de cobros aprobados) lo descargan administrador, tesorero y acudiente.
+   - **Mensualidades automáticas:** si está activa (`FUTDATA_MENSUALIDAD_GENERACION_AUTOMATICA`), cada día a las 6:00, hora de Bogotá (`America/Bogota`), se crea la mensualidad `PENDIENTE` del mes en curso de cada deportista que no la tenga. Es idempotente: correrla dos veces no duplica nada. El monto (`FUTDATA_MENSUALIDAD_MONTO`) lo define el club (**por confirmar**); mientras no esté configurado, no se generan mensualidades (la generación manual responde `409`). Vence el día del mes de `FUTDATA_MENSUALIDAD_DIA_VENCIMIENTO`, o el último día si el mes es más corto. Hoy alcanza a **todos** los deportistas de la tabla, sin filtrar por `activo` ni por `estadoInscripcion`. **Por confirmar** si debe excluir a los inactivos. Un deportista con la inscripción pendiente queda activo (regla 10), así que, aunque se excluyan los inactivos, seguiría recibiendo la mensualidad. Esta generación queda reemplazada por los cobros por ciclo de ingreso (regla 14): `POST /api/pagos/generar-mensualidades` queda obsoleto y la tarea diaria de n8n llama a `POST /api/pagos/generar-ciclos`.
+   - **Firma del webhook:** `POST /api/pagos/webhook/wompi` es público. Se calcula el checksum (SHA-256) con las propiedades que indica el evento, su `timestamp` y el secreto de eventos, y solo se acepta si coincide con el encabezado `X-Event-Checksum` **y** con `signature.checksum` (comparación en tiempo constante). Firma inválida o ausente: `401`. Sin el secreto configurado: `503` `PAGOS_NO_CONFIGURADOS`. Con firma válida responde `200` aunque ignore el evento. El checkout se firma en el servidor con el secreto de integridad.
+14. **Cobros por ciclo de ingreso** (como un gimnasio; reemplaza la generación manual de mensualidades por calendario):
    - **Ancla:** `deportista.fecha_registro`. La fecha de cobro del ciclo *n* es la fecha de registro (n = 0) o, para n ≥ 1, el mismo día del mes *n* meses después, acotado al último día de ese mes. Siempre se calcula desde la fecha de registro, nunca desde el cobro anterior, así que no hay corrimiento: registro el 31 de octubre → 31 oct, 30 nov, 31 dic, 31 ene, 28 feb (29 en bisiesto).
    - **Mensualidad:** el periodo es el primer día del mes de la fecha de cobro; vence en esa fecha (si el generador corre tarde y ya pasó, vence hoy). El **ciclo vigente** es la fecha de cobro más reciente menor o igual a *hoy + 5 días*. Se crea si el deportista no tiene **ninguna** mensualidad de ese periodo, en cualquier estado (si el administrador rechazó una a propósito, no se regenera). Nunca se crean ciclos anteriores: no hay cobros retroactivos.
    - **Ingreso:** si `fecha_registro` ≥ *hoy − 7 días*, se crean además una vez la **inscripción** y el **uniforme** (si el deportista no tiene ya un cobro de ese tipo), con vencimiento hoy.
@@ -151,22 +162,56 @@ Los entrenadores nombrados todavía no existen en la base: al crearlos se les as
 
 Los endpoints existentes están en `backend/README.md` y en la colección Postman (HU-057, pendiente).
 
-**Ya implementados:**
+**Ya implementados (todos en `develop`):**
 
-- Deportistas (bloque 2A, en la rama `feat/deportistas-api`; detalle en `backend/README.md`):
+- Deportistas (bloque 2A, en `develop`; detalle en `backend/README.md`):
   - `GET /api/deportistas`: paginado (`page`, `size` hasta 100, `sort`, filtros `activo` y `categoria`); responde `content`, `page`, `size`, `totalElements` y `totalPages`. ADMINISTRADOR y ENTRENADOR (este último sin documento, teléfono, dirección ni `estadoInscripcion`).
   - `GET /api/deportistas/{id}`, `POST /api/deportistas` y `PUT /api/deportistas/{id}`: solo ADMINISTRADOR; documento repetido da 409.
   - `POST` y `DELETE /api/deportistas/{id}/foto`: solo ADMINISTRADOR; JPG o PNG por su contenido, máximo 5 MB; la respuesta trae una URL firmada de 60 minutos.
-- Horario del club (bloque 4A, en la rama `feat/horario-club`; detalle en `backend/README.md`):
+- Horario del club (bloque 4A, en `develop`; detalle en `backend/README.md`):
   - `GET /api/horario-club` y `GET /api/horario-club/{id}`: ADMINISTRADOR, TESORERO, ENTRENADOR y ACUDIENTE. Filtros opcionales `categoria` (nombre exacto), `entrenador` (UUID) y `sede`; ordenado por día, hora de inicio y categoría.
   - `POST /api/horario-club`, `PUT /api/horario-club/{id}` (reemplaza todo) y `DELETE /api/horario-club/{id}` (`204`): solo ADMINISTRADOR.
   - Horas en `HH:mm`. `idEntrenador` null = "por turnos"; el entrenador inactivo solo se rechaza al asignarlo o cambiarlo. Grupo solo en Cachorros y Semillero.
   - El mismo entrenador con dos franjas que se solapan el mismo día: `409` "Ese entrenador ya tiene otra franja que se cruza con este horario". Las contiguas no se cruzan y categorías distintas pueden coincidir en hora y sede.
-- Alta de entrenadores con enlace (bloque 5, en la rama `feat/alta-entrenador-enlace`; detalle en `backend/README.md`):
+- Alta de entrenadores con enlace (bloque 5, en `develop`; detalle en `backend/README.md`):
   - `POST /api/entrenadores` (solo ADMINISTRADOR) ahora también crea la cuenta de acceso y responde `201` con `correoEnviado` (`true` o `false`); `409` si el correo ya es de otra cuenta y `503` si Supabase Auth no responde (no se guarda nada). Las demás respuestas de entrenadores no traen `correoEnviado`.
   - `POST /api/entrenadores/{id}/reenviar-enlace` (solo ADMINISTRADOR): `204` sin cuerpo; `404`; `409` (inactivo, sin correo o correo de otra cuenta); `429` con `Retry-After` (un envío por minuto); `503` (Supabase o el correo fallan).
   - `POST /api/auth/crear-contrasena` (**público**, sin token ni sesión) con `{ token, contrasena }`: `200` con un mensaje y sin tokens; `400` de política con `campos: ["contrasena"]`; `400` de enlace inválido, vencido o usado (mensaje único, sin `campos`); `429` con `Retry-After`; `503` si Supabase Auth falla.
   - `PUT /api/entrenadores/{id}`: `409` si intenta cambiar el correo de un entrenador con cuenta.
+- Pagos con Wompi (bloque 6, Felipe, en `develop`; detalle en `backend/README.md`):
+
+  | Ruta | Roles | Qué hace |
+  |---|---|---|
+  | `POST /api/pagos` | ADMINISTRADOR | Crea un cobro en estado PENDIENTE |
+  | `GET /api/pagos` | ADMINISTRADOR, TESORERO | Lista los cobros (paginado) |
+  | `GET /api/pagos/mis-pagos` | ACUDIENTE | Los cobros de sus deportistas |
+  | `POST /api/pagos/{id}/iniciar-wompi` | ACUDIENTE | Devuelve los datos para abrir el checkout de Wompi |
+  | `POST /api/pagos/{id}/reintentar` | ACUDIENTE | Reintenta un cobro rechazado |
+  | `POST /api/pagos/{id}/conciliar` | ADMINISTRADOR, TESORERO | Concilia el cobro con Wompi |
+  | `POST /api/pagos/{id}/aprobar` | ADMINISTRADOR, TESORERO | Aprueba un pago manual |
+  | `POST /api/pagos/{id}/rechazar` | ADMINISTRADOR, TESORERO | Rechaza un cobro pendiente |
+  | `GET /api/pagos/{id}/comprobante` | ADMINISTRADOR, TESORERO, ACUDIENTE | Comprobante en PDF |
+  | `POST /api/pagos/generar-mensualidades` | ADMINISTRADOR | Genera las mensualidades de un periodo |
+  | `POST /api/pagos/webhook/wompi` | Público (sin token) | Recibe el evento de Wompi (`transaction.updated`) y verifica su firma antes de usarlo |
+
+- Autenticación, usuarios, categorías, salud y el resto de rutas de entrenadores (detalle en `backend/README.md`):
+
+  | Ruta | Roles | Qué hace |
+  |---|---|---|
+  | `POST /api/auth/2fa/codigo` | Cualquier rol, con el JWT de Supabase y sin 2FA todavía | Genera el código de verificación y lo envía al correo (`202`) |
+  | `POST /api/auth/2fa/reenviar` | Cualquier rol, con el JWT de Supabase y sin 2FA todavía | Reenvía el código (uno por minuto) |
+  | `POST /api/auth/2fa/verificar` | Cualquier rol, con el JWT de Supabase y sin 2FA todavía | Verifica el código de seis dígitos; solo la sesión del token queda verificada |
+  | `POST /api/auth/logout` | Cualquier rol con sesión verificada | Cierra la sesión del token (`204`); las demás sesiones del usuario no cambian |
+  | `GET /api/usuarios/yo` | Cualquier rol con sesión verificada | Perfil del usuario autenticado |
+  | `GET /api/usuarios` y `GET /api/usuarios/{id}` | ADMINISTRADOR | Lista los usuarios o consulta uno |
+  | `POST /api/usuarios` | ADMINISTRADOR | Crea un usuario y lo invita por correo (invitación de Supabase) |
+  | `PUT /api/usuarios/{id}/rol` | ADMINISTRADOR | Cambia el rol de un usuario |
+  | `POST /api/usuarios/{id}/revocar` y `POST /api/usuarios/{id}/restablecer` | ADMINISTRADOR | Bloquea o restaura el acceso de un usuario |
+  | `GET /api/categorias` | ADMINISTRADOR, ENTRENADOR | Lista las categorías en el orden oficial, con su entrenador |
+  | `GET /api/health` | Público (sin token) | Estado del backend y de la base de datos (`503` si la base no responde) |
+  | `GET /api/entrenadores` y `GET /api/entrenadores/{id}` | ADMINISTRADOR | Lista los entrenadores o consulta uno |
+  | `PUT /api/entrenadores/{id}/categorias` | ADMINISTRADOR | Asigna las categorías de un entrenador |
+  | `PATCH /api/entrenadores/{id}/estado` | ADMINISTRADOR | Activa o desactiva un entrenador (con cuenta: bloquea o restaura su acceso, regla 9) |
 
 **Previstos:**
 
@@ -187,7 +232,6 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
     - `DELETE /api/horario-semana/extras/{idExcepcion}`.
   - Todas las de escritura responden `{ "sesion": {...la sesión resultante, o null si se borró...}, "avisoEnviado": true | false | null }`. `true`: n8n recibió el aviso a los acudientes de la categoría (no garantiza que el correo llegue; `CAMBIO_ENTRENAMIENTO` es asíncrono). `false`: no se pudo avisar, pero la operación **sí** quedó hecha. `null`: no había a quién avisar.
   - Validaciones: no cancelar ni crear en fechas pasadas (`400`); al cancelar, el día de la semana de la fecha debe coincidir con el de la franja (`400`); no cancelar dos veces la misma franja y fecha (`409`); extras de lunes a sábado, sede válida, `horaFin` > `horaInicio`, grupo solo para Cachorros y Semillero; cruce del mismo entrenador contra franjas no canceladas y otros extras (`409` "Ese entrenador ya tiene otra franja que se cruza con este horario"). Un extra puede quedar fuera de las franjas fijas.
-- Pagos: crear el cobro (mensualidad), generar los cobros por ciclo de ingreso (`POST /api/pagos/generar-ciclos`, regla 13), iniciar el pago con Wompi, `POST /api/pagos/webhook/wompi` (firma verificada), consultar el estado, comprobante en PDF, estado de cuenta del acudiente y vista del tesorero.
 - Grupos, asistencia, torneos, reportes y avisos: por definir en la sección 9.
 
 ## 9. Estado y plan
@@ -197,24 +241,26 @@ Los endpoints existentes están en `backend/README.md` y en la colección Postma
 | Bloque | Qué incluye | Responsable | Estado |
 |---|---|---|---|
 | 1 | Migración 007, buckets, categorías, sedes, `franja_horario` | Omar | **Hecho** (en `develop` y en la base real) |
-| 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición. Incluye la migración 008 (parentesco, grupo y activo) | Omar | Hecho en la rama `feat/deportistas-api` (pendiente de merge) |
-| 4A | API del horario fijo del club (`franja_horario`, `/api/horario-club`), sin migración nueva | Omar | Hecho en la rama `feat/horario-club` (pendiente de merge) |
-| 5 | Alta de entrenadores con enlace para crear la contraseña, reenvío y desactivación con bloqueo de la cuenta, sin migración nueva | Omar | Hecho en la rama `feat/alta-entrenador-enlace` (pendiente de merge) |
-| 2C | **Mis jugadores (acudiente):** `GET /api/acudientes/me/deportistas` y `GET /api/acudientes/me/deportistas/{id}` (ver abajo). No depende de nada nuevo; va antes del bloque 3 | Omar | Pendiente |
-| 4B | Entrenamientos (HU-026), redefinido: las franjas son fijas todo el año y solo se registran **excepciones por fecha** (`CANCELADO` y `EXTRA`) en una **tabla nueva de excepciones** (migración 010), sin tocar la tabla `entrenamiento`. `GET /api/horario-semana?fecha=` arma la semana con las franjas y sus excepciones. El acudiente solo ve la semana en curso. Cancelar una sesión y crear una extra: el administrador y el entrenador de la categoría. Se divide en 4B-1 y 4B-2 | Omar | Pendiente |
+| 2A | API de deportistas: categoría calculada al leer, sin CC y con RC, paginación, foto, posición. Incluye la migración 008 (parentesco, grupo y activo) | Omar | **Hecho** (en `develop`) |
+| 4A | API del horario fijo del club (`franja_horario`, `/api/horario-club`), sin migración nueva | Omar | **Hecho** (en `develop`) |
+| 5 | Alta de entrenadores con enlace para crear la contraseña, reenvío y desactivación con bloqueo de la cuenta, sin migración nueva | Omar | **Hecho** (en `develop`, PR #79) |
+| 2C | **Mis jugadores (acudiente):** `GET /api/acudientes/me/deportistas` y `GET /api/acudientes/me/deportistas/{id}` (ver abajo). No depende de nada nuevo | Omar | Pendiente |
+| 4B | Entrenamientos (HU-026), redefinido: las franjas son fijas todo el año y solo se registran **excepciones por fecha** (`CANCELADO` y `EXTRA`) en una **tabla nueva de excepciones** (migración 010), sin tocar la tabla `entrenamiento`. `GET /api/horario-semana?fecha=` arma la semana con las franjas y sus excepciones. El acudiente solo ve la semana en curso. Cancelar una sesión y crear una extra: el administrador y el entrenador de la categoría. Se divide en 4B-1 y 4B-2. **El frontend ya espera este contrato** (`frontend/src/utils/semanaApi.js`): con la API real, la pantalla "Horarios" lee `/api/horario-club` y oculta cancelar y extras hasta que exista, y necesita el `idEntrenador` en la sesión (lo trae el 4B-1) para saber sobre qué categorías actúa el entrenador | Omar | Pendiente |
 | 4B-1 | Sin migración: `GET /api/usuarios/yo` con el bloque `entrenador` para ENTRENADOR y `GET /api/horario-semana` **solo con franjas** (`estado` siempre `ACTIVO`, sin excepciones ni extras) | Omar | Pendiente |
 | 4B-2 | Migración 010 (tabla nueva de excepciones; `entrenamiento` no se toca): cancelaciones y extras con sus reglas, y los avisos por `CAMBIO_ENTRENAMIENTO`. Primera versión: cancelar, deshacer, crear y eliminar extra; editar un extra después, si da el tiempo | Omar | Pendiente |
 | 3 | Documentos: subir, aprobar, rechazar, correo | Omar | Pendiente |
 | 2B | Inscripción única (la migración 008 llegó con el 2A) | Omar | Pendiente |
 
-Orden acordado: 2A y 4A (hechos), después **5 → 2C → 4B-1 → 3 → 2B → 4B-2** (4A es el horario del club; 4B, los entrenamientos, HU-026).
+Hechos: 1, 2A, 4A y 5. Orden pendiente: **2C (Mis jugadores, acudiente) → 4B-1 (`usuarios/yo` con `entrenador` y `GET /api/horario-semana` sin excepciones) → 4B-2 (excepciones: cancelar y extras, migración 010, avisos) → 3 (documentos) → 2B (inscripción única)**. 4A es el horario del club; 4B, los entrenamientos (HU-026).
+
+**Si falta tiempo, el 2B es el primero que se recorta.** Congelamiento: viernes 6 de noviembre. Entrega: sábado 7 de noviembre.
 
 **Bloque 2C — Mis jugadores (acudiente).**
 
 - **Motivo:** `GET /api/deportistas` es solo para ADMINISTRADOR y ENTRENADOR; no existe ningún endpoint para que un acudiente vea a sus propios hijos, así que las pantallas acudiente/Jugadores, Ficha e Inicio no se pueden conectar.
 - **Alcance:** `GET /api/acudientes/me/deportistas` (lista de sus jugadores vinculados, con foto firmada y categoría derivada) y `GET /api/acudientes/me/deportistas/{id}` (ficha de uno de sus hijos; si no es suyo, `404`, no `403`). Solo rol ACUDIENTE; el acudiente se identifica por el token, nunca por un id enviado por el frontend. Reutiliza el DAO, la categoría derivada y las URL firmadas del 2A.
 - **Pregunta abierta:** si el acudiente ve `estadoInscripcion` y qué documentos faltan de sus hijos (propuesta: sí, solo de los suyos; se cierra en el bloque 3).
-- **Responsable:** Omar. No depende de nada nuevo; va antes del bloque 3.
+- **Responsable:** Omar. No depende de nada nuevo; es el siguiente en el orden.
 
 ### 9.2 Módulos nuevos para la entrega final
 
@@ -222,21 +268,25 @@ Estos módulos están en el menú de los cuatro roles y hoy son maquetas. Ningun
 
 | Bloque | Módulo | Quién lo usa | Responsable |
 |---|---|---|---|
-| 6 | **Pagos con Wompi** (cobro, pago en línea, webhook, comprobante PDF, estado de cuenta) | acudiente, tesorero, administrador | Omar (backend) y Felipe (pantallas). **Backend en curso** (rama `feature/back-pagos-wompi`: migración 009, endpoints, webhook y conciliación). **Prioridad alta:** el profesor insistió en este punto; Omar decide si lo adelanta antes del bloque 3 |
+| 6 | **Pagos con Wompi** (cobro, pago en línea, webhook, comprobante PDF, estado de cuenta) | acudiente, tesorero, administrador | Felipe (backend y pantallas). **Backend fusionado** en `develop` (PR #72: migración 009, endpoints, webhook con firma y conciliación) y **frontend fusionado** (PR #74). Pendiente: llaves y cuenta de pruebas (sandbox) de Wompi, y la prueba de punta a punta. Prioridad alta: el profesor insistió en este punto |
 | 7 | Grupos (de entrenamiento) y asistencia | administrador, entrenador | Por definir |
 | 8 | Torneos | administrador, entrenador | Por definir |
 | 9 | Reportes y avisos / notificaciones | tesorero, administrador, acudiente | Por definir |
 | 10 | Dashboard, pantallas de inicio por rol, respaldo, usuarios y roles | todos | Por definir |
 
-Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa en cuanto se acuerde. Migraciones nuevas desde la 009.
+Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa en cuanto se acuerde. Migraciones nuevas desde la 010; la 010 queda reservada para el 4B-2.
 
 ### 9.3 Frontend (Felipe)
 
 | Bloque | Qué hace el frontend | Estado |
 |---|---|---|
-| F-seg | Protección de rutas: sin sesión verificada no se entra; el rol sale de la sesión | En curso |
-| F0 | `apiClient` con subida de archivos y paginación; interruptor de API real por servicio (como `entrenadoresService`); parentescos alineados; quitar la fecha fija del 22 de octubre | Pendiente |
-| F-2A, F-4, F-5, F-3, F-2B, F-6… | Conectar cada pantalla a su bloque cuando Omar entregue los endpoints | Pendiente |
+| F-seg | Protección de rutas: sin sesión verificada no se entra; el rol sale de la sesión | Fusionado (PR #68) |
+| F0 | `apiClient` con subida de archivos y paginación; interruptor de API real por servicio (como `entrenadoresService`); parentescos alineados; quitar la fecha fija del 22 de octubre | Fusionado (PR #70) |
+| F-6 | Pagos conectados a la API | Fusionado (PR #74) |
+| F-5 | Crear la contraseña desde el enlace (PR #75); usuarios conectados a la API y enlaces de invitación (PR #80); los enlaces del correo van a `/restablecer` (PR #81) | Fusionado |
+| F-4 | Horarios unificados, conectados a `/api/horario-club` (cancelar y extras quedan ocultos con la API real hasta el 4B) | Fusionado (PR #77) |
+| F-2A | Deportistas conectados a la API | Fusionado (PR #78) |
+| F-2C, F-4B, F-3, F-2B | Conectar cada pantalla a su bloque cuando Omar entregue los endpoints | Pendiente |
 
 ### 9.4 Cuándo se considera terminado un módulo
 
@@ -248,12 +298,18 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 ### 9.5 Pendientes de información
 
 - Llaves y cuenta de pruebas (sandbox) de Wompi.
+- n8n corre en n8n Cloud (workflow publicado, *Header Auth* con la cabecera `X-FutData-Token`, remitente fijo), probado con el backend en local. **Pendiente:** actualizar en Render `N8N_BASE_URL`, `N8N_WEBHOOK_TOKEN` y `FRONTEND_URL` y repetir las pruebas de 2FA y alta de entrenador contra el backend desplegado.
+- **Deuda (n8n Cloud):** el JSON para Cloud se agregará al repositorio junto al actual (sin `$env` y sin el nodo **Validar token**). Con *Header Auth*, una petición sin token recibe `403` y no `401`, y `N8nClient` solo reconoce el `401` como "token mal configurado" (un `403` lo trata como código inesperado).
 - Confirmar el reparto de los bloques 7 a 10.
+- Pasos de despliegue del bloque 5, **pendientes de confirmar** que se hicieron:
+  - Workflow publicado en n8n Cloud, con `ENLACE_CONTRASENA` y el `CODIGO_2FA` asíncrono.
+  - Ajustes de Supabase Auth: vencimiento del enlace de 1 hora y una política de contraseña que no sea más estricta que la nuestra (ver `docs/GUIA-SUPABASE-EQUIPO.md`).
+  - Revisar en los logs de Render que las peticiones lleguen con `CF-Connecting-IP`; si no llega, el límite por IP se vuelve uno solo para todos.
 
 ## 10. Convenciones
 
 - Una rama por bloque desde `develop`; PR a `develop`, el otro lo revisa.
-- Toda migración se prueba primero en un proyecto de prueba de Supabase y se aplica en la real con backup. Una migración ya aplicada no se edita: se crea una nueva.
+- Toda migración se prueba primero en un proyecto de prueba de Supabase y se aplica en la real con backup. Una migración ya aplicada no se edita: se crea una nueva. Hoy existen de la 001 a la 009; las nuevas van desde la 010.
 - Las pruebas corren con `.\mvnw.cmd test` desde `backend\` (Docker abierto) y no tocan la base real.
 - **El total de pruebas se cuenta siempre con `./mvnw clean test`** (`.\mvnw.cmd clean test` en Windows) y se toma de la línea final de Maven (`Tests run: N, Failures: 0, Errors: 0, Skipped: M`). Sin `clean` quedan reportes viejos en `target/`, y sumar los `.txt` de surefire no cuenta las clases `@Nested`.
 - Cada bloque termina con este archivo actualizado.
@@ -273,4 +329,5 @@ Cada módulo "por definir" se reparte entre Omar y Felipe; la tabla se completa 
 | 2026-11-02 | Latencia del 2FA (rama `fix/latencia-2fa`): `CODIGO_2FA` pasa a asíncrono en n8n (valida, responde `202` y después envía). `N8nClient` ya aceptaba `200` y `202`, así que el orden de despliegue no importa. Si el SMTP falla después del `202`, el código queda guardado, el correo no llega y el usuario usa "Reenviar código"; la falla solo queda en el registro enmascarado de n8n. **874 pruebas, 0 fallos, 7 omitidas** (`develop` tenía 873: el 875 anterior contaba reportes viejos de `target/`). |
 | 2026-11-02 | **Corrección del conteo de pruebas.** El "874" estaba mal contado: se sumaban los `.txt` de surefire, que no incluyen las clases `@Nested` (`EntrenadorServiceImplTest` y `JwtValidatorTest`). Con `./mvnw clean test`, el total real antes del bloque 5 era **928 pruebas, 0 fallos, 7 omitidas**. Desde ahora se cuenta siempre así (sección 10). |
 | 2026-11-02 | Bloque 5 (rama `feat/alta-entrenador-enlace`, pendiente de merge), sin migración nueva. Alta de entrenador con cuenta de Supabase Auth sin contraseña, `usuario`, `usuario_rol` e `id_usuario` en una transacción (con compensación en Auth) y, después del commit, enlace para crear la contraseña por n8n (`ENLACE_CONTRASENA`, síncrono, 15 s de espera) con `correoEnviado`. Reenvío (`POST /api/entrenadores/{id}/reenviar-enlace`, uno por minuto) y `POST /api/auth/crear-contrasena` público (política antes de verificar, `400` genérico, `429`, `503`). El enlace vence en 1 hora. Política de contraseña 8–72 caracteres y máximo 72 bytes, con letra y número. Límites en memoria (por IP con `CF-Connecting-IP`, por enlace y global). Desactivar un entrenador con cuenta bloquea su acceso. `FRONTEND_URL` obligatoria en prod. Deudas: administrador y tesorero siguen con la invitación de Supabase; el correo de un entrenador con cuenta no se puede editar. Nuevo orden: 5 → 2C → 4B-1 → 3 → 2B → 4B-2, con 4B redefinido (excepciones por fecha, migración 010). Corrección: bloquear y restaurar una cuenta en Supabase Auth usaba `PATCH`, que esa ruta no acepta (desactivar un entrenador con cuenta daba `503`, y revocar y restablecer de `/api/usuarios` nunca funcionaron); ahora usa `PUT`, traduce cada respuesta y un `404` (cuenta inexistente, probable mezcla de proyectos `SUPABASE_URL`/`DB_URL`) deja desactivar y responde `409` al reactivar. **1030 pruebas, 0 fallos, 9 omitidas.** |
-| 2026-11-03 | Cobros por ciclo de ingreso (rama `feature/cobros-por-ciclo`, sin migración): regla 13, `POST /api/pagos/generar-ciclos` (administrador por JWT o `X-Cron-Token` con `N8N_CRON_TOKEN`, opcional), evento `RECORDATORIO_PAGO` para n8n y variables `FUTDATA_COBROS_*`. `generar-mensualidades` queda obsoleto. |
+| 2026-11-03 | Versión 3, tras auditar el documento contra `develop`. **Fusionados en `develop`:** 2A (`a751aa9`), 4A (`fce17f3`), 5 (PR #79) y 6, pagos con Wompi (PR #72). **El backend de Wompi lo hizo Felipe**, no Omar (se corrigen §2 y §9.2). Frontend fusionado: PR #68 (protección de rutas), #70 (base de la API), #74 (pagos), #75 (crear contraseña), #77 (horarios), #78 (deportistas), #80 (usuarios) y #81 (enlaces del correo). §8 lista todas las rutas reales, con pagos ya implementado. §5 agrega la regla 13 (pagos) y aclara las reglas 4 y 8. Nuevo orden pendiente: 2C → 4B-1 → 4B-2 → 3 → 2B; el 2B es el primero que se recorta. Congelamiento el viernes 6. **Corrección de las migraciones:** la 009 ya está usada (pagos); las nuevas van desde la 010, reservada para el 4B-2. Despliegue: solo se deja lo verificado en el repositorio; dónde corre n8n en producción queda por confirmar. |
+| 2026-11-03 | Cobros por ciclo de ingreso (rama `feature/cobros-por-ciclo`, sin migración): regla 14, `POST /api/pagos/generar-ciclos` (administrador por JWT o `X-Cron-Token` con `N8N_CRON_TOKEN`, opcional), evento `RECORDATORIO_PAGO` para n8n y variables `FUTDATA_COBROS_*`. `generar-mensualidades` queda obsoleto. |
