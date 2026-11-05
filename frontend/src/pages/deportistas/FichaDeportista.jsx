@@ -66,7 +66,8 @@ function Ficha({ id }) {
 
   useEffect(() => {
     let activo = true
-    Promise.all([obtenerFichaDeportista(id, actor), listarCategorias()])
+    // Con la API las categorías solo sirven para el formulario: si fallan, la ficha igual se muestra (trae el nombre de su categoría)
+    Promise.all([obtenerFichaDeportista(id, actor), porApi ? listarCategorias().catch(() => []) : listarCategorias()])
       .then(([ficha, categorias]) => {
         if (!activo) return
         setCarga({ intento, ficha, categorias, error: null })
@@ -96,7 +97,7 @@ function Ficha({ id }) {
   const cargando = carga.intento !== intento
   const ficha = carga.ficha
   const deportista = ficha?.deportista
-  const nombreCategoria = (idCategoria) => carga.categorias.find((c) => c.id === idCategoria)?.nombre ?? null
+  const nombreCategoria = (idCategoria) => carga.categorias.find((c) => c.id === idCategoria)?.nombre ?? deportista?.categoria ?? null
 
   function editar() {
     setExito(null)
@@ -111,7 +112,8 @@ function Ficha({ id }) {
   }
 
   async function guardar(valores) {
-    const resultado = await actualizarDeportista(id, valores, actor)
+    const { activo, ...datos } = valores
+    const resultado = await actualizarDeportista(id, activo === undefined ? datos : { ...datos, activo: activo === 'activo' }, actor)
     setCarga((previa) => ({ ...previa, ficha: resultado }))
     setModo('lectura')
     setExito({ texto: 'Ficha actualizada.' })
@@ -177,6 +179,7 @@ function Ficha({ id }) {
       fechaNacimiento: deportista.fechaNacimiento, telefono: deportista.telefono, direccion: deportista.direccion,
       idCategoria: deportista.idCategoria === null ? '' : String(deportista.idCategoria),
       grupoEntrenamiento: deportista.grupoEntrenamiento ?? '', posicion: deportista.posicion ?? '',
+      ...(porApi ? { activo: deportista.activo ? 'activo' : 'inactivo' } : {}),
     }
     contenido = (
       <Card className="w-full max-w-2xl">

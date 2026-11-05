@@ -530,12 +530,13 @@ async function crearDeportistaApi(datos) {
   return adaptarDeportista(creado)
 }
 
-// PUT reemplaza todos los campos editables y exige `activo`: se manda el actual (la ficha no cambia el estado). Si nada cambió
+// PUT reemplaza todos los campos editables y exige `activo`: se manda el de `cambios.activo` (boolean) o, si no viene, el actual. Si nada cambió
 // no se llama al backend (SIN_CAMBIOS, como en el modo de ejemplo).
 async function actualizarDeportistaApi(id, cambios) {
   const actual = await obtenerDeportistaApi(id)
   const propuesto = { ...comoFormulario(actual), ...Object.fromEntries(Object.entries(cambios ?? {}).filter(([campo]) => CAMPOS_EDITABLES.includes(campo))) }
-  const cuerpo = cuerpoDeportista(propuesto, { activo: actual.activo })
+  const activo = typeof cambios?.activo === 'boolean' ? cambios.activo : actual.activo
+  const cuerpo = cuerpoDeportista(propuesto, { activo })
   if (JSON.stringify(cuerpo) === JSON.stringify(cuerpoDeportista(comoFormulario(actual), { activo: actual.activo }))) {
     throw Object.assign(new Error('No hiciste ningún cambio.'), { codigo: 'SIN_CAMBIOS' })
   }

@@ -8,8 +8,10 @@ import PasoJugador from '../../components/inscribir/PasoJugador.jsx'
 import PasoAcudiente from '../../components/inscribir/PasoAcudiente.jsx'
 import PasoDocumentos from '../../components/inscribir/PasoDocumentos.jsx'
 import PasoConfirmar from '../../components/inscribir/PasoConfirmar.jsx'
+import InscribirConApi from '../../components/inscribir/InscribirConApi.jsx'
 import { useActor } from '../../context/useActor.js'
 import { ESTADO_INICIAL, PASOS, ULTIMO_PASO, reducirAsistente } from '../../services/asistenteInscripcion.js'
+import { deportistasPorApi } from '../../services/deportistasService.js'
 import { inscribirJugador } from '../../services/inscribirJugadorService.js'
 import { TIPOS_DOCUMENTO_CLUB } from '../../utils/documentosClub.js'
 
@@ -26,7 +28,12 @@ const SUBTITULOS = [
 const VOLVER = '/administrador/deportistas'
 
 // Cada "Inscribir otro jugador" empieza un asistente nuevo (cambia la clave), sin recargar la página: los datos en memoria se conservan
+// Con la API (módulo "deportistas") no hay asistente: el backend solo acepta los datos del jugador y su foto (InscribirConApi).
 export default function Inscribir() {
+  return deportistasPorApi() ? <InscribirConApi /> : <InscribirConAsistente />
+}
+
+function InscribirConAsistente() {
   const [asistente, setAsistente] = useState(0)
   return <Asistente key={asistente} onOtro={() => setAsistente((n) => n + 1)} />
 }

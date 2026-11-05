@@ -48,7 +48,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const [ocupado, setOcupado] = useState(null)
   const [exito, setExito] = useState(null)
   const [errorAccion, setErrorAccion] = useState(null)
-  const [deportistas, setDeportistas] = useState([])
+  // Deportistas ACTIVOS para «Crear cobro». `clave` es el intento con el que se leyeron (distinto del actual = cargando).
+  const [reintentoDeportistas, setReintentoDeportistas] = useState(0)
+  const [cargaDeportistas, setCargaDeportistas] = useState({ clave: null, lista: [], error: null })
 
   // Con el filtro de mes por vencimiento se leen todos los cobros una vez por estado + tipo + mes y se pagina aquí (ver lecturaCobros.js):
   // cambiar de página no vuelve a pedirlos. `filtros` no incluye la página en ese modo, así el efecto no se dispara.
@@ -75,10 +77,23 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   }, [filtros, clave])
 
   // El administrador elige a quién crearle un cobro
+  // Con la API se recorren todas las páginas (de 100 en 100); se vuelve a leer cada vez que se abre el panel
+  const pideDeportistas = esAdministrador && panel?.tipo === 'crear'
   useEffect(() => {
-    if (!esAdministrador || panel?.tipo !== 'crear' || deportistas.length > 0) return
-    listarDeportistas().then(setDeportistas).catch(() => setDeportistas([]))
-  }, [esAdministrador, panel, deportistas.length])
+    if (!pideDeportistas) return undefined
+    let activo = true
+    listarDeportistas({ estado: 'activos' })
+      .then((lista) => activo && setCargaDeportistas({ clave: reintentoDeportistas, lista, error: null }))
+      .catch((error) => activo && setCargaDeportistas({ clave: reintentoDeportistas, lista: [], error }))
+    return () => {
+      activo = false
+    }
+  }, [pideDeportistas, reintentoDeportistas])
+  const cargandoDeportistas = cargaDeportistas.clave !== reintentoDeportistas
+  const deportistas = cargaDeportistas.lista
+  const errorDeportistas = !cargandoDeportistas && cargaDeportistas.error
+    ? { texto: cargaDeportistas.error.estado ? cargaDeportistas.error.mensaje : 'No se pudieron cargar los deportistas.', accion: { texto: 'Reintentar', onClick: () => setReintentoDeportistas((n) => n + 1) } }
+    : null
 
   const cargando = carga.clave !== clave
   const datos = carga.datos
@@ -273,8 +288,9 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
             )}
             {panel.tipo === 'crear' && (
               <>
+                <AvisoEstado aviso={errorDeportistas} rol="alert" tono="danger" enfocar={false} />
                 <Field label="Deportista" id="idDeportista" as="select" requerido value={valores.idDeportista ?? ''} error={erroresCampos.idDeportista} onChange={(e) => cambiar('idDeportista', e.target.value)}>
-                  <option value="">Selecciona el deportista</option>
+                  <option value="">{cargandoDeportistas ? 'Cargando deportistas…' : !errorDeportistas && deportistas.length === 0 ? 'No hay deportistas activos' : 'Selecciona el deportista'}</option>
                   {deportistas.map((d) => <option key={d.id} value={d.id}>{d.nombre} {d.apellido}</option>)}
                 </Field>
                 <Field label="Tipo de cobro" id="tipo" as="select" requerido value={valores.tipo ?? ''} error={erroresCampos.tipo} onChange={(e) => cambiar('tipo', e.target.value)}>
