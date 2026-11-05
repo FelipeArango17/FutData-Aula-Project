@@ -259,9 +259,26 @@ Ya **no devuelve un arreglo**: `{"content": [...], "page": 0, "size": 10, "total
 | `size` | De 1 a 100 | `10` |
 | `sort` | `campo` o `campo,asc` o `campo,desc`. Campos: `nombre`, `apellido`, `documento`, `fechaNacimiento`, `fechaRegistro`. El `ENTRENADOR` solo puede `nombre`, `apellido` y `fechaNacimiento`. Siempre se desempata por id (orden estable entre páginas) | `apellido,asc` (luego nombre) |
 | `activo` | `true` o `false` | Todos |
-| `categoria` | Nombre exacto de una de las 9 (`Párvulos`, `Cachorros`, `Semillero`, `Sub-11` … `Sub-16`), calculada con el año actual | Todas |
+| `categoria` | Nombre exacto de una de las 9 (`Párvulos`, `Cachorros`, `Semillero`, `Sub-11` … `Sub-16`), calculada con el año actual. Se puede **repetir** (`categoria=Sub-11&categoria=Sub-12`) o separar con comas | Todas (para el `ENTRENADOR`, las suyas) |
 
 Un valor inválido responde `400` con todos los campos con error a la vez, por ejemplo `size: debe estar entre 1 y 100`. Una página después de la última responde `content` vacío.
+
+#### Qué ve cada rol (bloque 7)
+
+| Rol | Resultado de `GET /api/deportistas` |
+| :--- | :--- |
+| `ADMINISTRADOR` | Todos los deportistas (también quien queda fuera de 4 a 16 años), con `documento`, `telefono`, `direccion` y `estadoInscripcion`. `categoria` filtra por esos nombres |
+| `ENTRENADOR` | **Solo los de las categorías que tiene a cargo** (`categoria.id_entrenador` = su fila de `entrenador`, hallada por `entrenador.id_usuario` = `sub` del token), sin `documento` ni `estadoInscripcion`. Sin `categoria`: todas las suyas. Con `categoria`: se cruza con las suyas |
+| `TESORERO`, `ACUDIENTE` | `403` |
+
+Reglas del entrenador: pedir una categoría que existe pero **no es suya** da `200` con `content` vacío y `totalElements` 0 (no `403`); un nombre que no existe da `400`; sin categorías asignadas (o sin fila de entrenador) la lista sale vacía; quien queda fuera de 4 a 16 años no sale; un entrenador inactivo conserva sus categorías. La categoría se compara con la **calculada por edad** (no con `deportista.id_categoria`) y la regla se resuelve en SQL, así que `totalElements` y `totalPages` ya reflejan el filtro. El servicio falla cerrado: un rol que no sea `ADMINISTRADOR` ni `ENTRENADOR` nunca obtiene la lista completa. La ficha `GET /api/deportistas/{id}` sigue siendo solo del `ADMINISTRADOR`.
+
+```bash
+# Entrenador con Sub-11 y Sub-12 asignadas: pidiendo Sub-11 y Sub-13 solo salen los de Sub-11
+curl "http://localhost:8080/api/deportistas?categoria=Sub-11&categoria=Sub-13&activo=true&size=100" \
+  -H "Authorization: Bearer $TOKEN_ENTRENADOR"
+# Pidiendo solo Sub-13 (existe, pero no es suya): 200 con {"content": [], "totalElements": 0, ...}
+```
 
 ### `POST` y `PUT`
 
@@ -1023,7 +1040,7 @@ Ver la tabla de [Variables de entorno](#variables-de-entorno) y `backend/.env.ex
 | Método y ruta | Quién | Qué hace |
 | :--- | :--- | :--- |
 | `POST /api/pagos` | `ADMINISTRADOR` | Crea un cobro `PENDIENTE`. Una mensualidad repetida del mismo deportista y periodo: `409` |
-| `GET /api/pagos` | `ADMINISTRADOR`, `TESORERO` | Paginado: `page` (desde 0), `size` (1 a 100), `sort` (`vencimiento`, `monto`, `creadoEn` o `estado`, con `,asc` o `,desc`); filtros `estado`, `tipo`, `idDeportista`, `periodo` (`AAAA-MM`). Respuesta `{ content, totalElements, number, size }`; cada cobro trae `vencido` |
+| `GET /api/pagos` | `ADMINISTRADOR`, `TESORERO` | Paginado: `page` (desde 0), `size` (1 a 100), `sort` (`vencimiento`, `monto`, `creadoEn` o `estado`, con `,asc` o `,desc`); filtros `estado`, `tipo`, `idDeportista`, `periodo` (`AAAA-MM`), `vencimientoDesde` y `vencimientoHasta` (`AAAA-MM-DD`, ambos inclusive; ver [abajo](#filtro-de-vencimiento-de-get-apipagos)). Respuesta `{ content, totalElements, number, size }`; cada cobro trae `vencido` |
 | `GET /api/pagos/mis-pagos` | `ACUDIENTE` | Los cobros de sus deportistas, con estado y `tieneComprobante`; sin nota interna ni datos de Wompi |
 | `POST /api/pagos/{id}/iniciar-wompi` | `ACUDIENTE` dueño | Solo `PENDIENTE`. Referencia `FD-<id del pago>`, **reutilizada** si el cobro ya la tiene |
 | `POST /api/pagos/{id}/reintentar` | `ACUDIENTE` dueño | Solo `RECHAZADO`: crea un `PENDIENTE` nuevo con los mismos datos; idempotente |
@@ -1043,6 +1060,18 @@ curl -X POST http://localhost:8080/api/pagos -H "Authorization: Bearer $TOKEN" -
 # Datos del checkout (acudiente)
 curl -X POST http://localhost:8080/api/pagos/<id>/iniciar-wompi -H "Authorization: Bearer $TOKEN"
 ```
+
+#### Filtro de vencimiento de `GET /api/pagos`
+
+`vencimientoDesde` y `vencimientoHasta` (`AAAA-MM-DD`, **ambos inclusive**) filtran por `fecha_vencimiento` (columna `NOT NULL`). Son opcionales, se pueden usar solos o juntos, y se combinan con `estado`, `tipo`, `periodo` e `idDeportista`. Sin ellos, todo sigue igual.
+
+```bash
+# Inscripciones que vencen en noviembre de 2026 (el 1 y el 30 incluidos)
+curl "http://localhost:8080/api/pagos?tipo=INSCRIPCION&vencimientoDesde=2026-11-01&vencimientoHasta=2026-11-30" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+`400` (con `campos`): una fecha que no existe o con otro formato (`vencimientoDesde: debe ser una fecha válida con el formato AAAA-MM-DD`; los errores de `periodo` y de las dos fechas salen juntos) y `vencimientoDesde` posterior a `vencimientoHasta` (`campos: ["vencimientoDesde", "vencimientoHasta"]`).
 
 ```json
 {
@@ -1196,7 +1225,7 @@ Authorization: Bearer eyJhbGciOiJFUzI1NiIs...
 | `POST /api/auth/2fa/codigo`, `/reenviar`, `/verificar` | Cualquier rol, con el JWT del primer paso y sin haber verificado el código |
 | `POST /api/auth/logout`, `GET /api/usuarios/yo` | Cualquier rol, con la sesión verificada |
 | `/api/usuarios/**` (salvo `/yo`) | `ADMINISTRADOR` |
-| `/api/deportistas/**` (incluidos `PUT` y `/foto`) | `ADMINISTRADOR`; `GET /api/deportistas` (la lista) también `ENTRENADOR`, sin documento, teléfono, dirección ni estado de la inscripción |
+| `/api/deportistas/**` (incluidos `PUT` y `/foto`) | `ADMINISTRADOR`; `GET /api/deportistas` (la lista) también `ENTRENADOR`, solo con los deportistas de sus categorías y sin documento, teléfono, dirección ni estado de la inscripción (un rol distinto de `ADMINISTRADOR` y `ENTRENADOR` nunca obtiene la lista completa) |
 | `/api/entrenadores/**` | `ADMINISTRADOR` |
 | `POST /api/pagos`, `POST /api/pagos/generar-mensualidades` | `ADMINISTRADOR` |
 | `POST /api/pagos/generar-ciclos` | `ADMINISTRADOR` con JWT, o la cabecera `X-Cron-Token` (solo si `N8N_CRON_TOKEN` está definida; solo esta ruta) |

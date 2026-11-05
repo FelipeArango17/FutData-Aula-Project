@@ -104,6 +104,15 @@ public class PagoDAOImpl implements IPagoDAO {
             donde.append(" AND p.periodo = :periodo");
             parametros.addValue("periodo", filtro.periodo());
         }
+        // Ambos extremos incluidos (fecha_vencimiento es NOT NULL)
+        if (filtro.vencimientoDesde() != null) {
+            donde.append(" AND p.fecha_vencimiento >= :vencimientoDesde");
+            parametros.addValue("vencimientoDesde", filtro.vencimientoDesde());
+        }
+        if (filtro.vencimientoHasta() != null) {
+            donde.append(" AND p.fecha_vencimiento <= :vencimientoHasta");
+            parametros.addValue("vencimientoHasta", filtro.vencimientoHasta());
+        }
         Long total = jdbc.queryForObject("SELECT count(*) FROM pago_con_estado p" + donde, parametros, Long.class);
         parametros.addValue("limite", size).addValue("desde", (long) page * size);
         // columnaOrden viene de una lista fija del servicio: nunca de la petición tal cual

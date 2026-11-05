@@ -18,11 +18,17 @@ public interface IDeportistaService {
      * @param size            de 1 a 100 (por defecto 10)
      * @param sort            {@code campo} o {@code campo,asc|desc}; campos en {@code OrdenDeportista}
      * @param activo          {@code null} = todos
-     * @param categoria       nombre exacto de una de las 9 categorías; {@code null} o vacío = todas
-     * @param esAdministrador {@code false} (entrenador): sin teléfono, dirección ni {@code estadoInscripcion}
+     * @param categorias      nombres exactos de las 9 categorías (valores repetidos o separados por coma); {@code null}
+     *                        o vacío = sin filtrar por nombre. Un nombre que no existe es un 400
+     * @param solicitante     quién consulta. ADMINISTRADOR ve todo, con teléfono, dirección, documento y
+     *                        {@code estadoInscripcion}. ENTRENADOR solo ve a los deportistas de las categorías que tiene a
+     *                        cargo (los nombres pedidos se cruzan con las suyas; una ajena no da error, solo no sale; sin
+     *                        categorías, lista vacía) y sin esos cuatro datos. Falla cerrado: cualquier otro rol (o un
+     *                        solicitante sin identificar) lanza {@link SinPermisoException}, nunca se trata como administrador
+     * @throws SinPermisoException el rol no es ADMINISTRADOR ni ENTRENADOR (403)
      */
-    PaginaDTO<DeportistaResponseDTO> listar(Integer page, Integer size, String sort, Boolean activo, String categoria,
-                                            boolean esAdministrador);
+    PaginaDTO<DeportistaResponseDTO> listar(Integer page, Integer size, String sort, Boolean activo,
+                                            List<String> categorias, Solicitante solicitante);
 
     /** @throws ConflictoException el número de documento ya está registrado (409) */
     DeportistaResponseDTO crear(DeportistaRequestDTO datos);

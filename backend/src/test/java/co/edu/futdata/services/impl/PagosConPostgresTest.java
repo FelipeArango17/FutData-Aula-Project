@@ -168,7 +168,7 @@ class PagosConPostgresTest {
     }
 
     private PagoResponseDTO leer(UUID idPago) {
-        return servicio.listar(new FiltroPagos(null, null, null, null), "creadoEn,asc", 0, 100).content().stream()
+        return servicio.listar(new FiltroPagos(null, null, null, null, null, null), "creadoEn,asc", 0, 100).content().stream()
                 .filter(p -> p.id().equals(idPago)).findFirst().orElseThrow();
     }
 
@@ -661,24 +661,64 @@ class PagosConPostgresTest {
         cobro();
         servicio.crear(admin, new CrearPagoRequestDTO(deportista, TipoPago.UNIFORME, "Uniforme", 120_000L, HOY.plusDays(20), null));
 
-        PaginaResponseDTO<PagoResponseDTO> todos = servicio.listar(new FiltroPagos(null, null, null, null), "vencimiento,asc", 0, 2);
+        PaginaResponseDTO<PagoResponseDTO> todos = servicio.listar(new FiltroPagos(null, null, null, null, null, null), "vencimiento,asc", 0, 2);
         assertThat(todos.totalElements()).isEqualTo(3);
         assertThat(todos.content()).hasSize(2).extracting(PagoResponseDTO::concepto).containsExactly("Mensualidad octubre 2026", "Mensualidad noviembre 2026");
         assertThat(todos.content().get(0).vencido()).isTrue();   // vencía el 5 de octubre
         assertThat(todos.content().get(1).vencido()).isFalse();  // vence el 5 de noviembre; hoy (reloj de la base) puede variar, no se afirma
         assertThat(todos.number()).isZero();
         assertThat(todos.size()).isEqualTo(2);
-        assertThat(servicio.listar(new FiltroPagos(null, null, null, null), "vencimiento,asc", 1, 2).content()).hasSize(1);
+        assertThat(servicio.listar(new FiltroPagos(null, null, null, null, null, null), "vencimiento,asc", 1, 2).content()).hasSize(1);
 
-        assertThat(servicio.listar(new FiltroPagos(null, TipoPago.UNIFORME, null, null), null, 0, 20).content()).hasSize(1);
-        assertThat(servicio.listar(new FiltroPagos(EstadoPago.APROBADO, null, null, null), null, 0, 20).content()).isEmpty();
-        assertThat(servicio.listar(new FiltroPagos(null, null, deportista, NOVIEMBRE), null, 0, 20).content()).hasSize(1);
-        assertThat(servicio.listar(new FiltroPagos(null, null, UUID.randomUUID(), null), null, 0, 20).totalElements()).isZero();
+        assertThat(servicio.listar(new FiltroPagos(null, TipoPago.UNIFORME, null, null, null, null), null, 0, 20).content()).hasSize(1);
+        assertThat(servicio.listar(new FiltroPagos(EstadoPago.APROBADO, null, null, null, null, null), null, 0, 20).content()).isEmpty();
+        assertThat(servicio.listar(new FiltroPagos(null, null, deportista, NOVIEMBRE, null, null), null, 0, 20).content()).hasSize(1);
+        assertThat(servicio.listar(new FiltroPagos(null, null, UUID.randomUUID(), null, null, null), null, 0, 20).totalElements()).isZero();
+    }
+
+    @Test
+    void listarFiltraPorRangoDeVencimientoConLosExtremosIncluidos() {
+        // Vencimientos: 5 oct (mensualidad), 5 nov (mensualidad), 20 nov (uniforme), 30 nov (uniforme).
+        // fecha_vencimiento es NOT NULL (migración 004), así que no existe un cobro sin fecha.
+        servicio.crear(admin, new CrearPagoRequestDTO(deportista, TipoPago.MENSUALIDAD, null, 90_000L, LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 1)));
+        cobro();
+        servicio.crear(admin, new CrearPagoRequestDTO(deportista, TipoPago.UNIFORME, "Uniforme A", 120_000L, LocalDate.of(2026, 11, 20), null));
+        servicio.crear(admin, new CrearPagoRequestDTO(deportista, TipoPago.UNIFORME, "Uniforme B", 120_000L, LocalDate.of(2026, 11, 30), null));
+        LocalDate cinco = LocalDate.of(2026, 11, 5);
+        LocalDate treinta = LocalDate.of(2026, 11, 30);
+
+        // Sin los parámetros, todo igual: entran los 4
+        assertThat(servicio.listar(new FiltroPagos(null, null, null, null, null, null), null, 0, 20).totalElements()).isEqualTo(4);
+        // Rango: desde y hasta incluidos (5 y 30 de noviembre)
+        assertThat(conceptos(new FiltroPagos(null, null, null, null, cinco, treinta)))
+                .containsExactly("Mensualidad noviembre 2026", "Uniforme A", "Uniforme B");
+        // Extremo exacto: un solo día
+        assertThat(conceptos(new FiltroPagos(null, null, null, null, cinco, cinco))).containsExactly("Mensualidad noviembre 2026");
+        assertThat(conceptos(new FiltroPagos(null, null, null, null, treinta, treinta))).containsExactly("Uniforme B");
+        // Solo desde / solo hasta
+        assertThat(conceptos(new FiltroPagos(null, null, null, null, LocalDate.of(2026, 11, 6), null)))
+                .containsExactly("Uniforme A", "Uniforme B");
+        assertThat(conceptos(new FiltroPagos(null, null, null, null, null, LocalDate.of(2026, 11, 4))))
+                .containsExactly("Mensualidad octubre 2026");
+        // Tipo + rango
+        assertThat(conceptos(new FiltroPagos(null, TipoPago.UNIFORME, null, null, cinco, treinta)))
+                .containsExactly("Uniforme A", "Uniforme B");
+        assertThat(conceptos(new FiltroPagos(null, TipoPago.MENSUALIDAD, null, null, LocalDate.of(2026, 11, 6), treinta))).isEmpty();
+        // Combinado con periodo (primer día del mes): la mensualidad de noviembre y el rango que la excluye
+        assertThat(conceptos(new FiltroPagos(null, null, null, NOVIEMBRE, cinco, cinco))).containsExactly("Mensualidad noviembre 2026");
+        assertThat(conceptos(new FiltroPagos(null, null, null, NOVIEMBRE, LocalDate.of(2026, 11, 6), treinta))).isEmpty();
+        assertThat(conceptos(new FiltroPagos(null, null, deportista, NOVIEMBRE, null, treinta))).containsExactly("Mensualidad noviembre 2026");
+        // El total cuenta lo mismo que lista
+        assertThat(servicio.listar(new FiltroPagos(null, null, null, null, cinco, treinta), null, 0, 2).totalElements()).isEqualTo(3);
+    }
+
+    private List<String> conceptos(FiltroPagos filtro) {
+        return servicio.listar(filtro, "vencimiento,asc", 0, 100).content().stream().map(PagoResponseDTO::concepto).toList();
     }
 
     @Test
     void listarRechazaOrdenesYTamanosInvalidosYNoPermiteInyectarElOrden() {
-        FiltroPagos sin = new FiltroPagos(null, null, null, null);
+        FiltroPagos sin = new FiltroPagos(null, null, null, null, null, null);
         for (String sort : new String[] {"monto;DROP TABLE pago", "contrasena,asc", "monto,sideways", "monto,asc,mas", "p.monto"}) {
             assertThatThrownBy(() -> servicio.listar(sin, sort, 0, 20)).isInstanceOf(DatosInvalidosException.class);
         }
@@ -718,7 +758,7 @@ class PagosConPostgresTest {
         assertThat(segunda.yaExistentes()).isEqualTo(2);
         assertThat(cantidadDePagos()).isEqualTo(2);
 
-        PagoResponseDTO generada = servicio.listar(new FiltroPagos(null, TipoPago.MENSUALIDAD, deportista, null), null, 0, 10).content().get(0);
+        PagoResponseDTO generada = servicio.listar(new FiltroPagos(null, TipoPago.MENSUALIDAD, deportista, null, null, null), null, 0, 10).content().get(0);
         assertThat(generada).extracting(PagoResponseDTO::monto, PagoResponseDTO::periodo, PagoResponseDTO::fechaVencimiento, PagoResponseDTO::concepto,
                 PagoResponseDTO::estado).containsExactly(90_000L, LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 5),
                 "Mensualidad diciembre 2026", EstadoPago.PENDIENTE);
@@ -746,7 +786,7 @@ class PagosConPostgresTest {
     void elDiaDeVencimientoSeAjustaAlFinDeMesCorto() {
         PagoServiceImpl dia31 = armarServicio(WOMPI, new MensualidadProperties(90_000, 31, false));
         dia31.generarMensualidades(admin, YearMonth.of(2027, 2));
-        assertThat(dia31.listar(new FiltroPagos(null, null, null, null), null, 0, 10).content().get(0).fechaVencimiento())
+        assertThat(dia31.listar(new FiltroPagos(null, null, null, null, null, null), null, 0, 10).content().get(0).fechaVencimiento())
                 .isEqualTo(LocalDate.of(2027, 2, 28));
     }
 }

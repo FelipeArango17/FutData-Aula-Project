@@ -17,9 +17,12 @@ public interface IDeportistaDAO {
      * @param conEstadoInscripcion {@code true} calcula {@code estadoInscripcion} desde los documentos (solo para el
      *                             administrador); {@code false} lo deja en {@code null} sin consultar documentos
      */
-    List<Deportista> listar(ConsultaDeportistas consulta, int anioActual, boolean conEstadoInscripcion);
+    List<Deportista> listar(ConsultaDeportistas consulta, boolean conEstadoInscripcion);
 
-    /** Total de deportistas que cumplen los filtros de {@code consulta} (sin página ni orden). */
+    /**
+     * Total de deportistas que cumplen los filtros de {@code consulta} (sin página ni orden), con el mismo {@code where}
+     * y el mismo año que {@link #listar}.
+     */
     long contar(ConsultaDeportistas consulta);
 
     /**
