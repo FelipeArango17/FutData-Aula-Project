@@ -14,6 +14,7 @@ import co.edu.futdata.datasource.external.NotificacionNoEnviadaException;
 import co.edu.futdata.datasource.external.WompiNoDisponibleException;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.SemanaNoPermitidaException;
+import co.edu.futdata.services.facade.SinPermisoException;
 import co.edu.futdata.services.facade.SinPermisoHorarioException;
 import co.edu.futdata.persistence.dao.FranjaYaCanceladaException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
@@ -205,6 +206,12 @@ public class ManejadorGlobalErrores {
     /** Sin esto, el {@code 403} de {@code @PreAuthorize} caería en {@link #errorInterno} y respondería {@code 500}. */
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponseDTO> sinPermiso(AccessDeniedException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.FORBIDDEN, RespuestasSeguridad.SIN_PERMISO, peticion);
+    }
+
+    /** Un servicio que filtra por rol falló cerrado ante un rol que no puede hacer la operación: 403. */
+    @ExceptionHandler(SinPermisoException.class)
+    public ResponseEntity<ErrorResponseDTO> sinPermisoDelServicio(SinPermisoException e, HttpServletRequest peticion) {
         return responder(HttpStatus.FORBIDDEN, RespuestasSeguridad.SIN_PERMISO, peticion);
     }
 

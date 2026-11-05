@@ -22,10 +22,13 @@ import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.IDeportistaService;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
+import co.edu.futdata.services.facade.SinPermisoException;
+import co.edu.futdata.services.facade.Solicitante;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -76,10 +79,22 @@ public class DeportistaServiceImpl implements IDeportistaService {
     @Override
     @Transactional(readOnly = true)
     public PaginaDTO<DeportistaResponseDTO> listar(Integer page, Integer size, String sort, Boolean activo,
-                                                   String categoria, boolean esAdministrador) {
+                                                   List<String> categorias, Solicitante solicitante) {
+        // Falla cerrado: antes de validar nada, solo ADMINISTRADOR y ENTRENADOR tienen lista; cualquier otro rol (o un
+        // solicitante sin identificar) es un 403 y NUNCA se trata como administrador
+        if (solicitante == null || !(solicitante.esAdministrador() || solicitante.esEntrenador())) {
+            throw new SinPermisoException();
+        }
+        boolean esAdministrador = solicitante.esAdministrador();
+        UUID usuarioEntrenador = null;
+        if (!esAdministrador) {
+            usuarioEntrenador = solicitante.idUsuario();
+            if (usuarioEntrenador == null) throw new SinPermisoException();
+        }
         int anio = anioActual();
-        ConsultaDeportistas consulta = consulta(page, size, sort, activo, categoria, anio, esAdministrador);
-        List<Deportista> pagina = deportistas.listar(consulta, anio, esAdministrador);
+        ConsultaDeportistas consulta = consulta(page, size, sort, activo, categorias, usuarioEntrenador, anio,
+                esAdministrador);
+        List<Deportista> pagina = deportistas.listar(consulta, esAdministrador);
         Map<String, String> urls = urlsDeFotos(pagina);
         List<DeportistaResponseDTO> contenido = pagina.stream()
                 .map(d -> respuesta(d, esAdministrador, urls)).toList();
@@ -88,7 +103,8 @@ public class DeportistaServiceImpl implements IDeportistaService {
 
     /** Valida los parámetros de la lista; todos los errores juntos en un solo 400. */
     private static ConsultaDeportistas consulta(Integer page, Integer size, String sort, Boolean activo,
-                                                String categoria, int anio, boolean esAdministrador) {
+                                                List<String> categoriasPedidas, UUID usuarioEntrenador, int anio,
+                                                boolean esAdministrador) {
         Map<String, String> errores = new LinkedHashMap<>();
         int pagina = page == null ? 0 : page;
         if (pagina < 0) errores.put("page", "debe ser 0 o mayor (la primera página es 0)");
@@ -111,20 +127,24 @@ public class DeportistaServiceImpl implements IDeportistaService {
             }
         }
 
-        LocalDate nacidoDesde = null;
-        LocalDate nacidoHasta = null;
-        if (categoria != null && !categoria.isBlank()) {
-            Optional<ReglasDeportista.CategoriaClub> c = ReglasDeportista.categoriaPorNombre(categoria.strip());
-            if (c.isEmpty()) {
-                errores.put("categoria", "debe ser una de " + String.join(", ", ReglasEntrenador.CATEGORIAS));
-            } else {
-                // edad por año entre edad_minima y edad_maxima ⇔ nacido entre (anio - maxima) y (anio - minima)
-                nacidoDesde = LocalDate.of(anio - c.get().edadMaxima(), 1, 1);
-                nacidoHasta = LocalDate.of(anio - c.get().edadMinima(), 12, 31);
+        // Valores repetidos y/o separados por coma; los vacíos se ignoran. Un nombre inexistente es 400 para todos los
+        // roles. El DAO compara con la categoría calculada por año (:anio) y, para el entrenador, con las suyas.
+        Set<String> categorias = new LinkedHashSet<>();
+        boolean categoriaInvalida = false;
+        for (String pedida : categoriasPedidas == null ? List.<String>of() : categoriasPedidas) {
+            if (pedida == null) continue;
+            for (String nombre : pedida.split(",")) {
+                if (nombre.isBlank()) continue;
+                if (ReglasDeportista.categoriaPorNombre(nombre.strip()).isEmpty()) categoriaInvalida = true;
+                else categorias.add(nombre.strip());
             }
         }
+        if (categoriaInvalida) {
+            errores.put("categoria", "debe ser una de " + String.join(", ", ReglasEntrenador.CATEGORIAS));
+        }
         if (!errores.isEmpty()) throw new DatosInvalidosException(errores);
-        return new ConsultaDeportistas(activo, nacidoDesde, nacidoHasta, orden, descendente, pagina, tamano);
+        return new ConsultaDeportistas(activo, List.copyOf(categorias), usuarioEntrenador, anio, orden, descendente,
+                pagina, tamano);
     }
 
     @Override

@@ -13,7 +13,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.multipart.MultipartFile;
 import java.util.UUID;
@@ -51,20 +54,21 @@ public class DeportistaController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'ENTRENADOR')")
     @Operation(summary = "Listar deportistas (paginado)",
-            description = "Categoría calculada por año de nacimiento. El entrenador no recibe teléfono, dirección ni "
-                    + "estadoInscripcion. Un valor inválido de page, size, sort o categoria responde 400.")
+            description = "Categoría calculada por año de nacimiento. El entrenador no recibe documento, teléfono, dirección "
+                    + "ni estadoInscripcion, y solo ve a los deportistas de las categorías que tiene a cargo: el parámetro "
+                    + "categoria se cruza con las suyas (pedir una ajena da una lista vacía, no 403; sin categorías, lista "
+                    + "vacía). Un valor inválido de page, size, sort o categoria (nombre que no existe) responde 400.")
     public PaginaDTO<DeportistaResponseDTO> listar(
             @Parameter(description = "Página, desde 0 (por defecto 0)") @RequestParam(required = false) Integer page,
             @Parameter(description = "Tamaño de página, de 1 a 100 (por defecto 10)") @RequestParam(required = false) Integer size,
             @Parameter(description = "campo o campo,asc|desc; campos: nombre, apellido, documento, fechaNacimiento, "
                     + "fechaRegistro (por defecto apellido,asc)") @RequestParam(required = false) String sort,
             @Parameter(description = "true o false; sin él, todos") @RequestParam(required = false) Boolean activo,
-            @Parameter(description = "Nombre exacto de una de las 9 categorías, por ejemplo Semillero o Sub-11")
-            @RequestParam(required = false) String categoria,
-            Authentication autenticacion) {
-        boolean esAdministrador = autenticacion.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMINISTRADOR"));
-        return deportistas.listar(page, size, sort, activo, categoria, esAdministrador);
+            @Parameter(description = "Nombre exacto de una de las 9 categorías, por ejemplo Semillero o Sub-11; se puede "
+                    + "repetir (categoria=Sub-11&categoria=Sub-12) o separar con comas")
+            @RequestParam(required = false) List<String> categoria,
+            @AuthenticationPrincipal Jwt jwt, Authentication autenticacion) {
+        return deportistas.listar(page, size, sort, activo, categoria, Solicitantes.de(jwt, autenticacion));
     }
 
     @PostMapping

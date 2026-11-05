@@ -13,10 +13,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -146,13 +143,6 @@ public class HorarioSemanaController {
 
     /** El {@code sub} del token y su rol (si hubiera varios, el de más permisos). */
     private static Solicitante solicitante(Jwt jwt, Authentication autenticacion) {
-        Set<String> roles = autenticacion.getAuthorities().stream()
-                .map(a -> a.getAuthority())
-                .filter(a -> a.startsWith("ROLE_"))
-                .map(a -> a.substring("ROLE_".length()))
-                .collect(Collectors.toSet());
-        String rol = Stream.of("ADMINISTRADOR", "ENTRENADOR", "TESORERO", "ACUDIENTE")
-                .filter(roles::contains).findFirst().orElse("");
-        return new Solicitante(UUID.fromString(jwt.getSubject()), rol);
+        return Solicitantes.de(jwt, autenticacion);
     }
 }

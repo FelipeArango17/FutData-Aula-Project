@@ -12,6 +12,8 @@ import co.edu.futdata.domain.entities.Deportista;
 import co.edu.futdata.persistence.dao.ConsultaDeportistas;
 import co.edu.futdata.persistence.dao.DatoDuplicadoException;
 import co.edu.futdata.services.facade.RecursoNoEncontradoException;
+import co.edu.futdata.services.facade.SinPermisoException;
+import co.edu.futdata.services.facade.Solicitante;
 import co.edu.futdata.persistence.dao.IDeportistaDAO;
 import co.edu.futdata.persistence.dao.JugadorDeAcudiente;
 import co.edu.futdata.persistence.dao.OrdenDeportista;
@@ -38,6 +40,10 @@ class DeportistaServiceImplTest {
     private static final UUID ID = UUID.fromString("6f1c2a9e-3b4d-4e5f-8a7b-1c2d3e4f5a6b");
     private static final UUID SEMILLERO = UUID.fromString("0a0a0a0a-0000-4000-8000-000000000009");
     private static final UUID SUB_11 = UUID.fromString("0a0a0a0a-0000-4000-8000-000000000011");
+    private static final UUID SUB_ENTRENADOR = UUID.fromString("00000000-0000-0000-0000-0000000000e1");
+    private static final Solicitante ADMIN = new Solicitante(UUID.fromString("00000000-0000-0000-0000-00000000000a"),
+            Solicitante.ADMINISTRADOR);
+    private static final Solicitante ENTRENADOR = new Solicitante(SUB_ENTRENADOR, Solicitante.ENTRENADOR);
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
     private static final Duration VIGENCIA = Duration.ofMinutes(60);
     private static final FotosProperties FOTOS = new FotosProperties("fotos", VIGENCIA);
@@ -277,9 +283,9 @@ class DeportistaServiceImplTest {
     void elEntrenadorVeCategoriaYGrupoPeroNoDatosPrivadosNiEstadoInscripcion() {
         Deportista d = leido(LocalDate.of(2017, 1, 1), "Semillero", SEMILLERO, "mañana");
         d.setEstadoInscripcion("COMPLETA"); // aunque el DAO lo trajera, no se devuelve
-        when(dao.listar(any(), eq(2026), eq(false))).thenReturn(List.of(d));
+        when(dao.listar(any(), eq(false))).thenReturn(List.of(d));
 
-        DeportistaResponseDTO r = servicio.listar(null, null, null, null, null, false).content().getFirst();
+        DeportistaResponseDTO r = servicio.listar(null, null, null, null, null, ENTRENADOR).content().getFirst();
 
         assertThat(r.documento()).isNull();
         assertThat(r.telefono()).isNull();
@@ -288,16 +294,16 @@ class DeportistaServiceImplTest {
         assertThat(r.tipoDocumento()).isEqualTo("TI");
         assertThat(r.categoria()).isEqualTo("Semillero");
         assertThat(r.grupo()).isEqualTo("mañana");
-        verify(dao).listar(any(), eq(2026), eq(false));
+        verify(dao).listar(any(), eq(false));
     }
 
     @Test
     void elAdministradorPideYRecibeElEstadoInscripcion() {
         Deportista d = leido(LocalDate.of(2017, 1, 1), "Semillero", SEMILLERO, null);
         d.setEstadoInscripcion("PENDIENTE");
-        when(dao.listar(any(), eq(2026), eq(true))).thenReturn(List.of(d));
+        when(dao.listar(any(), eq(true))).thenReturn(List.of(d));
 
-        assertThat(servicio.listar(null, null, null, null, null, true).content().getFirst().estadoInscripcion())
+        assertThat(servicio.listar(null, null, null, null, null, ADMIN).content().getFirst().estadoInscripcion())
                 .isEqualTo("PENDIENTE");
     }
 
@@ -307,12 +313,12 @@ class DeportistaServiceImplTest {
     void sinParametrosUsaPagina0Tamano10YOrdenPorApellido() {
         when(dao.contar(any())).thenReturn(23L);
 
-        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(null, null, null, null, null, true);
+        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(null, null, null, null, null, ADMIN);
 
         ArgumentCaptor<ConsultaDeportistas> consulta = ArgumentCaptor.forClass(ConsultaDeportistas.class);
-        verify(dao).listar(consulta.capture(), eq(2026), eq(true));
+        verify(dao).listar(consulta.capture(), eq(true));
         assertThat(consulta.getValue()).isEqualTo(
-                new ConsultaDeportistas(null, null, null, OrdenDeportista.APELLIDO, false, 0, 10));
+                new ConsultaDeportistas(null, List.of(), null, 2026, OrdenDeportista.APELLIDO, false, 0, 10));
         assertThat(pagina.page()).isZero();
         assertThat(pagina.size()).isEqualTo(10);
         assertThat(pagina.totalElements()).isEqualTo(23);
@@ -321,16 +327,74 @@ class DeportistaServiceImplTest {
 
     @Test
     void pasaFiltrosOrdenYPaginaAlDao() {
-        servicio.listar(2, 100, "fechaNacimiento,DESC", false, " Semillero ", true);
+        servicio.listar(2, 100, "fechaNacimiento,DESC", false, List.of(" Semillero "), ADMIN);
 
-        // 29/10/2026: Semillero (9 y 10 años por año) = nacidos de 2016 a 2017
-        verify(dao).listar(new ConsultaDeportistas(false, LocalDate.of(2016, 1, 1), LocalDate.of(2017, 12, 31),
-                OrdenDeportista.FECHA_NACIMIENTO, true, 2, 100), 2026, true);
+        // El nombre llega limpio y el DAO lo compara con la categoría calculada del año 2026
+        verify(dao).listar(new ConsultaDeportistas(false, List.of("Semillero"), null, 2026,
+                OrdenDeportista.FECHA_NACIMIENTO, true, 2, 100), true);
+    }
+
+    // --- Quién consulta: falla cerrado, y el filtro de dueño ----------------------------------------------
+
+    @Test
+    void unRolQueNoEsAdministradorNiEntrenadorNoPuedeObtenerLaListaCompleta() {
+        UUID usuario = UUID.fromString("00000000-0000-0000-0000-0000000000ce");
+        List<Solicitante> intrusos = java.util.Arrays.asList(
+                new Solicitante(usuario, "TESORERO"), new Solicitante(usuario, Solicitante.ACUDIENTE),
+                new Solicitante(usuario, ""), new Solicitante(usuario, null),
+                new Solicitante(usuario, "administrador"), new Solicitante(usuario, "ROLE_ADMINISTRADOR"),
+                new Solicitante(null, "TESORERO"), null);
+
+        for (Solicitante intruso : intrusos) {
+            assertThatThrownBy(() -> servicio.listar(null, null, null, null, null, intruso))
+                    .as("solicitante %s", intruso).isInstanceOf(SinPermisoException.class);
+        }
+        // Ni siquiera se consulta la base: no hay ningún camino que llegue a la lista completa
+        verifyNoInteractions(dao);
+    }
+
+    @Test
+    void elEntrenadorSinIdentificarNoSeTrataComoAdministrador() {
+        assertThatThrownBy(() -> servicio.listar(null, null, null, null, null,
+                new Solicitante(null, Solicitante.ENTRENADOR))).isInstanceOf(SinPermisoException.class);
+        verifyNoInteractions(dao);
+    }
+
+    @Test
+    void soloElAdministradorVaSinDuenoYElEntrenadorVaConSuSub() {
+        servicio.listar(null, null, null, null, null, ADMIN);
+        servicio.listar(null, null, null, null, null, ENTRENADOR);
+
+        ArgumentCaptor<ConsultaDeportistas> consulta = ArgumentCaptor.forClass(ConsultaDeportistas.class);
+        verify(dao, times(2)).listar(consulta.capture(), anyBoolean());
+        assertThat(consulta.getAllValues()).extracting(ConsultaDeportistas::idUsuarioEntrenador)
+                .containsExactly(null, SUB_ENTRENADOR);
+        // El mismo filtro y el mismo año para el total
+        verify(dao, times(2)).contar(consulta.capture());
+        assertThat(consulta.getAllValues().subList(2, 4)).isEqualTo(consulta.getAllValues().subList(0, 2));
+    }
+
+    @Test
+    void lasCategoriasRepetidasOConComaSeUnenSinDuplicadosYSeIgnoranLasVacias() {
+        servicio.listar(null, null, null, null, List.of("Sub-11", " Sub-13,Sub-11 ", "", " "), ENTRENADOR);
+
+        ArgumentCaptor<ConsultaDeportistas> consulta = ArgumentCaptor.forClass(ConsultaDeportistas.class);
+        verify(dao).listar(consulta.capture(), eq(false));
+        assertThat(consulta.getValue().categorias()).containsExactly("Sub-11", "Sub-13");
+        assertThat(consulta.getValue().anio()).isEqualTo(2026);
+    }
+
+    @Test
+    void unaCategoriaQueNoExisteSigueDando400TambienAlEntrenador() {
+        assertThatThrownBy(() -> servicio.listar(null, null, null, null, List.of("Sub-11", "Sub-9"), ENTRENADOR))
+                .isInstanceOf(DatosInvalidosException.class)
+                .satisfies(e -> assertThat(((DatosInvalidosException) e).getCampos()).containsExactly("categoria"));
+        verifyNoInteractions(dao);
     }
 
     @Test
     void sinResultadosHayCeroPaginas() {
-        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(0, 10, null, null, null, true);
+        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(0, 10, null, null, null, ADMIN);
 
         assertThat(pagina.content()).isEmpty();
         assertThat(pagina.totalPages()).isZero();
@@ -338,7 +402,7 @@ class DeportistaServiceImplTest {
 
     @Test
     void parametrosInvalidosDan400ConTodosLosCampos() {
-        assertThatThrownBy(() -> servicio.listar(-1, 101, "apellido; drop table deportista", null, "Sub-9", true))
+        assertThatThrownBy(() -> servicio.listar(-1, 101, "apellido; drop table deportista", null, List.of("Sub-9"), ADMIN))
                 .isInstanceOf(DatosInvalidosException.class)
                 .hasMessageContaining("page: debe ser 0 o mayor")
                 .hasMessageContaining("size: debe estar entre 1 y 100")
@@ -352,13 +416,13 @@ class DeportistaServiceImplTest {
 
     @Test
     void tamanoCeroYDireccionDesconocidaDan400() {
-        assertThatThrownBy(() -> servicio.listar(0, 0, null, null, null, true))
+        assertThatThrownBy(() -> servicio.listar(0, 0, null, null, null, ADMIN))
                 .isInstanceOf(DatosInvalidosException.class).hasMessageContaining("size");
-        assertThatThrownBy(() -> servicio.listar(0, 10, "apellido,arriba", null, null, true))
+        assertThatThrownBy(() -> servicio.listar(0, 10, "apellido,arriba", null, null, ADMIN))
                 .isInstanceOf(DatosInvalidosException.class).hasMessageContaining("sort");
-        assertThatThrownBy(() -> servicio.listar(0, 10, "apellido,asc,desc", null, null, true))
+        assertThatThrownBy(() -> servicio.listar(0, 10, "apellido,asc,desc", null, null, ADMIN))
                 .isInstanceOf(DatosInvalidosException.class).hasMessageContaining("sort");
-        assertThatThrownBy(() -> servicio.listar(0, 10, null, null, "semillero", true))
+        assertThatThrownBy(() -> servicio.listar(0, 10, null, null, List.of("semillero"), ADMIN))
                 .as("el nombre de la categoría es exacto").isInstanceOf(DatosInvalidosException.class)
                 .hasMessageContaining("categoria");
         verifyNoInteractions(dao);
@@ -369,7 +433,7 @@ class DeportistaServiceImplTest {
     @Test
     void elEntrenadorNoPuedeOrdenarPorDocumentoNiPorFechaDeRegistro() {
         for (String sort : List.of("documento", "documento,desc", "fechaRegistro")) {
-            assertThatThrownBy(() -> servicio.listar(0, 10, sort, null, null, false)).as(sort)
+            assertThatThrownBy(() -> servicio.listar(0, 10, sort, null, null, ENTRENADOR)).as(sort)
                     .isInstanceOf(DatosInvalidosException.class)
                     .hasMessage("sort: debe ser campo o campo,asc o campo,desc; campos: nombre, apellido, fechaNacimiento");
         }
@@ -378,18 +442,18 @@ class DeportistaServiceImplTest {
 
     @Test
     void elEntrenadorOrdenaPorNombreApellidoOFechaDeNacimiento() {
-        servicio.listar(0, 10, "nombre", null, null, false);
-        servicio.listar(0, 10, "apellido,desc", null, null, false);
-        servicio.listar(0, 10, "fechaNacimiento,asc", null, null, false);
+        servicio.listar(0, 10, "nombre", null, null, ENTRENADOR);
+        servicio.listar(0, 10, "apellido,desc", null, null, ENTRENADOR);
+        servicio.listar(0, 10, "fechaNacimiento,asc", null, null, ENTRENADOR);
 
-        verify(dao, times(3)).listar(any(), eq(2026), eq(false));
+        verify(dao, times(3)).listar(any(), eq(false));
     }
 
     @Test
     void elAdministradorSiOrdenaPorDocumentoYLoRecibe() {
-        when(dao.listar(any(), eq(2026), eq(true))).thenReturn(List.of(leido(LocalDate.of(2012, 1, 1), "Sub-14", null, null)));
+        when(dao.listar(any(), eq(true))).thenReturn(List.of(leido(LocalDate.of(2012, 1, 1), "Sub-14", null, null)));
 
-        assertThat(servicio.listar(0, 10, "documento", null, null, true).content().getFirst().documento())
+        assertThat(servicio.listar(0, 10, "documento", null, null, ADMIN).content().getFirst().documento())
                 .isEqualTo("12345678");
     }
 
@@ -562,11 +626,11 @@ class DeportistaServiceImplTest {
     void conStorageCaidoLaListaRespondeConFotoNull() {
         Deportista d = leido(LocalDate.of(2012, 4, 10), "Sub-14", null, null);
         d.setFoto(ID + "/actual.jpg");
-        when(dao.listar(any(), eq(2026), eq(true))).thenReturn(List.of(d));
+        when(dao.listar(any(), eq(true))).thenReturn(List.of(d));
         when(almacenamiento.urlsFirmadas(any(), any(), any()))
                 .thenThrow(new AlmacenamientoNoDisponibleException("Storage caído", 503, null));
 
-        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(null, null, null, null, null, true);
+        PaginaDTO<DeportistaResponseDTO> pagina = servicio.listar(null, null, null, null, null, ADMIN);
 
         assertThat(pagina.content()).hasSize(1);
         assertThat(pagina.content().getFirst().foto()).isNull();
@@ -579,11 +643,11 @@ class DeportistaServiceImplTest {
         Deportista b = leido(LocalDate.of(2013, 4, 10), "Sub-13", null, null);
         b.setFoto("b/2.png");
         Deportista sinFoto = leido(LocalDate.of(2014, 4, 10), "Sub-12", null, null);
-        when(dao.listar(any(), eq(2026), eq(false))).thenReturn(List.of(a, b, sinFoto));
+        when(dao.listar(any(), eq(false))).thenReturn(List.of(a, b, sinFoto));
         when(almacenamiento.urlsFirmadas("fotos", List.of("a/1.jpg", "b/2.png"), VIGENCIA))
                 .thenReturn(Map.of("a/1.jpg", "https://firmada/a", "b/2.png", "https://firmada/b"));
 
-        List<DeportistaResponseDTO> lista = servicio.listar(null, null, null, null, null, false).content();
+        List<DeportistaResponseDTO> lista = servicio.listar(null, null, null, null, null, ENTRENADOR).content();
 
         assertThat(lista).extracting(DeportistaResponseDTO::foto).containsExactly("https://firmada/a", "https://firmada/b", null);
         verify(almacenamiento, times(1)).urlsFirmadas(any(), any(), any());

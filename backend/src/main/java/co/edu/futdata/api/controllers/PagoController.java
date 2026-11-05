@@ -13,6 +13,7 @@ import co.edu.futdata.api.dto.ResultadoCiclosDTO;
 import co.edu.futdata.api.dto.ResultadoGeneracionDTO;
 import co.edu.futdata.domain.entities.EstadoPago;
 import co.edu.futdata.domain.entities.TipoPago;
+import co.edu.futdata.domain.rules.ReglasSemana;
 import co.edu.futdata.persistence.dao.FiltroPagos;
 import co.edu.futdata.services.facade.DatosInvalidosException;
 import co.edu.futdata.services.facade.ICobrosCicloService;
@@ -27,7 +28,9 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -58,6 +61,9 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
         content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class)))
 public class PagoController {
 
+    /** El mismo mensaje que /api/horario-semana. */
+    private static final String FECHA_INVALIDA = "debe ser una fecha válida con el formato AAAA-MM-DD";
+
     private final IPagoService pagos;
     private final ICobrosCicloService ciclos;
     private final Clock reloj;
@@ -83,7 +89,10 @@ public class PagoController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'TESORERO')")
     @Operation(summary = "Listar los cobros (paginado)",
-            description = "Filtros: estado, tipo, idDeportista, periodo (AAAA-MM). sort: campo,asc|desc con campo vencimiento, monto, creadoEn o estado")
+            description = "Filtros: estado, tipo, idDeportista, periodo (AAAA-MM), vencimientoDesde y vencimientoHasta "
+                    + "(AAAA-MM-DD, ambos incluidos, sobre la fecha de vencimiento). Todos se combinan. Un formato "
+                    + "inválido, o vencimientoDesde posterior a "
+                    + "vencimientoHasta, responde 400. sort: campo,asc|desc con campo vencimiento, monto, creadoEn o estado")
     public PaginaResponseDTO<PagoResponseDTO> listar(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
@@ -91,16 +100,41 @@ public class PagoController {
             @RequestParam(required = false) EstadoPago estado,
             @RequestParam(required = false) TipoPago tipo,
             @RequestParam(required = false) UUID idDeportista,
-            @RequestParam(required = false) String periodo) {
+            @RequestParam(required = false) String periodo,
+            @RequestParam(required = false) String vencimientoDesde,
+            @RequestParam(required = false) String vencimientoHasta) {
+        // Texto y no LocalDate: así el mensaje y los campos los controlamos nosotros, y todos los errores de formato
+        // salen juntos en un solo 400
+        Map<String, String> errores = new LinkedHashMap<>();
         LocalDate primerDia = null;
         if (periodo != null && !periodo.isBlank()) {
             try {
                 primerDia = YearMonth.parse(periodo.strip()).atDay(1);
             } catch (DateTimeParseException e) {
-                throw DatosInvalidosException.de("periodo", "debe tener el formato AAAA-MM");
+                errores.put("periodo", "debe tener el formato AAAA-MM");
             }
         }
-        return pagos.listar(new FiltroPagos(estado, tipo, idDeportista, primerDia), sort, page, size);
+        LocalDate desde = fecha("vencimientoDesde", vencimientoDesde, errores);
+        LocalDate hasta = fecha("vencimientoHasta", vencimientoHasta, errores);
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
+            errores.put("vencimientoDesde", "no puede ser posterior a vencimientoHasta");
+            errores.put("vencimientoHasta", "no puede ser anterior a vencimientoDesde");
+        }
+        if (!errores.isEmpty()) {
+            throw new DatosInvalidosException(errores);
+        }
+        return pagos.listar(new FiltroPagos(estado, tipo, idDeportista, primerDia, desde, hasta), sort, page, size);
+    }
+
+    /** {@code null} si el parámetro no vino o está en blanco; si no es una fecha real AAAA-MM-DD, anota el error. */
+    private static LocalDate fecha(String campo, String texto, Map<String, String> errores) {
+        if (texto == null || texto.isBlank()) {
+            return null;
+        }
+        return ReglasSemana.fecha(texto.strip()).orElseGet(() -> {
+            errores.put(campo, FECHA_INVALIDA);
+            return null;
+        });
     }
 
     @GetMapping("/mis-pagos")

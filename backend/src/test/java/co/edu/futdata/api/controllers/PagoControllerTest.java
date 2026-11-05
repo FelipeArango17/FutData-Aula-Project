@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -146,14 +147,68 @@ class PagoControllerTest {
                 .andExpect(jsonPath("$.number").value(2))
                 .andExpect(jsonPath("$.size").value(10));
 
-        verify(pagos).listar(new FiltroPagos(EstadoPago.PENDIENTE, TipoPago.UNIFORME, DEPORTISTA, LocalDate.of(2026, 11, 1)), "monto,asc", 2, 10);
+        verify(pagos).listar(new FiltroPagos(EstadoPago.PENDIENTE, TipoPago.UNIFORME, DEPORTISTA, LocalDate.of(2026, 11, 1), null, null), "monto,asc", 2, 10);
+    }
+
+    @Test
+    void listarLeeElRangoDeVencimientoComoTextoYLoCombinaConElResto() throws Exception {
+        when(pagos.listar(any(), any(), anyInt(), anyInt())).thenReturn(new PaginaResponseDTO<>(List.of(), 0, 0, 20));
+
+        como(TESORERO, get("/api/pagos").param("vencimientoDesde", "2026-11-01").param("vencimientoHasta", "2026-11-30")
+                .param("tipo", "UNIFORME").param("periodo", "2026-11")).andExpect(status().isOk());
+        como(ADMIN, get("/api/pagos").param("vencimientoDesde", " 2026-11-05 ")).andExpect(status().isOk());
+        como(ADMIN, get("/api/pagos").param("vencimientoHasta", "2026-11-05")).andExpect(status().isOk());
+        como(ADMIN, get("/api/pagos").param("vencimientoDesde", "2026-11-05").param("vencimientoHasta", "2026-11-05"))
+                .andExpect(status().isOk());
+        como(ADMIN, get("/api/pagos").param("vencimientoDesde", "").param("vencimientoHasta", " ")).andExpect(status().isOk());
+
+        verify(pagos).listar(new FiltroPagos(null, TipoPago.UNIFORME, null, LocalDate.of(2026, 11, 1),
+                LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30)), null, 0, 20);
+        verify(pagos).listar(new FiltroPagos(null, null, null, null, LocalDate.of(2026, 11, 5), null), null, 0, 20);
+        verify(pagos).listar(new FiltroPagos(null, null, null, null, null, LocalDate.of(2026, 11, 5)), null, 0, 20);
+        verify(pagos).listar(new FiltroPagos(null, null, null, null, LocalDate.of(2026, 11, 5), LocalDate.of(2026, 11, 5)), null, 0, 20);
+        // En blanco = como si no vinieran
+        verify(pagos).listar(new FiltroPagos(null, null, null, null, null, null), null, 0, 20);
+    }
+
+    @Test
+    void unaFechaDeVencimientoMalFormadaEs400ConSuCampoYSinLlamarAlServicio() throws Exception {
+        for (String mala : new String[] {"2026-13-01", "2026-02-30", "01/11/2026", "2026-11", "noviembre", "2026-1-5"}) {
+            como(ADMIN, get("/api/pagos").param("vencimientoDesde", mala)).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.campos[0]").value("vencimientoDesde"))
+                    .andExpect(jsonPath("$.mensaje").value("vencimientoDesde: debe ser una fecha válida con el formato AAAA-MM-DD"));
+            como(ADMIN, get("/api/pagos").param("vencimientoHasta", mala)).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.campos[0]").value("vencimientoHasta"));
+        }
+        verifyNoInteractions(pagos);
+    }
+
+    @Test
+    void todosLosErroresDeFormatoSalenJuntosEnUnSolo400() throws Exception {
+        como(ADMIN, get("/api/pagos").param("periodo", "noviembre").param("vencimientoDesde", "x").param("vencimientoHasta", "y"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos.length()").value(3))
+                .andExpect(jsonPath("$.campos[0]").value("periodo"))
+                .andExpect(jsonPath("$.campos[1]").value("vencimientoDesde"))
+                .andExpect(jsonPath("$.campos[2]").value("vencimientoHasta"));
+        verifyNoInteractions(pagos);
+    }
+
+    @Test
+    void desdePosteriorAHastaEs400ConLosDosCampos() throws Exception {
+        como(ADMIN, get("/api/pagos").param("vencimientoDesde", "2026-11-30").param("vencimientoHasta", "2026-11-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.campos.length()").value(2))
+                .andExpect(jsonPath("$.campos[0]").value("vencimientoDesde"))
+                .andExpect(jsonPath("$.campos[1]").value("vencimientoHasta"));
+        verifyNoInteractions(pagos);
     }
 
     @Test
     void listarConValoresPorDefectoYFiltrosInvalidos() throws Exception {
         when(pagos.listar(any(), any(), anyInt(), anyInt())).thenReturn(new PaginaResponseDTO<>(List.of(), 0, 0, 20));
         como(ADMIN, get("/api/pagos")).andExpect(status().isOk());
-        verify(pagos).listar(new FiltroPagos(null, null, null, null), null, 0, 20);
+        verify(pagos).listar(new FiltroPagos(null, null, null, null, null, null), null, 0, 20);
 
         como(ADMIN, get("/api/pagos").param("periodo", "noviembre")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.campos[0]").value("periodo"));
         como(ADMIN, get("/api/pagos").param("estado", "VENCIDO")).andExpect(status().isBadRequest());

@@ -64,9 +64,8 @@ public class DeportistaDAOImpl implements IDeportistaDAO {
     }
 
     @Override
-    public List<Deportista> listar(ConsultaDeportistas consulta, int anioActual, boolean conEstadoInscripcion) {
+    public List<Deportista> listar(ConsultaDeportistas consulta, boolean conEstadoInscripcion) {
         MapSqlParameterSource p = filtros(consulta)
-                .addValue("anio", anioActual)
                 .addValue("limite", consulta.tamano())
                 .addValue("desplazamiento", (long) consulta.pagina() * consulta.tamano());
         if (conEstadoInscripcion) agregarObligatorios(p);
@@ -83,19 +82,36 @@ public class DeportistaDAOImpl implements IDeportistaDAO {
         return total == null ? 0 : total;
     }
 
-    /** Solo fragmentos fijos: los valores van como parámetros. */
+    /**
+     * Único {@code where} de {@link #listar} y {@link #contar}. Solo fragmentos fijos: los valores van como parámetros.
+     *
+     * <p>Los nombres de categoría y el dueño (entrenador) se resuelven en un solo {@code EXISTS} sobre la categoría
+     * <b>calculada</b> por edad ({@code :anio - año de nacimiento} entre {@code edad_minima} y {@code edad_maxima}); nunca
+     * sobre la columna heredada {@code deportista.id_categoria}. Fuera de 4 a 16 años ninguna categoría coincide, así que
+     * esos deportistas no salen cuando hay nombres o dueño.
+     */
     private static String where(ConsultaDeportistas consulta) {
         StringBuilder sql = new StringBuilder(" where true");
         if (consulta.activo() != null) sql.append(" and d.activo = :activo");
-        if (consulta.nacidoDesde() != null) sql.append(" and d.fecha_nacimiento between :nacidoDesde and :nacidoHasta");
+        boolean porNombre = !consulta.categorias().isEmpty();
+        boolean porDueno = consulta.idUsuarioEntrenador() != null;
+        if (porNombre || porDueno) {
+            sql.append(" and exists (select 1 from categoria cf");
+            if (porDueno) sql.append(" join entrenador ef on ef.id_entrenador = cf.id_entrenador");
+            sql.append(" where :anio - extract(year from d.fecha_nacimiento)::int between cf.edad_minima and cf.edad_maxima");
+            if (porDueno) sql.append(" and ef.id_usuario = :usuarioEntrenador");
+            if (porNombre) sql.append(" and cf.nombre in (:categorias)");
+            sql.append(")");
+        }
         return sql.toString();
     }
 
     private static MapSqlParameterSource filtros(ConsultaDeportistas consulta) {
         return new MapSqlParameterSource()
+                .addValue("anio", consulta.anio())
                 .addValue("activo", consulta.activo())
-                .addValue("nacidoDesde", consulta.nacidoDesde())
-                .addValue("nacidoHasta", consulta.nacidoHasta());
+                .addValue("usuarioEntrenador", consulta.idUsuarioEntrenador())
+                .addValue("categorias", consulta.categorias());
     }
 
     private static void agregarObligatorios(MapSqlParameterSource p) {
