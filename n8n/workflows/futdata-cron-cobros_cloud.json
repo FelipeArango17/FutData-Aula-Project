@@ -1,0 +1,121 @@
+{
+  "name": "FutData cron cobros",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 6,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "3f1c2a10-6b7e-4c55-9a41-0d2b8e7c1a01",
+      "name": "Cada día 6:00 a. m. (Bogotá)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://futdata-aula-project.onrender.com/api/health",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "id": "3f1c2a10-6b7e-4c55-9a41-0d2b8e7c1a03",
+      "name": "Despertar backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "3f1c2a10-6b7e-4c55-9a41-0d2b8e7c1a04",
+      "name": "Esperar 60 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        540,
+        0
+      ],
+      "webhookId": "3f1c2a10-6b7e-4c55-9a41-0d2b8e7c1a05"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://futdata-aula-project.onrender.com/api/pagos/generar-ciclos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "3f1c2a10-6b7e-4c55-9a41-0d2b8e7c1a02",
+      "name": "Generar ciclos de cobro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 10000
+    }
+  ],
+  "connections": {
+    "Cada día 6:00 a. m. (Bogotá)": {
+      "main": [
+        [
+          {
+            "node": "Despertar backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Despertar backend": {
+      "main": [
+        [
+          {
+            "node": "Esperar 60 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esperar 60 s": {
+      "main": [
+        [
+          {
+            "node": "Generar ciclos de cobro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Bogota"
+  },
+  "pinData": {}
+}
