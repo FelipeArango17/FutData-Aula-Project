@@ -7,7 +7,7 @@ import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
 import Icon from '../../components/Icon.jsx'
 import Paginacion from '../../components/ui/Paginacion.jsx'
 import { TablaDeportistas, TarjetasDeportistas } from '../../components/deportistas/ListaDeportistas.jsx'
-import { SIN_CATEGORIA, contarDeportistas, listarCategorias, listarPaginaDeportistas } from '../../services/deportistasService.js'
+import { SIN_CATEGORIA, contarDeportistas, deportistasPorApi, listarCategorias, listarPaginaDeportistas } from '../../services/deportistasService.js'
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { NOTA_CATEGORIA_POR_ANIO } from '../../utils/categorias.js'
 
@@ -83,7 +83,15 @@ export default function Deportistas() {
     }
   }, [intento])
 
-  const busqueda = texto.trim()
+  // Con la API, escribir busca en TODOS los deportistas recorriendo todas las páginas: se espera a que termine de escribir
+  const porApi = deportistasPorApi()
+  const [textoEsperado, setTextoEsperado] = useState('')
+  useEffect(() => {
+    if (!porApi) return undefined
+    const espera = setTimeout(() => setTextoEsperado(texto), 400)
+    return () => clearTimeout(espera)
+  }, [texto, porApi])
+  const busqueda = (porApi ? textoEsperado : texto).trim()
   const estado = FILTROS[filtro]
   const filtros = `${estado}|${categoria}|${busqueda}`
   const pagina = elegida.filtros === filtros ? elegida.pagina : 1
@@ -110,7 +118,7 @@ export default function Deportistas() {
   // «Sin asignar» o el nombre de la categoría elegida (vacío si el filtro es «Todas las categorías»)
   const nombreFiltro = categoria === SIN_CATEGORIA ? 'Sin asignar' : nombresCategoria[categoria] ?? ''
   const filtroActivo = Boolean(busqueda) || filtro !== 'Todos' || categoria !== TODAS
-  const limpiar = () => { setTexto(''); setFiltro('Todos'); setCategoria(TODAS) }
+  const limpiar = () => { setTexto(''); setTextoEsperado(''); setFiltro('Todos'); setCategoria(TODAS) }
   const sufijoCategoria = nombreFiltro ? ` · Categoría: ${nombreFiltro}` : ''
   const detalleEstado = filtro === 'Todos' ? '' : filtro.toLowerCase()
   const detalleCategoria = !categoria ? '' : categoria === SIN_CATEGORIA ? 'sin categoría asignada' : `de la categoría ${nombreFiltro}`
@@ -157,7 +165,10 @@ export default function Deportistas() {
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
       <div className="grid grid-cols-1 gap-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Buscar por nombre o documento" id="buscar" type="search" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)} />
+          <Field
+            label="Buscar por nombre o documento" id="buscar" type="search" autoComplete="off" value={texto} onChange={(e) => setTexto(e.target.value)}
+            {...(porApi ? { describedBy: 'buscar-ayuda' } : {})}
+          />
           <Field as="select" label="Categoría" id="categoria" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
             <option value={TODAS}>Todas las categorías</option>
             {categorias.map((c) => (
@@ -167,6 +178,7 @@ export default function Deportistas() {
           </Field>
         </div>
         <FilterChips label="Estado" options={Object.keys(FILTROS)} value={filtro} onChange={setFiltro} />
+        {porApi && <p id="buscar-ayuda" className="break-words text-small text-secondary">La búsqueda revisa a todos los deportistas del club desde esta pantalla (el servidor aún no busca por texto), así que con muchos puede tardar un poco.</p>}
         <p role="status" className="min-h-[1.125rem] text-small text-secondary">{cuenta}</p>
         <p className="break-words text-small text-secondary">{NOTA_CATEGORIA_POR_ANIO}</p>
       </div>

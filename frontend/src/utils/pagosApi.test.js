@@ -174,7 +174,7 @@ describe('validaciones de los formularios', () => {
   it('crear cobro: el deportista debe ser un UUID, el monto entero y la mensualidad lleva mes', () => {
     const bueno = { idDeportista: ID_DEPORTISTA, tipo: 'MENSUALIDAD', concepto: '', monto: '90000', fechaVencimiento: '2026-11-05', periodo: '2026-11' }
     expect(validarNuevoCobro(bueno)).toEqual({})
-    expect(validarNuevoCobro({ ...bueno, idDeportista: '3' }).idDeportista).toMatch(/módulo de deportistas/)
+    expect(validarNuevoCobro({ ...bueno, idDeportista: '3' }).idDeportista).toBe('Elige un deportista.')
     expect(validarNuevoCobro({ ...bueno, monto: '90.5' }).monto).toBeDefined()
     expect(validarNuevoCobro({ ...bueno, monto: '0' }).monto).toBeDefined()
     expect(validarNuevoCobro({ ...bueno, periodo: '' }).periodo).toBeDefined()

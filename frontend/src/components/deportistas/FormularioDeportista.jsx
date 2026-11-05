@@ -3,6 +3,7 @@ import Button from '../ui/Button.jsx'
 import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import Icon from '../Icon.jsx'
+import Field from '../ui/Field.jsx'
 import CamposDeportista from './CamposDeportista.jsx'
 import { idCategoriaAlGuardar } from '../../utils/categorias.js'
 import { DEPORTISTA_VACIO, aplicarCambio, validarDatosDeportista } from '../../services/deportistasService.js'
@@ -82,6 +83,13 @@ export default function FormularioDeportista({ inicial = DEPORTISTA_VACIO, categ
     <form ref={formRef} noValidate onSubmit={enviar} className="flex flex-col gap-4">
       <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
       <CamposDeportista texto={texto} fechaNacimiento={valores.fechaNacimiento} />
+      {/* Solo con la API: el PUT del backend recibe `activo`. `inicial.activo` es 'activo' o 'inactivo'; sin él no hay campo. */}
+      {inicial.activo !== undefined && (
+        <Field label="Estado" id="activo" as="select" {...texto('activo')}>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+        </Field>
+      )}
 
       <div role="status">
         {sinCambios && (
