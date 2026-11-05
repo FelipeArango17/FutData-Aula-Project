@@ -9,6 +9,7 @@ import AvisoEstado from '../ui/AvisoEstado.jsx'
 import DialogoConfirmacion from '../ui/DialogoConfirmacion.jsx'
 import Paginacion from '../ui/Paginacion.jsx'
 import TablaCobros from './TablaCobros.jsx'
+import SelectorDeportista from './SelectorDeportista.jsx'
 import { listarDeportistas } from '../../services/deportistasService.js'
 import {
   aprobarPagoManual, conciliarCobro, crearCobro, descargarComprobante, generarCiclos, listarCobros, listarTodosLosCobros, MAX_PAGINAS_RESUMEN, rechazarCobro,
@@ -50,6 +51,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
   const [errorAccion, setErrorAccion] = useState(null)
   // Deportistas ACTIVOS para «Crear cobro». `clave` es el intento con el que se leyeron (distinto del actual = cargando).
   const [reintentoDeportistas, setReintentoDeportistas] = useState(0)
+  const [pedirDeportistas, setPedirDeportistas] = useState(false) // se enciende al abrir «Crear cobro» por primera vez
   const [cargaDeportistas, setCargaDeportistas] = useState({ clave: null, lista: [], error: null })
 
   // Con el filtro de mes por vencimiento se leen todos los cobros una vez por estado + tipo + mes y se pagina aquí (ver lecturaCobros.js):
@@ -76,11 +78,10 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     }
   }, [filtros, clave])
 
-  // El administrador elige a quién crearle un cobro
-  // Con la API se recorren todas las páginas (de 100 en 100); se vuelve a leer cada vez que se abre el panel
-  const pideDeportistas = esAdministrador && panel?.tipo === 'crear'
+  // El administrador elige a quién crearle un cobro. La lista se lee UNA vez (al abrir el panel por primera vez) y se conserva mientras
+  // la pantalla esté montada; con la API se recorren todas las páginas (de 100 en 100). «Reintentar» la vuelve a pedir.
   useEffect(() => {
-    if (!pideDeportistas) return undefined
+    if (!pedirDeportistas) return undefined
     let activo = true
     listarDeportistas({ estado: 'activos' })
       .then((lista) => activo && setCargaDeportistas({ clave: reintentoDeportistas, lista, error: null }))
@@ -88,7 +89,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     return () => {
       activo = false
     }
-  }, [pideDeportistas, reintentoDeportistas])
+  }, [pedirDeportistas, reintentoDeportistas])
   const cargandoDeportistas = cargaDeportistas.clave !== reintentoDeportistas
   const deportistas = cargaDeportistas.lista
   const errorDeportistas = !cargandoDeportistas && cargaDeportistas.error
@@ -118,6 +119,7 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
     setErrorAccion(null)
     setErrorPanel(null)
     setErroresCampos({})
+    if (tipoPanel === 'crear' && esAdministrador) setPedirDeportistas(true)
     setPanel({ tipo: tipoPanel, cobro })
     setValores(tipoPanel === 'manual' ? { fechaPago: hoy(), metodo: '', nota: '' }
       : tipoPanel === 'crear' ? { idDeportista: '', tipo: 'MENSUALIDAD', concepto: '', monto: '', fechaVencimiento: '', periodo: hoy().slice(0, 7) }
@@ -289,10 +291,14 @@ export default function GestionCobros({ titulo, subtitulo, esAdministrador = fal
             {panel.tipo === 'crear' && (
               <>
                 <AvisoEstado aviso={errorDeportistas} rol="alert" tono="danger" enfocar={false} />
-                <Field label="Deportista" id="idDeportista" as="select" requerido value={valores.idDeportista ?? ''} error={erroresCampos.idDeportista} onChange={(e) => cambiar('idDeportista', e.target.value)}>
-                  <option value="">{cargandoDeportistas ? 'Cargando deportistas…' : !errorDeportistas && deportistas.length === 0 ? 'No hay deportistas activos' : 'Selecciona el deportista'}</option>
-                  {deportistas.map((d) => <option key={d.id} value={d.id}>{d.nombre} {d.apellido}</option>)}
-                </Field>
+                <SelectorDeportista
+                  deportistas={deportistas}
+                  value={valores.idDeportista ?? ''}
+                  cargando={cargandoDeportistas && pedirDeportistas}
+                  errorDeCarga={Boolean(errorDeportistas)}
+                  error={erroresCampos.idDeportista}
+                  onChange={(id) => cambiar('idDeportista', id)}
+                />
                 <Field label="Tipo de cobro" id="tipo" as="select" requerido value={valores.tipo ?? ''} error={erroresCampos.tipo} onChange={(e) => cambiar('tipo', e.target.value)}>
                   {TIPOS_COBRO.map((t) => <option key={t} value={t}>{ETIQUETAS_TIPO[t]}</option>)}
                 </Field>

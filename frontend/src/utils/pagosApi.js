@@ -185,7 +185,7 @@ export function validarAprobacionManual({ fechaPago, metodo }, hoy) {
 // Crear un cobro (administrador). El id del deportista es un UUID: con deportistas de ejemplo (ids numéricos) no se puede crear.
 export function validarNuevoCobro({ idDeportista, tipo, concepto, monto, fechaVencimiento, periodo }) {
   const errores = {}
-  if (!UUID.test(String(idDeportista ?? ''))) errores.idDeportista = 'Elige un deportista de la API (el módulo de deportistas debe estar conectado).'
+  if (!UUID.test(String(idDeportista ?? ''))) errores.idDeportista = 'Elige un deportista.'
   if (!TIPOS_COBRO.includes(tipo)) errores.tipo = 'Elige el tipo de cobro.'
   const texto = String(concepto ?? '').trim()
   if (!texto && tipo !== 'MENSUALIDAD') errores.concepto = 'Escribe el concepto.'
