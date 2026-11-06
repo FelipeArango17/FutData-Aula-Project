@@ -51,7 +51,8 @@ class CodigoVerificacionServiceImplConPostgresTest {
     @Configuration
     @EnableTransactionManagement
     static class Config {
-        @Bean
+        /** El pool compartido de PostgresDePrueba: Spring no debe cerrarlo al cerrar el contexto. */
+        @Bean(destroyMethod = "")
         DataSource dataSource() {
             return PostgresDePrueba.dataSource();
         }

@@ -26,6 +26,13 @@ public interface IDeportistaDAO {
     long contar(ConsultaDeportistas consulta);
 
     /**
+     * ¿Ya hay un deportista con ese número de documento? Es la revisión previa de la inscripción única; no sustituye
+     * al índice único (dos peticiones a la vez las cubre {@link #crear}). Compara el número tal cual se guardaría
+     * (ya limpio), sin distinguir el tipo, como el índice.
+     */
+    boolean existeDocumento(String documento);
+
+    /**
      * Inserta con {@code activo} en su valor por defecto ({@code true}).
      *
      * @throws DatoDuplicadoException el número de documento ya existe (lo garantiza el índice único)

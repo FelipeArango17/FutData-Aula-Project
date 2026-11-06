@@ -672,7 +672,8 @@ class PagosConPostgresTest {
         assertThat(todos.totalElements()).isEqualTo(3);
         assertThat(todos.content()).hasSize(2).extracting(PagoResponseDTO::concepto).containsExactly("Mensualidad octubre 2026", "Mensualidad noviembre 2026");
         assertThat(todos.content().get(0).vencido()).isTrue();   // vencía el 5 de octubre
-        assertThat(todos.content().get(1).vencido()).isFalse();  // vence el 5 de noviembre; hoy (reloj de la base) puede variar, no se afirma
+        // El segundo vence el 5 de noviembre: "vencido" lo calcula la vista pago_con_estado con el reloj real de la base,
+        // así que cambia con la fecha en que corren las pruebas y no se afirma.
         assertThat(todos.number()).isZero();
         assertThat(todos.size()).isEqualTo(2);
         assertThat(servicio.listar(new FiltroPagos(null, null, null, null, null, null), "vencimiento,asc", 1, 2).content()).hasSize(1);

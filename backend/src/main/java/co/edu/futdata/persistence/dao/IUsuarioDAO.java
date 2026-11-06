@@ -10,6 +10,9 @@ public interface IUsuarioDAO {
     Optional<Usuario> buscarPorId(UUID id);
     Optional<Usuario> buscarPorCorreo(String correo);
     boolean existeCorreo(String correo);
+
+    /** ¿El usuario tiene ese rol? Sin mirar si la cuenta está activa (a diferencia de {@link #rolesActivos}). */
+    boolean tieneRol(UUID idUsuario, String rol);
     UUID crear(Usuario usuario);
     void asignarRol(UUID idUsuario, String rol);
     void actualizarRol(UUID idUsuario, String rol);

@@ -442,6 +442,84 @@ Después de confirmar el rechazo (nunca dentro de la transacción) se avisa por 
 
 Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend).
 
+## Inscripción única (bloque 2B)
+
+Un solo `POST` que crea el deportista, crea o reutiliza a su acudiente por correo, los vincula con el parentesco y, si el correo no tiene cuenta, le crea la cuenta de acceso y le envía el enlace para crear su contraseña (regla 9, el mismo camino que el alta de entrenadores del bloque 5). Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` §9.1.3. **Migración 011** (`011_acudiente_documento_opcional.sql`, ya aplicada en la base del equipo): `acudiente.tipo_documento`, `documento_identidad` y `fecha_nacimiento` pasan a ser opcionales, porque la inscripción no los pide. Sin variables de entorno nuevas.
+
+### Endpoint
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `POST /api/inscripciones` | Inscribe a un deportista con su acudiente, todo o nada. Respuesta con `Cache-Control: no-store` | `ADMINISTRADOR` | `201`, `400`, `401`, `403`, `409`, `503` |
+
+La foto y los documentos **no** van aquí: se suben después con `POST /api/deportistas/{id}/foto` y `POST /api/deportistas/{id}/documentos`. El deportista nace activo y con `estadoInscripcion` `PENDIENTE` hasta que se aprueben los 4 documentos obligatorios.
+
+### Petición
+
+```json
+POST /api/inscripciones
+{
+  "deportista": {
+    "nombre": "Mateo", "apellido": "Ríos", "tipoDocumento": "TI", "documento": "1234567890",
+    "fechaNacimiento": "2016-03-03", "telefono": "3001234567", "direccion": "Calle 1 # 2-3",
+    "posicion": "Delantero", "grupo": "mañana"
+  },
+  "acudiente": {
+    "nombre": "Ana", "apellido": "Ríos", "correo": "ana@correo.co", "telefono": "3001234567", "parentesco": "Madre"
+  }
+}
+```
+
+- `deportista`: los mismos campos y reglas de `POST /api/deportistas` (4 a 16 años por año de nacimiento, grupo solo en Cachorros y Semillero); además, nombre y apellido de máximo 100. `activo` se ignora.
+- `acudiente`: nombre y apellido obligatorios (máximo 100), correo obligatorio (máximo 254), teléfono de 10 dígitos y parentesco `Madre`, `Padre`, `Abuelo`, `Abuela`, `Tia`, `Tio` u `Otro` (`Tía` y `Tío` se aceptan y se guardan sin tilde). El correo se guarda en minúsculas.
+- Los campos desconocidos se ignoran.
+
+### Respuesta (`201`)
+
+```json
+{
+  "deportista": { "id": "…", "nombre": "Mateo", "apellido": "Ríos", "tipoDocumento": "TI", "documento": "1234567890",
+                  "fechaNacimiento": "2016-03-03", "edad": 10, "telefono": "3001234567", "direccion": "Calle 1 # 2-3",
+                  "posicion": "Delantero", "foto": null, "categoria": "Semillero", "idCategoria": "…", "grupo": "mañana",
+                  "activo": true, "estadoInscripcion": "PENDIENTE" },
+  "acudiente": { "id": "…", "nombre": "Ana", "apellido": "Ríos", "correo": "ana@correo.co",
+                 "reutilizado": false, "cuentaCreada": true },
+  "parentesco": "Madre",
+  "correoEnviado": true
+}
+```
+
+- `deportista`: el mismo objeto que devuelve `POST /api/deportistas`.
+- `acudiente.reutilizado`: ya existía una ficha de acudiente con ese correo; **sus datos no cambian** (los que llegan se ignoran).
+- `acudiente.cuentaCreada`: la inscripción le creó la cuenta de acceso (sin contraseña).
+- `correoEnviado` va **siempre**: `true`, n8n aceptó el correo con el enlace (no garantiza que llegue); `false`, no se pudo enviar, pero la inscripción **sí** quedó hecha; `null`, no había cuenta nueva y no se envió nada. **Hasta publicar la plantilla `BIENVENIDA_ACUDIENTE` en n8n Cloud, n8n responde `400` y sale `false`.**
+- Nunca trae nada de Supabase Auth (ni el id de la cuenta).
+
+### La cuenta del acudiente
+
+Antes de guardar, por el correo y en este orden:
+
+1. La ficha de acudiente con ese correo ya tiene cuenta: se usa esa (no se crea ni se envía nada).
+2. Hay un usuario con ese correo y el rol `ACUDIENTE`: se reutiliza su cuenta; la ficha se crea o se enlaza.
+3. Hay un usuario con ese correo y **otro rol**: `409` en `acudiente.correo` ("ese correo ya pertenece a una cuenta con otro rol"); no se crea nada.
+4. El correo es nuevo: se crea la cuenta en Supabase Auth sin contraseña (`503` si Auth no responde; no se guarda nada).
+
+Después, en una sola transacción: `usuario` y su rol (si la cuenta es nueva), el deportista, la ficha y el vínculo. Si la transacción falla, la cuenta recién creada se borra de Auth (si ese borrado también falla, solo se registra el tipo de la falla y la cuenta hay que borrarla a mano). El enlace se envía **después** del commit y nunca deshace la inscripción.
+
+Si el correo no se envió, no hay todavía un "reenviar enlace" para acudientes: el acudiente puede usar "¿Olvidaste tu contraseña?" del login (`/recuperar`, con el correo de Supabase Auth).
+
+### Errores
+
+| Código | Cuándo |
+| :--- | :--- |
+| `400` | Datos inválidos, **todos juntos**, con los campos prefijados (`campos: ["acudiente.correo", "deportista.documento", …]`); sin cuerpo, `campos: ["cuerpo"]`; un valor con formato inválido, como una fecha, trae su ruta (`deportista.fechaNacimiento`); un JSON ilegible da el `400` general, sin `campos` |
+| `401` | Sin token, token inválido o vencido |
+| `403` | La cuenta no es `ADMINISTRADOR`; **o** la sesión no completó el 2FA (`codigo: "2FA_REQUERIDA"`) |
+| `409` | Documento del deportista ya registrado (`campos: ["deportista.documento"]`); correo de una cuenta con otro rol, u otra inscripción con el mismo correo al mismo tiempo, que se reintenta (`campos: ["acudiente.correo"]`) |
+| `503` | Supabase Auth no respondió al crear la cuenta; no se guardó nada |
+
+Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend). Los registros nunca llevan correos, nombres, teléfonos, documentos ni el id de la cuenta.
+
 ## Horario del club (bloque 4A)
 
 Plantilla fija de entrenamientos de lunes a sábado (tabla `franja_horario`, migración 007). Cada franja es de una categoría, un día, una hora de inicio y fin, y una sede; el entrenador y el grupo son opcionales. La plantilla real del club (30 franjas) se carga una vez con `supabase/seeds/franjas_club.sql` (ver `docs/GUIA-SUPABASE-EQUIPO.md`).

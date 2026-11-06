@@ -14,6 +14,7 @@ import co.edu.futdata.persistence.dao.IUsuarioDAO;
 import co.edu.futdata.services.facade.ConflictoException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,8 @@ public class CuentasDeAcceso {
     static final String CUENTA_AUTH_INEXISTENTE =
             "La cuenta de acceso de este entrenador no existe en Supabase Auth; revisa la configuración";
     public static final String PLANTILLA_BIENVENIDA_ENTRENADOR = "BIENVENIDA_ENTRENADOR";
+    /** La de la inscripción única (bloque 2B). Mientras n8n no la conozca responde 400 y el alta da correoEnviado=false. */
+    public static final String PLANTILLA_BIENVENIDA_ACUDIENTE = "BIENVENIDA_ACUDIENTE";
     /**
      * Vigencia del enlace que se anuncia en el correo: 1 hora. Debe coincidir con la de Supabase Auth
      * ({@code mailer_otp_exp = 3600}, Email OTP Expiration). Si vence, el administrador lo reenvía.
@@ -98,12 +101,22 @@ public class CuentasDeAcceso {
 
     /** Compensación: borra la cuenta de Auth recién creada porque la base falló. Si no se puede, solo lo registra. */
     void eliminarCuentaAuth(UUID id) {
+        intentarEliminarCuentaAuth(id).ifPresentOrElse(
+                tipo -> log.error("No se pudo borrar la cuenta de Auth {} tras la falla de la base ({}); hay que "
+                        + "borrarla a mano", id, tipo),
+                () -> log.info("Cuenta de Auth {} borrada: la base de datos no guardó el alta", id));
+    }
+
+    /**
+     * Compensación sin registros, para quien no debe dejar ni el id de la cuenta en los logs (la inscripción del
+     * acudiente). Nunca lanza: si no se pudo borrar, devuelve el tipo de la excepción; si se borró, vacío.
+     */
+    Optional<String> intentarEliminarCuentaAuth(UUID id) {
         try {
             auth.eliminar(id);
-            log.info("Cuenta de Auth {} borrada: la base de datos no guardó el alta", id);
+            return Optional.empty();
         } catch (RuntimeException e) {
-            log.error("No se pudo borrar la cuenta de Auth {} tras la falla de la base ({}); hay que borrarla a mano",
-                    id, e.getClass().getSimpleName());
+            return Optional.of(e.getClass().getSimpleName());
         }
     }
 

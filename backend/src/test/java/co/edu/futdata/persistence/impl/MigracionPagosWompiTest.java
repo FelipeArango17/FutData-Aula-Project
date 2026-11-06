@@ -151,7 +151,8 @@ class MigracionPagosWompiTest {
     @Test
     void correrLaMigracionDosVecesSeDetieneConUnMensajeClaro() throws IOException {
         String sql = Files.readString(PostgresDePrueba.MIGRACIONES.resolve("009_pagos_wompi.sql"));
-        assertThatThrownBy(() -> jdbc.getJdbcOperations().execute(sql))
+        // Por una conexión propia: el script abre su transacción, falla y esa conexión no debe volver al pool
+        assertThatThrownBy(() -> PostgresDePrueba.ejecutarConConexionPropia(sql))
                 .hasMessageContaining("ya tiene la columna id_transaccion_wompi");
         // y no dejó nada a medias: las restricciones siguen siendo las nuevas
         insertar("TORNEO", null, "PENDIENTE", null, null, null);
