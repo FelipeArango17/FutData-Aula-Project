@@ -84,3 +84,6 @@ export function resumenObligatorios(documentos) {
   const total = TOTAL_REQUISITOS_OBLIGATORIOS
   return { completos, total, texto: `${completos} de ${total} requisitos obligatorios completos` }
 }
+
+// La foto real de un deportista del listado: `foto` (con la API) o la guardada en memoria (fotos: { idDeportista: url })
+export const deportistaTieneFoto = (deportista, fotos = {}) => Boolean(deportista.foto || fotos[deportista.id])
