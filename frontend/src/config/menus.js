@@ -114,3 +114,7 @@ export const bottomNavs = {
 export const inicioDe = (role) => menus[role][0].items[0].to
 
 export const getItems = (role) => menus[role].flatMap((group) => group.items)
+
+// Rutas públicas que dependen de un módulo (fuera del menú). Sin el módulo en VITE_API_MODULOS se ocultan: la ruta redirige al login
+// y ningún enlace lleva a ella.
+export const RUTA_INSCRIPCION = { to: '/inscripcion', modulo: 'inscripcionpublica' }

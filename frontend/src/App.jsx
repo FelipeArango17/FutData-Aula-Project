@@ -17,7 +17,7 @@ import { useAuth } from './context/AuthContext.js'
 import EntrenadoresProvider from './context/EntrenadoresProvider.jsx'
 import { useRole } from './context/RoleContext.js'
 import EsperaSesion from './components/EsperaSesion.jsx'
-import { roles, menus, getItems } from './config/menus.js'
+import { roles, menus, getItems, RUTA_INSCRIPCION } from './config/menus.js'
 import { autenticacionReal } from './services/supabaseClient.js'
 import { modulosConApi } from './services/usarApi.js'
 import { inicioVisibleDe, opcionDeRuta, opcionVisible } from './utils/menusVisibles.js'
@@ -56,7 +56,7 @@ function App() {
               <Route path="/recuperar" element={<Recuperar />} />
               <Route path="/restablecer" element={<Restablecer />} />
               <Route path="/crear-contrasena" element={<CrearContrasena />} />
-              <Route path="/inscripcion" element={<Inscripcion />} />
+              <Route path="/inscripcion" element={visible(RUTA_INSCRIPCION) ? <Inscripcion /> : <Navigate to="/login" replace />} />
               <Route element={<AppShell />}>
                 {/* Perfil: dentro del AppShell, para los 4 roles */}
                 <Route path="/perfil" element={<Perfil />} />
