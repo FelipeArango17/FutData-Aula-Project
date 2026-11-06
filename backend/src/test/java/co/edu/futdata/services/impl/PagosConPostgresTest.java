@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -124,10 +125,16 @@ class PagosConPostgresTest {
         return new PagoWompiServiceImpl(wompi, pagos, aplicador, JSON, new DataSourceTransactionManager(PostgresDePrueba.dataSource()));
     }
 
+    /** La base se comparte con otras clases: no se dejan pagos ni deportistas que les impidan borrar los suyos. */
+    @AfterEach
+    void limpiarAlTerminar() {
+        limpiar();
+    }
+
     private void limpiar() {
-        for (String tabla : List.of("auditoria", "notificacion_pago", "pago", "acudiente_deportista", "acudiente", "documento", "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         jdbc.getJdbcOperations().update("DELETE FROM usuario WHERE correo LIKE 'pagos-%'");
         jdbc.getJdbcOperations().update("DELETE FROM auth.users WHERE id NOT IN (SELECT id_usuario FROM usuario)");
     }

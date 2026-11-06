@@ -3,7 +3,6 @@ package co.edu.futdata.persistence.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import co.edu.futdata.persistence.dao.Destinatario;
-import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,9 +40,9 @@ class DestinatariosDAOImplTest {
 
     @AfterEach
     void limpiarTodo() {
-        for (String tabla : List.of("auditoria", "notificacion_pago", "pago", "acudiente_deportista", "acudiente", "documento", "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         PostgresDePrueba.limpiar();
     }
 

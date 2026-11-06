@@ -127,10 +127,9 @@ class DocumentoServiceConPostgresTest {
     @AfterEach
     void limpiarTodo() {
         // La base de pruebas se comparte con otras clases, que dejan cobros y avisos de sus deportistas
-        for (String tabla : List.of("auditoria", "notificacion_pago", "pago", "documento", "acudiente_deportista", "acudiente",
-                "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         jdbc.getJdbcOperations().update("DELETE FROM usuario WHERE correo LIKE '" + CORREO_PG + "%'");
         jdbc.getJdbcOperations().update("DELETE FROM auth.users WHERE id NOT IN (SELECT id_usuario FROM usuario)");
     }
