@@ -14,6 +14,21 @@
 // que a los entrenadores; aquí solo se guardan sus datos de contacto y el vínculo. El backend también debe garantizar que el
 // correo no se repita (hoy, si el correo ya existe, se reutiliza el acudiente).
 import { validarCampos, validarCorreo, validarNombre, validarTelefono, enLista, MENSAJES } from '../utils/validaciones.js'
+import { adaptarFichaJugador, adaptarMisJugadores } from '../utils/acudientesApi.js'
+import { apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+
+// MODO API (módulo "acudientes" en VITE_API_MODULOS): solo la lectura del acudiente con sesión. El resto de este servicio (registrar y vincular
+// acudientes) sigue en memoria. Sin el módulo (y siempre en las pruebas) las pantallas del acudiente usan sus datos de ejemplo.
+//   GET /api/acudientes/me/deportistas       -> lista de MiJugadorResponseDTO (el acudiente sale del token; lista vacía si no tiene jugadores)
+//   GET /api/acudientes/me/deportistas/{id}  -> MiJugadorFichaResponseDTO con documentosFaltantes (404 si no existe o no es suyo; 400 si el id no es UUID)
+export const acudientesPorApi = () => usarApiDe('acudientes')
+export async function listarMisJugadores() {
+  return adaptarMisJugadores(await apiRequest('/acudientes/me/deportistas'))
+}
+export async function obtenerMiJugador(id) {
+  return adaptarFichaJugador(await apiRequest(`/acudientes/me/deportistas/${encodeURIComponent(id)}`))
+}
 
 export const PARENTESCOS = ['Madre', 'Padre', 'Abuelo', 'Abuela', 'Tía', 'Tío', 'Otro']
 
