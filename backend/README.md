@@ -492,7 +492,7 @@ POST /api/inscripciones
 - `deportista`: el mismo objeto que devuelve `POST /api/deportistas`.
 - `acudiente.reutilizado`: ya existía una ficha de acudiente con ese correo; **sus datos no cambian** (los que llegan se ignoran).
 - `acudiente.cuentaCreada`: la inscripción le creó la cuenta de acceso (sin contraseña).
-- `correoEnviado` va **siempre**: `true`, n8n aceptó el correo con el enlace (no garantiza que llegue); `false`, no se pudo enviar, pero la inscripción **sí** quedó hecha; `null`, no había cuenta nueva y no se envió nada. **Hasta publicar la plantilla `BIENVENIDA_ACUDIENTE` en n8n Cloud, n8n responde `400` y sale `false`.**
+- `correoEnviado` va **siempre**: `true`, n8n aceptó el correo con el enlace (no garantiza que llegue); `false`, no se pudo enviar, pero la inscripción **sí** quedó hecha; `null`, no había cuenta nueva y no se envió nada. **La plantilla `BIENVENIDA_ACUDIENTE` en n8n Cloud se descartó: n8n responde `400` y, con un acudiente nuevo, sale `false` hasta nuevo aviso.** El acudiente crea su contraseña con "¿Olvidaste tu contraseña?" (`/recuperar`), camino verificado en producción.
 - Nunca trae nada de Supabase Auth (ni el id de la cuenta).
 
 ### La cuenta del acudiente
@@ -702,7 +702,7 @@ Solo `ADMINISTRADOR` y `ENTRENADOR` (acudiente y tesorero reciben `403` por rol)
 
 ## Asistencia (bloque 4C, versión mínima)
 
-Pasar lista de una sesión del horario: la lista de deportistas de una franja en una fecha (o de un extra) con su estado, y guardar las marcas. **Estado:** implementado en la rama `feature/bloque-asistencia`, pendiente de merge. **La migración 012 (`supabase/migrations/012_asistencia_entrenador_opcional.sql`) está pendiente de aplicar en la base real**; las pruebas la aplican solas en su PostgreSQL. Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` (9.1.2).
+Pasar lista de una sesión del horario: la lista de deportistas de una franja en una fecha (o de un extra) con su estado, y guardar las marcas. **Estado:** en `develop` (PR #102). La migración 012 (`supabase/migrations/012_asistencia_entrenador_opcional.sql`) ya está aplicada en la base real; las pruebas la aplican solas en su PostgreSQL. Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` (9.1.2).
 
 ### Endpoints
 
