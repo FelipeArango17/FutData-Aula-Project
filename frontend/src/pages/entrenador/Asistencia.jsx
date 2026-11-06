@@ -13,7 +13,8 @@ import { ESTADOS_ASISTENCIA, ORDEN_ESTADOS } from '../../components/asistencia/e
 import { useFotosDeportistas } from '../../hooks/useFotosDeportistas.js'
 import { useRole } from '../../context/RoleContext.js'
 import { useAuth } from '../../context/AuthContext.js'
-import { editarAsistencia, listarEntrenamientosParaAsistencia, obtenerAsistencia, registrarAsistencia } from '../../services/asistenciaService.js'
+import AsistenciaApi from './AsistenciaApi.jsx'
+import { asistenciaPorApi, editarAsistencia, listarEntrenamientosParaAsistencia, obtenerAsistencia, registrarAsistencia } from '../../services/asistenciaService.js'
 import { ENTRENADORES, ID_ENTRENADOR_EJEMPLO } from '../../services/entrenamientosService.js'
 import { diaLargo, formatHora } from '../../utils/fechas.js'
 
@@ -60,7 +61,12 @@ const etiquetaMomento = (fechaHora) => {
   return `${diaLargo(fecha)}, ${formatHora(hora)}`
 }
 
+// Con el módulo "asistencia" encendido (VITE_API_MODULOS) se usa la pantalla de la API; apagado, queda la de ejemplo de abajo.
 export default function Asistencia() {
+  return asistenciaPorApi() ? <AsistenciaApi /> : <AsistenciaEjemplo />
+}
+
+function AsistenciaEjemplo() {
   const { role } = useRole()
   const fotos = useFotosDeportistas()
   const { estado: estadoSesion, usuario } = useAuth()

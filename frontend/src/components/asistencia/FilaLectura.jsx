@@ -10,7 +10,7 @@ export default function FilaLectura({ nombre, foto, estado, observacion }) {
       <div className="flex min-w-0 grow basis-[14rem] flex-col gap-2">
         <p className="break-words text-body-medium">{nombre}</p>
         <div className="flex flex-wrap">
-          <EstadoChip estado={estado} />
+          {estado ? <EstadoChip estado={estado} /> : <span className="text-small text-secondary">Sin marcar</span>}
         </div>
         {observacion && <p className="break-words text-small text-secondary">Observación: {observacion}</p>}
       </div>
