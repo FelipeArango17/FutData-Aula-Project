@@ -50,6 +50,14 @@ public class UsuarioDAOImpl implements IUsuarioDAO {
     }
 
     @Override
+    public boolean tieneRol(UUID idUsuario, String rol) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                select exists(select 1 from usuario_rol ur join rol r on r.id_rol = ur.id_rol
+                               where ur.id_usuario = :id and r.nombre = :rol)""",
+                Map.of("id", idUsuario, "rol", rol), Boolean.class));
+    }
+
+    @Override
     public UUID crear(Usuario usuario) {
         jdbc.update("insert into usuario (id_usuario, nombre, apellido, correo) values (:id, :nombre, :apellido, :correo)",
                 Map.of("id", usuario.getId(), "nombre", usuario.getNombre(), "apellido", usuario.getApellido(),

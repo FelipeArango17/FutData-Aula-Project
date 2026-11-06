@@ -1,5 +1,7 @@
 package co.edu.futdata.persistence.impl;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -75,6 +77,7 @@ public final class PostgresDePrueba {
 
     private static PostgreSQLContainer<?> contenedor;
     private static DataSource dataSource;
+    private static DriverManagerDataSource conexionDirecta;
     private static List<String> categoriasDeLaMigracion;
 
     private PostgresDePrueba() {
@@ -86,11 +89,19 @@ public final class PostgresDePrueba {
         return url != null && !url.isBlank();
     }
 
-    /** Prepara la base la primera vez (contenedor o base local) y aplica las migraciones. */
+    /**
+     * Prepara la base la primera vez (contenedor o base local), aplica las migraciones y devuelve el pool compartido.
+     *
+     * <p>Las migraciones y el {@code DROP SCHEMA} de la base local van por una conexión directa; las pruebas usan un
+     * pool Hikari pequeño. Antes cada consulta abría una conexión TCP nueva y, en Windows, una corrida completa
+     * agotaba los puertos locales ({@code BindException: Address already in use}). Nadie debe cerrar este pool (un
+     * {@code @Bean} que lo exponga va con {@code destroyMethod = ""}), ni devolverle una conexión con una transacción
+     * abortada: un script con su propio {@code begin} que debe fallar se corre con {@link #ejecutarConConexionPropia}.
+     */
     public static synchronized DataSource dataSource() {
         if (dataSource == null) {
-            DriverManagerDataSource ds = usaBaseLocal() ? baseLocal() : baseEnDocker();
-            JdbcTemplate jdbc = new JdbcTemplate(ds);
+            DriverManagerDataSource directa = usaBaseLocal() ? baseLocal() : baseEnDocker();
+            JdbcTemplate jdbc = new JdbcTemplate(directa);
             jdbc.execute("CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY)");
             for (Path archivo : migraciones()) {
                 jdbc.execute(leerMigracion(archivo));
@@ -98,9 +109,34 @@ public final class PostgresDePrueba {
             categoriasDeLaMigracion = jdbc.queryForList(
                     "SELECT nombre || ' ' || edad_minima || '-' || edad_maxima || ' ' || coalesce(id_entrenador::text, 'sin entrenador') "
                             + "FROM categoria ORDER BY edad_minima", String.class);
-            dataSource = ds;
+            conexionDirecta = directa;
+            dataSource = pool(directa);
         }
         return dataSource;
+    }
+
+    /** El pool de las pruebas, con la misma URL, usuario y clave que la conexión directa. */
+    private static HikariDataSource pool(DriverManagerDataSource directa) {
+        HikariConfig config = new HikariConfig();
+        config.setPoolName("postgres-de-prueba");
+        config.setJdbcUrl(directa.getUrl());
+        config.setUsername(directa.getUsername());
+        config.setPassword(directa.getPassword());
+        config.setMaximumPoolSize(10);
+        config.setMinimumIdle(2);
+        config.setConnectionTimeout(30_000);
+        return new HikariDataSource(config);
+    }
+
+    /**
+     * Ejecuta {@code sql} por una conexión propia, fuera del pool, que se cierra al terminar. Para los scripts con su
+     * propio {@code begin ... commit} que la prueba espera que <b>fallen</b>: la conexión queda con la transacción
+     * abortada y no debe volver al pool. Lanza la excepción de JDBC tal cual.
+     */
+    static void ejecutarConConexionPropia(String sql) {
+        dataSource();
+        new JdbcTemplate(new DriverManagerDataSource(conexionDirecta.getUrl(), conexionDirecta.getUsername(),
+                conexionDirecta.getPassword())).execute(sql);
     }
 
     /**

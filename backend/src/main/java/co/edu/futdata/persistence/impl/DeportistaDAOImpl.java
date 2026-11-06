@@ -120,6 +120,13 @@ public class DeportistaDAOImpl implements IDeportistaDAO {
     }
 
     @Override
+    public boolean existeDocumento(String documento) {
+        return Boolean.TRUE.equals(jdbc.queryForObject(
+                "select exists (select 1 from deportista where documento_identidad = :documento)",
+                new MapSqlParameterSource("documento", documento), Boolean.class));
+    }
+
+    @Override
     public UUID crear(Deportista d) {
         try {
             return jdbc.queryForObject("""
