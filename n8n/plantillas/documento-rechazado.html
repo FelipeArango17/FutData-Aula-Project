@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Documento rechazado en FutData</title>
+</head>
+<body style="margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+<!-- Texto de vista previa (oculto en el cuerpo del correo) -->
+<div style="display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;">
+No se pudo aprobar el documento {{documento}} de {{nombreDeportista}}. Revisa el motivo y vuelve a subirlo.
+</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F7F8FA;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;">
+        <!-- Encabezado -->
+        <tr>
+          <td align="left" style="background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;">
+            <span style="font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;">Fut<span style="color:#3CB043;">Data</span></span>
+          </td>
+        </tr>
+        <!-- Cuerpo -->
+        <tr>
+          <td align="left" style="padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;">
+            <p style="margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;">Hola, {{nombreAcudiente}}:</p>
+            <p style="margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;">El administrador del club revisó el documento <strong>{{documento}}</strong> de <strong>{{nombreDeportista}}</strong> y no pudo aprobarlo. Revisa el motivo, corrige el documento y vuelve a subirlo desde la sección de documentos.</p>
+          </td>
+        </tr>
+        <!-- Motivo del rechazo (el comentario conserva sus saltos de línea como <br>) -->
+        <tr>
+          <td style="padding:0 32px 24px 32px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;">
+              <tr>
+                <td style="padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;">
+                  <strong>Motivo del rechazo:</strong><br>
+                  {{comentario}}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Botón -->
+        <tr>
+          <td align="center" style="padding:0 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td align="center" style="background-color:#3CB043; border-radius:8px;">
+                  <a href="{{enlace}}" target="_blank" rel="noopener" style="display:inline-block; padding:14px 28px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:8px;">Ir a los documentos</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <!-- Enlace en texto, por si el botón no funciona -->
+        <tr>
+          <td align="left" style="padding:16px 32px 32px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#4B5563;">
+            Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
+            <a href="{{enlace}}" target="_blank" rel="noopener" style="color:#0F2C4C; word-break:break-all;">{{enlace}}</a>
+          </td>
+        </tr>
+        <!-- Pie -->
+        <tr>
+          <td align="center" style="border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;">
+            Asociación Deportiva Prado Fútbol Club · FutData<br>
+            Este es un correo automático, por favor no lo respondas.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

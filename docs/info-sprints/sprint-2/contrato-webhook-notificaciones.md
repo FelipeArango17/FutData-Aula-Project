@@ -14,7 +14,7 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | `CAMBIO_ENTRENAMIENTO` | HU-026 (CU-05) | Asíncrona: `202` | Aviso al entrenador, los jugadores y los acudientes cuando se crea, modifica o cancela un entrenamiento |
 | `ENLACE_CONTRASENA` | Regla 9 (alta de entrenador y su reenvío) | **Síncrona**: `200` o `502` | Enlace para que la persona cree su propia contraseña (vence en 1 hora) |
 | `RECORDATORIO_PAGO` | Regla 14 (cobros por ciclo de ingreso) | Asíncrona: `202` | Recordatorio al acudiente de una mensualidad creada con anticipación. Un correo por acudiente |
-| `DOCUMENTO_RECHAZADO` | Regla 8 (bloque 3, documentos) | Asíncrona: `202` | Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista. Un correo por acudiente. **El backend ya lo envía; el flujo de n8n Cloud lo agrega el paso 6B** (hasta entonces responde `400` "Evento no soportado") |
+| `DOCUMENTO_RECHAZADO` | Regla 8 (bloque 3, documentos) | Asíncrona: `202` | Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista. Un correo por acudiente. **El backend ya lo envía y el JSON de Cloud con el evento ya está en el repositorio (`n8n/workflows/futdata-notificaciones_cloud.json`); falta importarlo y publicarlo en n8n Cloud y probarlo con `probar-documento` (Omar)** (hasta entonces responde `400` "Evento no soportado") |
 
 ## Reparto de responsabilidades
 
@@ -226,7 +226,7 @@ El administrador rechaza un documento de la inscripción de un deportista y escr
 
 **Destinatarios.** El backend los resuelve (los acudientes vinculados al deportista con correo válido, sin repetir correos aunque cambien las mayúsculas); n8n **no consulta la base de datos** ni recibe una lista: cada petición lleva un solo `correo`. Si una llamada falla, el backend no envía las demás.
 
-**Correo** (se agrega en el paso 6B). Plantilla `n8n/plantillas/documento-rechazado.html` (y `.txt`). Todos los textos de la petición (nombres, documento, comentario, enlace) se escapan antes de insertarlos en el HTML; los saltos de línea del comentario se muestran como saltos de línea.
+**Correo.** Plantilla `n8n/plantillas/documento-rechazado.html` (y `.txt`); el nodo `Enviar aviso de documento rechazado` del flujo de Cloud tiene una copia. Todos los textos de la petición (nombres, documento, comentario, enlace) se escapan antes de insertarlos en el HTML; los saltos de línea del comentario se muestran como saltos de línea.
 
 **Datos personales.** Los nombres, el comentario y el correo son datos de menores y de sus familias: ni el backend ni n8n los escriben en sus registros (ver *Seguridad y registros*). El `detalle` de un `400` nunca los incluye.
 
@@ -313,7 +313,7 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
    - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; como `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. No hay que tocar `¿Responder 502?`.
    - **Asíncrono** (como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
 
-   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`. **Pendiente (paso 6B):** debe excluir también `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`; hoy, si el envío de un recordatorio falla después del `202`, el flujo intentaría responder otra vez.
+   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son asíncronos: en el JSON de Cloud del repositorio excluye `CAMBIO_ENTRENAMIENTO`, `CODIGO_2FA`, `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`. El flujo publicado hoy en n8n Cloud solo excluye los dos primeros hasta que se importe y publique el JSON del repositorio; mientras tanto, si el envío de un recordatorio falla después del `202`, el flujo intentaría responder otra vez.
 
    En ambos casos la salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos. Ese nodo toma el correo del ítem que falló (campo `correo`) o, si no lo tiene, de `datos.correo`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.
