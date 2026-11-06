@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_MOTIVO, accionesDe, categoriasCreables, chocaEntrenadorEnSesiones, esFechaModificable, fechaConMes, puedeActuarSobre, puedeCrearExtra,
+  MAX_MOTIVO, accionesDe, avisoDeAccion, categoriasCreables, chocaEntrenadorEnSesiones, esFechaModificable, fechaConMes, puedeActuarSobre, puedeCrearExtra,
   semanaEnCurso, sesionesDeSemana, textoAviso, validarExtra, validarMotivo,
 } from './semana.js'
 
@@ -181,5 +181,49 @@ describe('semanaEnCurso', () => {
     expect(semanaEnCurso('2026-11-08')).toBe('2026-11-09') // domingo
     expect(semanaEnCurso('2026-11-09')).toBe('2026-11-09') // lunes
     expect(semanaEnCurso('2026-10-22')).toBe('2026-10-19') // jueves (HOY_EJEMPLO)
+  })
+})
+
+describe('accionesDe con puedeGestionar (modo API)', () => {
+  const sesionApi = (extra = {}) => ({ tipo: 'FRANJA', estado: 'PROGRAMADO', idExcepcion: null, fecha: '2026-10-23', categoria: 'Sub-12', ...extra })
+  const ctx = (extra = {}) => ({ rol: 'entrenador', propias: null, capacidades: { cancelar: true, extras: true, editarExtra: false }, hoy: '2026-10-22', ...extra })
+
+  it('el backend manda: puedeGestionar true habilita cancelar aunque no se conozcan las categorías propias', () => {
+    expect(accionesDe(sesionApi({ puedeGestionar: true }), ctx()).cancelar).toBe(true)
+    expect(accionesDe(sesionApi({ puedeGestionar: false }), ctx({ rol: 'administrador' })).cancelar).toBe(false)
+  })
+
+  it('deshacer una cancelación y eliminar un extra salen de puedeGestionar; editar un extra queda oculto', () => {
+    expect(accionesDe(sesionApi({ estado: 'CANCELADO', idExcepcion: 'e1', puedeGestionar: true }), ctx()).reactivar).toBe(true)
+    const extra = accionesDe(sesionApi({ tipo: 'EXTRA', idExcepcion: 'x1', puedeGestionar: true }), ctx())
+    expect(extra).toMatchObject({ eliminarExtra: true, editarExtra: false })
+  })
+
+  it('tesorero y acudiente no reciben puedeGestionar true del backend: sin botones', () => {
+    for (const rol of ['tesorero', 'acudiente']) {
+      expect(Object.values(accionesDe(sesionApi({ puedeGestionar: false }), ctx({ rol })))).toEqual([false, false, false, false, false])
+    }
+  })
+})
+
+describe('avisoDeAccion', () => {
+  it('true: el correo salió', () => {
+    expect(avisoDeAccion('Entrenamiento cancelado.', true, 'Sub-12')).toEqual({ texto: 'Entrenamiento cancelado. Se envió el aviso por correo a los acudientes de Sub-12.', tono: 'success' })
+  })
+
+  it('false: la operación quedó hecha, pero no se avisó (advertencia, no error)', () => {
+    const aviso = avisoDeAccion('Entrenamiento cancelado.', false, 'Sub-12')
+    expect(aviso.tono).toBe('warning')
+    expect(aviso.texto).toContain('Entrenamiento cancelado.')
+    expect(aviso.texto).toContain('No se pudo avisar por correo')
+  })
+
+  it('null: la categoría no tiene acudientes con correo', () => {
+    expect(avisoDeAccion('Entrenamiento extra eliminado.', null, 'Sub-12').texto).toContain('no tiene acudientes con correo')
+  })
+
+  it('undefined (modo ejemplo): conserva el texto de siempre', () => {
+    expect(avisoDeAccion('Entrenamiento cancelado.', undefined, 'Sub-12', 'Se avisará por correo a los acudientes de Sub-12.').texto).toBe('Entrenamiento cancelado. Se avisará por correo a los acudientes de Sub-12.')
+    expect(avisoDeAccion('Entrenamiento reactivado.', undefined, 'Sub-12').texto).toBe('Entrenamiento reactivado.')
   })
 })

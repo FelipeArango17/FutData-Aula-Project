@@ -29,8 +29,9 @@ const dias = [
   ...sesiones(jugadores[1], 'Semillero', '8:30 a. m. – 10:00 a. m.'),
 ]
 
-// Con la API (módulo "horarioclub") es la pantalla única de Horarios en solo lectura (semana en curso, filtro por categoría): el
-// grupo de cada niño todavía no existe en el backend, así que no hay "Tu grupo". Sin la API conserva el contenido de ejemplo.
+// Con la API (módulo "horarioclub") es la pantalla única de Horarios en solo lectura: la semana en curso (el backend le niega otra al
+// acudiente) con las cancelaciones y los extras, sin botones. El grupo de cada niño todavía no existe en el backend, así que no hay
+// "Tu grupo". Con el módulo apagado conserva el contenido de ejemplo (sigue siendo alcanzable: por eso no se quitó).
 export default function Horarios() {
   if (semanaPorApi()) return <HorariosCompartido />
   return <HorariosEjemplo />

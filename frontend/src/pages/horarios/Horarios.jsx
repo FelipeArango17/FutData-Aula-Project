@@ -16,14 +16,15 @@ import { entrenadorDeCategoria } from '../../services/horarioClubData.js'
 import { diaLargo, diasDeSemana, lunesDe, rangoSemana, sumarDias } from '../../utils/fechas.js'
 import { hoy } from '../../utils/hoy.js'
 import { VISTA_CLUB, VISTA_MIS, esDeMisCategorias, estadoPerfil, opcionesDeCategoria } from '../../utils/horarioEntrenador.js'
-import { SEDES_CLUB, accionesDe, categoriasCreables, puedeCrearExtra, semanaEnCurso, textoAviso } from '../../utils/semana.js'
+import { SEDES_CLUB, accionesDe, avisoDeAccion, categoriasCreables, puedeCrearExtra, semanaEnCurso, textoAviso } from '../../utils/semana.js'
 
 
 // Horarios: UNA pantalla para acudiente, entrenador y administrador (el tesorero no la tiene en el menú).
 // Las franjas son fijas todo el año: aquí no se crean ni se borran. Lo que sí se hace, según el rol y la capacidad del servicio:
 // cancelar el entrenamiento de una fecha (y reactivarlo), agregar entrenamientos extra (editarlos y eliminarlos) y, solo el
-// administrador, cambiar el entrenador de una franja para todas las semanas. Lo que el servicio no ofrece (modo API sin el
-// contrato 4B) NO se muestra. El acudiente ve solo la semana en curso; administrador y entrenador navegan semanas.
+// administrador, cambiar el entrenador de una franja para todas las semanas. Lo que el servicio no ofrece NO se muestra (en la API no
+// se edita un extra: se elimina y se crea otro). Los botones salen de `puedeGestionar`, que calcula el backend. El acudiente ve solo la
+// semana en curso (el backend le niega otra), con sus cancelaciones y extras pero sin botones; administrador y entrenador navegan semanas.
 const TODAS = 'Todas'
 const MIS_CATEGORIAS = 'Mis categorías'
 const SIN_SEDE = ''
@@ -139,13 +140,13 @@ export default function Horarios() {
   const puedeExtra = puedeCrearExtra(role, capacidades, propias)
   const acciones = (sesion) => accionesDe(sesion, { rol: role, propias, capacidades, hoy: hoyTexto })
 
-  // Ejecuta una acción del servicio: aviso si sale bien, mensaje del backend (403, 404, 409…) si no
-  async function ejecutar(accion, textoOk, generico) {
+  // Ejecuta una acción del servicio: aviso si sale bien (`avisoOk(resultado)`; dice si se avisó a los acudientes), mensaje del backend
+  // (403, 404, 409…) si no
+  async function ejecutar(accion, avisoOk, generico) {
     setAviso(null)
     setErrorAccion(null)
     try {
-      await accion()
-      setAviso({ texto: textoOk })
+      setAviso(avisoOk(await accion()))
       recargar()
     } catch (error) {
       setErrorAccion({ texto: textoError(error, generico) })
@@ -155,9 +156,9 @@ export default function Horarios() {
 
   async function confirmarCancelar(motivo) {
     const sesion = porCancelar
-    await servicio.cancelar({ fecha: sesion.fecha, idFranja: sesion.idFranja, motivo })
+    const resultado = await servicio.cancelar({ fecha: sesion.fecha, idFranja: sesion.idFranja, motivo })
     setPorCancelar(null)
-    setAviso({ texto: `Entrenamiento cancelado. ${textoAviso(sesion.categoria)}` })
+    setAviso(avisoDeAccion('Entrenamiento cancelado.', resultado?.avisoEnviado, sesion.categoria, textoAviso(sesion.categoria)))
     recargar()
   }
 
@@ -170,10 +171,9 @@ export default function Horarios() {
 
   async function guardarExtra(valores) {
     const sesion = extra.sesion
-    if (sesion) await servicio.editarExtra(sesion.idExcepcion, valores)
-    else await servicio.crearExtra(valores)
+    const resultado = sesion ? await servicio.editarExtra(sesion.idExcepcion, valores) : await servicio.crearExtra(valores)
     setExtra(null)
-    setAviso({ texto: `${sesion ? 'Entrenamiento extra actualizado.' : 'Entrenamiento extra creado.'} ${textoAviso(valores.categoria)}` })
+    setAviso(avisoDeAccion(sesion ? 'Entrenamiento extra actualizado.' : 'Entrenamiento extra creado.', resultado?.avisoEnviado, valores.categoria, textoAviso(valores.categoria)))
     if (navega) setSemana(lunesDe(valores.fecha))
     recargar()
   }
@@ -181,7 +181,22 @@ export default function Horarios() {
   function confirmarEliminar() {
     const sesion = porEliminar
     setPorEliminar(null)
-    return ejecutar(() => servicio.eliminarExtra(sesion.idExcepcion), 'Entrenamiento extra eliminado.', 'No se pudo eliminar el entrenamiento extra. Intenta de nuevo.')
+    return ejecutar(
+      () => servicio.eliminarExtra(sesion.idExcepcion),
+      (resultado) => avisoDeAccion('Entrenamiento extra eliminado.', resultado?.avisoEnviado, sesion.categoria),
+      'No se pudo eliminar el entrenamiento extra. Intenta de nuevo.',
+    )
+  }
+
+  // Modo API, entrenador: no puede listar entrenadores; los extras los asigna a sí mismo (el id sale de su perfil)
+  const idPropio = perfilPorApi && perfil ? perfil.idEntrenador : null
+  const entrenadorFijo = identidad ? identidad.id : idPropio
+  const entrenadoresForm = idPropio ? [{ id: idPropio, nombre: 'Tú', activo: true }] : entrenadores
+  // Entrenador que se propone al elegir categoría: el de ejemplo, o (API) el de sus franjas de esta semana si está activo
+  const proponerEntrenador = (nombre) => {
+    if (!servicio.semanaPorApi()) return entrenadorDeCategoria(nombre)
+    const id = carga.sesiones.find((s) => s.categoria === nombre && s.tipo === 'FRANJA' && s.idEntrenador)?.idEntrenador ?? null
+    return id && entrenadores.some((e) => String(e.id) === String(id) && e.activo !== false) ? id : null
   }
 
   const inicialExtra = extra?.sesion
@@ -191,7 +206,7 @@ export default function Horarios() {
       }
     : {
         categoria: creables.length === 1 ? creables[0] : '', fecha: '', hora: '', horaFin: '', sede: '',
-        idEntrenador: identidad ? String(identidad.id) : '', grupo: '', motivo: '',
+        idEntrenador: entrenadorFijo ? String(entrenadorFijo) : '', grupo: '', motivo: '',
       }
 
   let contenido
@@ -219,7 +234,11 @@ export default function Horarios() {
         miId={perfil?.idEntrenador ?? null}
         esPropia={conVista && vista === VISTA_CLUB ? esPropia : undefined}
         onCancelar={(s) => { setAviso(null); setErrorAccion(null); setPorCancelar(s) }}
-        onReactivar={(s) => ejecutar(() => servicio.reactivar(s.idExcepcion), 'Entrenamiento reactivado.', 'No se pudo reactivar el entrenamiento. Intenta de nuevo.')}
+        onReactivar={(s) => ejecutar(
+          () => servicio.reactivar(s.idExcepcion),
+          (resultado) => avisoDeAccion('Entrenamiento reactivado.', resultado?.avisoEnviado, s.categoria),
+          'No se pudo reactivar el entrenamiento. Intenta de nuevo.',
+        )}
         onRotar={(s) => { setAviso(null); setErrorAccion(null); setPorRotar(s) }}
         onEditarExtra={(s) => { setAviso(null); setErrorAccion(null); setExtra({ sesion: s }) }}
         onEliminarExtra={setPorEliminar}
@@ -229,7 +248,7 @@ export default function Horarios() {
 
   return (
     <Page title="Horarios" subtitle={navega ? `Semana del ${rangoSemana(lunes)}` : `Semana en curso · del ${rangoSemana(lunes)}`}>
-      <AvisoEstado aviso={aviso} onCerrar={() => setAviso(null)} />
+      <AvisoEstado aviso={aviso} tono={aviso?.tono} onCerrar={() => setAviso(null)} />
       <AvisoEstado aviso={errorAccion} rol="alert" tono="danger" onCerrar={() => setErrorAccion(null)} />
 
       {(puedeExtra || navega) && (
@@ -285,10 +304,10 @@ export default function Horarios() {
         extra={extra}
         inicial={inicialExtra}
         categorias={creables}
-        entrenadores={entrenadores}
-        entrenadorFijo={identidad ? identidad.id : null}
+        entrenadores={entrenadoresForm}
+        entrenadorFijo={entrenadorFijo}
         hoy={hoyTexto}
-        proponerEntrenador={entrenadorDeCategoria}
+        proponerEntrenador={proponerEntrenador}
         detectarConflicto={(valores) => servicio.detectarConflicto(valores, extra?.sesion?.idExcepcion ?? null)}
         onGuardar={guardarExtra}
         onCerrar={() => setExtra(null)}

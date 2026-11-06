@@ -9,7 +9,7 @@ import { categoriaDeSesion, entrenadorDeSesion, rangoDeSesion } from './formatoS
 // - cuadricula (escritorio): días como columnas y una fila por cada hora de inicio;
 // - lista (móvil, tablet vertical o letra grande): una sección por día, sin scroll horizontal.
 // Cada sesión muestra categoría (con grupo), hora, sede y entrenador ("Por turnos" si no hay). El estado se dice con TEXTO, no solo
-// con color: "Cancelado" (texto tachado y atenuado, con el motivo si existe) y "Extra".
+// con color: "Cancelada" (texto tachado y atenuado, con el motivo si existe) y "Extra".
 // props: dias ("AAAA-MM-DD" de lunes a sábado), sesiones, hoy, modo ('cuadricula' | 'lista'),
 //        accionesDe(sesion) -> { cancelar, reactivar, rotar, editarExtra, eliminarExtra } (sin ella la vista es de solo lectura),
 //        miId (id del entrenador con sesión: su línea dice "Tú"), esPropia(sesion) (resalta con la etiqueta "Tu categoría"),
@@ -21,7 +21,7 @@ function Estado({ sesion, propia }) {
   return (
     <span className="flex flex-wrap items-center gap-1">
       {propia && <Badge tone="success">Tu categoría</Badge>}
-      {sesion.estado === 'CANCELADO' && <Badge tone="danger">Cancelado</Badge>}
+      {sesion.estado === 'CANCELADO' && <Badge tone="danger">Cancelada</Badge>}
       {sesion.tipo === 'EXTRA' && <Badge tone="warning">Extra</Badge>}
     </span>
   )
@@ -82,7 +82,7 @@ function Cuadricula({ dias, sesiones, hoy, accionesDe, manejadores, contexto }) 
                 <td key={dia} className={`border-b border-l p-1 align-top ${dia === hoy ? 'bg-app' : ''}`}>
                   <div className="flex flex-col gap-1">
                     {sesiones.filter((s) => s.fecha === dia && s.hora === hora).map((s) => (
-                      <div key={s.clave} role="group" aria-label={`${descripcion(s)}, ${s.sede}, entrenador: ${entrenadorDeSesion(s, contexto?.miId)}${contexto?.esPropia?.(s) ? ', tu categoría' : ''}${s.estado === 'CANCELADO' ? ', cancelado' : ''}${s.tipo === 'EXTRA' ? ', extra' : ''}`} className={`flex flex-col gap-1 rounded-md p-2 ${contexto?.esPropia?.(s) ? 'ring-2 ring-inset ring-focus' : ''} ${s.estado === 'CANCELADO' ? 'border bg-app text-primary' : 'bg-brand-primary text-on-dark'}`}>
+                      <div key={s.clave} role="group" aria-label={`${descripcion(s)}, ${s.sede}, entrenador: ${entrenadorDeSesion(s, contexto?.miId)}${contexto?.esPropia?.(s) ? ', tu categoría' : ''}${s.estado === 'CANCELADO' ? ', cancelada' : ''}${s.tipo === 'EXTRA' ? ', extra' : ''}`} className={`flex flex-col gap-1 rounded-md p-2 ${contexto?.esPropia?.(s) ? 'ring-2 ring-inset ring-focus' : ''} ${s.estado === 'CANCELADO' ? 'border bg-app text-primary' : 'bg-brand-primary text-on-dark'}`}>
                         <Datos sesion={s} contexto={contexto} />
                         <Acciones sesion={s} acciones={accionesDe?.(s)} manejadores={manejadores} />
                       </div>
