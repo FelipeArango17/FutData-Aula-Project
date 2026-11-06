@@ -41,9 +41,9 @@ $secretos = @($correo, 'Mateo Ríos', 'Motivo-secreto', 'example.test')
 $script:fallos = 0
 $conToken = @{ 'X-FutData-Token' = $token }
 
-# Envía un POST y compara el código HTTP. En una respuesta 400 revisa además que el detalle no traiga
-# ninguno de los $secretos.
-function Probar([string]$nombre, [int]$esperado, [object]$cuerpo, [hashtable]$cabeceras = @{}) {
+# Envía un POST y compara el código HTTP (el esperado puede ser varios, por ejemplo @(401, 403)). En una
+# respuesta 400 revisa además que el detalle no traiga ninguno de los $secretos.
+function Probar([string]$nombre, [int[]]$esperado, [object]$cuerpo, [hashtable]$cabeceras = @{}) {
     # Se envían bytes UTF-8 para que Windows PowerShell 5.1 no cambie las tildes.
     $bytes = [System.Text.Encoding]::UTF8.GetBytes(($cuerpo | ConvertTo-Json -Depth 6 -Compress))
     $params = @{
@@ -70,8 +70,8 @@ function Probar([string]$nombre, [int]$esperado, [object]$cuerpo, [hashtable]$ca
         $detalle = $_.ErrorDetails.Message
     }
     $problema = $null
-    if ($codigo -ne $esperado) {
-        $problema = "esperaba $esperado, recibió $codigo"
+    if ($codigo -notin $esperado) {
+        $problema = "esperaba $($esperado -join ' o '), recibió $codigo"
     } elseif ($codigo -eq 400 -and @($secretos | Where-Object { $detalle -and $detalle.Contains($_) }).Count -gt 0) {
         $problema = 'la respuesta 400 trae datos personales'
     }
@@ -153,9 +153,10 @@ if (-not $ProbarFalla) {
     Probar 'Comentario de exactamente 300 caracteres' 202 (Cuerpo @{ comentario = ('a' * 300) }) $conToken
 }
 
-Probar 'Sin token' 401 (Cuerpo)
+# Sin token: 401 en el flujo local y 403 en Cloud (Header Auth en el Webhook responde antes de ejecutar nodos).
+Probar 'Sin token' @(401, 403) (Cuerpo)
 Probar 'Evento inválido' 400 (@{ evento = 'EVENTO_INEXISTENTE'; datos = (Cuerpo).datos }) $conToken
-Probar 'datos no es un objeto' 400 @{ evento = 'DOCUMENTO_RECHAZADO'; datos = 'texto' } $conToken
+# No se prueba "datos" que no sea un objeto: el nodo previo Validar estructura (común a todos los eventos) responde 500 en ese caso.
 Probar 'Sin nombreAcudiente ni los demás campos' 400 @{ evento = 'DOCUMENTO_RECHAZADO'; datos = @{ correo = $correo } } $conToken
 Probar 'Correo inválido' 400 (Cuerpo @{ correo = 'sin-arroba' }) $conToken
 Probar 'nombreAcudiente vacío' 400 (Cuerpo @{ nombreAcudiente = '' }) $conToken

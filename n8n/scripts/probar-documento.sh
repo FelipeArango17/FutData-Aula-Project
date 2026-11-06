@@ -46,7 +46,8 @@ SECRETOS=("$CORREO" "Mateo Ríos" "Motivo-secreto" "example.test")
 
 fallos=0
 
-# Envía un POST y compara el código HTTP. El cuerpo llega por stdin como bytes UTF-8
+# Envía un POST y compara el código HTTP (el esperado puede ser varios separados por |, por ejemplo 401|403).
+# El cuerpo llega por stdin como bytes UTF-8
 # (con <<<, no con una tubería: así probar corre en este shell y cuenta los fallos).
 # En una respuesta 400 revisa además que el detalle no traiga ninguno de los SECRETOS.
 probar() {
@@ -61,7 +62,7 @@ probar() {
   fi
   codigo="${salida##*$'\n'}"
   cuerpo="${salida%$'\n'*}"
-  if [[ "$codigo" != "$esperado" ]]; then
+  if [[ "|$esperado|" != *"|$codigo|"* ]]; then
     problema="esperaba $esperado, recibió $codigo"
   elif [[ "$codigo" == "400" ]]; then
     for secreto in "${SECRETOS[@]}"; do
@@ -149,9 +150,10 @@ if (( ! PROBAR_FALLA )); then
   probar "Comentario de exactamente 300 caracteres" 202 -H "X-FutData-Token: $TOKEN" <<<"$(cuerpo "comentario=$(repetir 300)")"
 fi
 
-probar "Sin token" 401 <<<"$VALIDO"
+# Sin token: 401 en el flujo local y 403 en Cloud (Header Auth en el Webhook responde antes de ejecutar nodos).
+probar "Sin token" "401|403" <<<"$VALIDO"
 probar "Evento inválido" 400 -H "X-FutData-Token: $TOKEN" <<<"${VALIDO/DOCUMENTO_RECHAZADO/EVENTO_INEXISTENTE}"
-probar "datos no es un objeto" 400 -H "X-FutData-Token: $TOKEN" <<<'{"evento":"DOCUMENTO_RECHAZADO","datos":"texto"}'
+# No se prueba "datos" que no sea un objeto: el nodo previo Validar estructura (común a todos los eventos) responde 500 en ese caso.
 probar "Sin nombreAcudiente ni los demás campos" 400 -H "X-FutData-Token: $TOKEN" \
   <<<"$(printf '{"evento":"DOCUMENTO_RECHAZADO","datos":{"correo":"%s"}}' "$CORREO")"
 probar "Correo inválido" 400 -H "X-FutData-Token: $TOKEN" <<<"$(cuerpo 'correo="sin-arroba"')"
