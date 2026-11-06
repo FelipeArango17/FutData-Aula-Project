@@ -1,7 +1,7 @@
 # Contrato del webhook de notificaciones (n8n)
 
 **Sprint:** Sprint 2  
-**Historias:** HU-036 · Enviar código 2FA por correo con n8n (AB#51) · HU-026 · Aviso a participantes cuando cambia un entrenamiento (AB#338) · Regla 9 · Alta de entrenador con enlace para crear la contraseña  
+**Historias:** HU-036 · Enviar código 2FA por correo con n8n (AB#51) · HU-026 · Aviso a participantes cuando cambia un entrenamiento (AB#338) · Regla 9 · Alta de entrenador con enlace para crear la contraseña · Regla 14 · Recordatorio de pago · Regla 8 · Aviso de documento rechazado (bloque 3)  
 **Proyecto:** FutData - Asociación Deportiva Prado Fútbol Club
 
 ## Objetivo
@@ -13,6 +13,8 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | `CODIGO_2FA` | HU-036 | Asíncrona: `202` | Código de verificación al iniciar sesión |
 | `CAMBIO_ENTRENAMIENTO` | HU-026 (CU-05) | Asíncrona: `202` | Aviso al entrenador, los jugadores y los acudientes cuando se crea, modifica o cancela un entrenamiento |
 | `ENLACE_CONTRASENA` | Regla 9 (alta de entrenador y su reenvío) | **Síncrona**: `200` o `502` | Enlace para que la persona cree su propia contraseña (vence en 1 hora) |
+| `RECORDATORIO_PAGO` | Regla 14 (cobros por ciclo de ingreso) | Asíncrona: `202` | Recordatorio al acudiente de una mensualidad creada con anticipación. Un correo por acudiente |
+| `DOCUMENTO_RECHAZADO` | Regla 8 (bloque 3, documentos) | Asíncrona: `202` | Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista. Un correo por acudiente. **El backend ya lo envía; el flujo de n8n Cloud lo agrega el paso 6B** (hasta entonces responde `400` "Evento no soportado") |
 
 ## Reparto de responsabilidades
 
@@ -21,6 +23,8 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | Backend (`AutenticacionServiceImpl`) | Genera el código de 6 dígitos (`GeneradorCodigo`), guarda solo su hash con vigencia de 10 min (`ReglasVerificacion.VIGENCIA_CODIGO`), valida intentos y reenvíos, y llama a `INotificador.notificar(evento, datos)` | Enviar correos |
 | Backend (servicio de entrenamientos, HU-026) | Después de guardar la creación, edición o eliminación de un entrenamiento, resuelve los destinatarios (entrenador, acudientes y deportistas con correo) y llama a `INotificador.notificar("CAMBIO_ENTRENAMIENTO", datos)` | Enviar correos |
 | Backend (`EntrenadorServiceImpl` con `CuentasDeAcceso`) | Crea la cuenta de Supabase Auth sin contraseña, genera el enlace (`hashed_token` de `generate_link`, nunca el `action_link`), lo arma con `FRONTEND_URL` y llama a `INotificador.notificar("ENLACE_CONTRASENA", datos)` después del commit del alta o en el reenvío | Enviar correos |
+| Backend (`CobrosCicloServiceImpl`) | Al crear una mensualidad con anticipación, resuelve los acudientes con correo del deportista y llama a `INotificador.notificar("RECORDATORIO_PAGO", datos)`, una vez por acudiente | Enviar correos |
+| Backend (`DocumentoServiceImpl`) | Después de confirmar el rechazo de un documento, resuelve los acudientes con correo válido del deportista y llama a `INotificador.notificar("DOCUMENTO_RECHAZADO", datos)`, una vez por acudiente; si falla, el rechazo queda hecho y responde `avisoEnviado: false` | Enviar correos |
 | `N8nClient` (implementa `INotificador`) | Hace el `POST` al webhook de n8n con el secreto compartido | Decidir el contenido del correo |
 | n8n (flujo `FutData · Notificaciones`) | Valida la petición, arma el correo con la plantilla y lo envía por SMTP con TLS | Generar, guardar ni validar códigos; consultar la base de datos |
 
@@ -160,6 +164,72 @@ El administrador registra un entrenador (o le reenvía el enlace). Después de g
 
 **Correo.** Plantilla `n8n/plantillas/bienvenida-entrenador.html` (y `.txt`), asunto "Bienvenido a FutData: crea tu contraseña". Tiene un botón "Crear mi contraseña", el enlace en texto por si el botón no funciona y la línea "Este enlace vence en 1 hora; si venció, pide al administrador que te lo reenvíe." (n8n escribe "1 hora" o "N horas" según `vigenciaHoras`). El nombre y el enlace se escapan antes de insertarlos en el HTML.
 
+### Evento `RECORDATORIO_PAGO`
+
+El cron diario (o el administrador) crea con anticipación el cobro de la mensualidad del ciclo de un deportista (regla 14). Después de crearlo, el backend envía **un `POST` por acudiente vinculado que tenga correo**. No se avisa de la inscripción ni del uniforme. Los campos van planos dentro de `datos`:
+
+```json
+{
+  "evento": "RECORDATORIO_PAGO",
+  "datos": {
+    "correo": "acudiente@ejemplo.com",
+    "nombreAcudiente": "Marta Gómez",
+    "nombreDeportista": "Juan Gómez",
+    "concepto": "Mensualidad noviembre 2026",
+    "monto": 90000,
+    "fechaVencimiento": "2026-11-30",
+    "diasRestantes": 3,
+    "enlacePagos": "https://futdata.example/acudiente/pagos"
+  }
+}
+```
+
+| Campo de `datos` | Tipo | Regla |
+| :--- | :--- | :--- |
+| `correo` | string | Obligatorio. Correo con formato válido, máximo 254 caracteres |
+| `nombreAcudiente` | string | Obligatorio, no vacío, de una línea, máximo 120 caracteres. Se usa en el saludo |
+| `nombreDeportista` | string | Obligatorio, no vacío, de una línea, máximo 120 caracteres |
+| `concepto` | string | Obligatorio, no vacío, de una línea, máximo 120 caracteres |
+| `monto` | número | Obligatorio. Pesos **enteros** (sin centavos), mayor que 0 |
+| `fechaVencimiento` | string | Obligatorio. Fecha real con formato `AAAA-MM-DD` |
+| `diasRestantes` | número | Obligatorio. Entero de 0 a 60 (el correo dice "hoy", "mañana" o "en N días") |
+| `enlacePagos` | string | Obligatorio. Empieza por `http://` o `https://`, sin espacios, máximo 2000 caracteres. Es `{FRONTEND_URL}/acudiente/pagos`, sin datos secretos |
+
+El correo (asunto "Recordatorio: la mensualidad de {nombreDeportista} vence {hoy, mañana o en N días}") escribe el monto como `$90.000` y la fecha como `DD/MM/AAAA`. Todos los textos se escapan antes de insertarlos en el HTML. Respuestas: ver [Respuestas de `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`](#respuestas-de-recordatorio_pago-y-documento_rechazado).
+
+### Evento `DOCUMENTO_RECHAZADO`
+
+El administrador rechaza un documento de la inscripción de un deportista y escribe el motivo (regla 8, bloque 3). **Después de confirmar el rechazo** (nunca dentro de la transacción), el backend envía **un `POST` por acudiente vinculado al deportista que tenga un correo válido**, sin correos repetidos. Aprobar un documento no envía nada. Los campos van planos dentro de `datos`:
+
+```json
+{
+  "evento": "DOCUMENTO_RECHAZADO",
+  "datos": {
+    "correo": "acudiente@ejemplo.com",
+    "nombreAcudiente": "Marta Gómez",
+    "nombreDeportista": "Juan Gómez",
+    "documento": "Documento de identidad",
+    "comentario": "La imagen está borrosa.\nVuelve a subirla con mejor luz.",
+    "enlaceDocumentos": "https://futdata.example/acudiente/documentos"
+  }
+}
+```
+
+| Campo de `datos` | Tipo | Regla |
+| :--- | :--- | :--- |
+| `correo` | string | Obligatorio. Correo con formato válido (`^[^@\s]+@[^@\s]+\.[^@\s]+$`), máximo 254 caracteres |
+| `nombreAcudiente` | string | Obligatorio, no vacío, de **una línea** (sin saltos de línea ni otros caracteres de control), máximo 120 caracteres. Si el acudiente no tiene nombre, el backend manda `Acudiente` |
+| `nombreDeportista` | string | Obligatorio, no vacío, de una línea, máximo 120 caracteres. Nombre y apellido. Si llega vacío, el backend manda `tu deportista` |
+| `documento` | string | Obligatorio, no vacío, de una línea, máximo 120 caracteres. La **etiqueta legible** del tipo, no el código: `Documento de identidad`, `Certificado de estudio`, `Formulario de inscripción`, `Habeas Data`, `Paz y salvo`, `Carta de renuncia` o `Traspaso nacional` |
+| `comentario` | string | Obligatorio, no vacío, **máximo 300 caracteres**. Es el motivo que escribió el administrador, ya recortado. **Admite saltos de línea: `\n`, `\r` y `\t`** (es el único campo que los admite); cualquier otro carácter de control (`U+0000` a `U+001F`, `U+007F`) es inválido |
+| `enlaceDocumentos` | string | Obligatorio. Empieza por `http://` o `https://`, sin espacios, máximo 2000 caracteres. Es `{FRONTEND_URL}/acudiente/documentos`, **sin datos secretos**. Si el enlace pasara de 2000 caracteres el backend no lo recorta (quedaría roto): no envía el aviso |
+
+**Destinatarios.** El backend los resuelve (los acudientes vinculados al deportista con correo válido, sin repetir correos aunque cambien las mayúsculas); n8n **no consulta la base de datos** ni recibe una lista: cada petición lleva un solo `correo`. Si una llamada falla, el backend no envía las demás.
+
+**Correo** (se agrega en el paso 6B). Plantilla `n8n/plantillas/documento-rechazado.html` (y `.txt`). Todos los textos de la petición (nombres, documento, comentario, enlace) se escapan antes de insertarlos en el HTML; los saltos de línea del comentario se muestran como saltos de línea.
+
+**Datos personales.** Los nombres, el comentario y el correo son datos de menores y de sus familias: ni el backend ni n8n los escriben en sus registros (ver *Seguridad y registros*). El `detalle` de un `400` nunca los incluye.
+
 ## Respuestas
 
 Todas las respuestas son JSON.
@@ -206,6 +276,19 @@ Otros códigos posibles que no genera el flujo, sino n8n o la red:
 
 > **Para el backend: `202` significa "recibido", no "entregado".** Confirma que n8n aceptó la petición y cuántos correos va a intentar enviar; no garantiza que el SMTP los haya aceptado ni que lleguen. Las fallas de envío solo quedan en el registro de fallas de n8n.
 
+### Respuestas de `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`
+
+Los dos son asíncronos, igual que `CAMBIO_ENTRENAMIENTO`: n8n valida el token, la estructura y los datos, responde `202` y después envía el correo. Cada petición es de **un solo destinatario**.
+
+| Código | Cuándo | Cuerpo |
+| :--- | :--- | :--- |
+| `202` | Los datos son válidos. n8n respondió de inmediato y envía el correo después | `{"aceptado": true}` |
+| `400` | Falta `evento` o `datos`, o el evento no está soportado | Igual que en `CODIGO_2FA` (`{"enviado": false, "error": ...}`) |
+| `400` | Faltan campos de `datos` o tienen un formato inválido | `{"aceptado": false, "error": "Faltan campos o tienen un formato inválido", "detalle": "comentario es obligatorio (máximo 300 caracteres)"}` |
+| `401` | Falta la cabecera `X-FutData-Token` o su valor no coincide | `{"enviado": false, "error": "Token inválido"}` |
+
+`detalle` explica el primer problema encontrado y nunca incluye el correo, los nombres, el comentario ni el enlace. **En estos eventos n8n no responde `502`.** Un `202` significa "recibido", no "entregado": si el SMTP falla después, solo queda en el [registro de fallas](#registro-de-fallas-en-n8n) de n8n. Para el backend, un `400` (contrato roto), un `401` (token mal configurado), un tiempo de espera o un error de red cuentan igual: el aviso falló. Mientras el flujo de n8n Cloud no tenga `DOCUMENTO_RECHAZADO`, la respuesta es `400` "Evento no soportado" y el rechazo devuelve `avisoEnviado: false`.
+
 ### Respuestas de `ENLACE_CONTRASENA`
 
 | Código | Cuándo | Cuerpo |
@@ -230,7 +313,7 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
    - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; como `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. No hay que tocar `¿Responder 502?`.
    - **Asíncrono** (como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
 
-   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`.
+   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son `CAMBIO_ENTRENAMIENTO` ni `CODIGO_2FA`. **Pendiente (paso 6B):** debe excluir también `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`; hoy, si el envío de un recordatorio falla después del `202`, el flujo intentaría responder otra vez.
 
    En ambos casos la salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos. Ese nodo toma el correo del ítem que falló (campo `correo`) o, si no lo tiene, de `datos.correo`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.
@@ -281,6 +364,16 @@ El aviso se envía **después** de guardar el cambio del entrenamiento y su resu
 
 Se usa el mismo timeout de 5 s: n8n responde `202` en milisegundos porque solo valida antes de responder.
 
+**Manejo de respuestas de `DOCUMENTO_RECHAZADO`:**
+
+El rechazo ya está guardado cuando se pide el correo; el resultado del envío nunca lo deshace. El servicio resume el resultado en `avisoEnviado` (`true`, `false` o `null`; ver `backend/README.md`, sección "Documentos de la inscripción").
+
+| Respuesta | Qué hace el backend |
+| :--- | :--- |
+| `202` (o `200`) | Continúa con el siguiente acudiente. **No** debe decirle al usuario que los correos "llegaron" |
+| `400`, `401`, timeout, error de red u otro código | Registra solo el evento, el tipo de excepción y cuántos se enviaron antes; **no envía los demás** y el rechazo responde `200` con `avisoEnviado: false`. Sin reintentos |
+| Sin acudientes con correo válido | No llama a n8n; `avisoEnviado: null` |
+
 **Manejo de respuestas de `ENLACE_CONTRASENA`:**
 
 El alta del entrenador ya está guardada cuando se pide el correo; el resultado del envío nunca la deshace.
@@ -299,6 +392,7 @@ Sin reintentos automáticos: un reintento generaría otro enlace e invalidaría 
 - Tampoco registrar el valor de `X-FutData-Token`.
 - El correo puede registrarse enmascarado (`j***@ejemplo.com`) si hace falta para soporte.
 - En `CAMBIO_ENTRENAMIENTO`, no registrar la lista de `destinatarios` (correos y nombres de deportistas, muchos menores de edad); basta con el id del entrenamiento, `tipoCambio` y el número de destinatarios.
+- En `DOCUMENTO_RECHAZADO`, no registrar el correo, los nombres, el `comentario` ni el enlace: basta con el evento, el tipo de excepción y los conteos (cuántos se enviaron antes de la falla y cuántos destinatarios había).
 - En `ENLACE_CONTRASENA`, **nunca registrar el enlace** ni la parte `token=...`: con él se puede crear la contraseña de otra persona. Tampoco devolverlo en una respuesta de la API.
 - **Ante un `502` (eventos síncronos), un timeout o un error de red, registrar también la falla en la auditoría del backend** (`AuditoriaLogger`) cuando exista: evento, `usuarioId`, código HTTP y fecha. El log de n8n no reemplaza esa auditoría. Está en otro equipo, no conoce al usuario y no ve los timeouts ni las fallas de red, que solo ve el backend.
 

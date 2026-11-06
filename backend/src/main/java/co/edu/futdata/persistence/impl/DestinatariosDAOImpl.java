@@ -38,4 +38,21 @@ public class DestinatariosDAOImpl implements IDestinatariosDAO {
                 new MapSqlParameterSource("categoria", idCategoria).addValue("anio", anioActual),
                 (fila, n) -> new Destinatario(fila.getString("correo"), fila.getString("nombre")));
     }
+
+    @Override
+    public List<Destinatario> acudientesDeDeportista(UUID idDeportista) {
+        // Mismo DISTINCT ON que arriba: un solo acudiente por correo, y la consulta de afuera ordena por apellido y nombre.
+        return jdbc.query("""
+                SELECT correo, nombre FROM (
+                    SELECT DISTINCT ON (lower(btrim(a.correo)))
+                           btrim(a.correo) AS correo, nullif(btrim(a.nombre || ' ' || a.apellido), '') AS nombre,
+                           a.apellido, a.nombre AS nombre_pila, a.id_acudiente
+                      FROM acudiente_deportista ad
+                      JOIN acudiente a ON a.id_acudiente = ad.id_acudiente
+                     WHERE ad.id_deportista = :deportista AND a.correo IS NOT NULL AND btrim(a.correo) <> ''
+                     ORDER BY lower(btrim(a.correo)), a.apellido, a.nombre, a.id_acudiente) unicos
+                 ORDER BY apellido, nombre_pila, id_acudiente""",
+                new MapSqlParameterSource("deportista", idDeportista),
+                (fila, n) -> new Destinatario(fila.getString("correo"), fila.getString("nombre")));
+    }
 }
