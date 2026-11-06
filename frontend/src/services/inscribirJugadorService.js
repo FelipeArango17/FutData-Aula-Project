@@ -23,6 +23,10 @@ import { subirDocumento, validarDatosDocumento } from './documentosService.js'
 import { guardarFoto } from './fotosService.js'
 import { validarPaso } from './asistenteInscripcion.js'
 import { idCategoriaAlGuardar } from '../utils/categorias.js'
+import { apiRequest } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+import { MENSAJES_ERROR, adaptarInscripcion, cuerpoInscripcion, errorDeInscripcion } from '../utils/inscripcionApi.js'
+import { NOMBRES_TIPO_DOCUMENTO } from '../utils/documentosClub.js'
 
 const error = (codigo, mensaje, extra) => Object.assign(new Error(mensaje), { codigo }, extra)
 
@@ -34,10 +38,12 @@ const ERROR_DE_PASO_1 = {
   CATEGORIA_NO_EXISTE: 'fechaNacimiento',
 }
 
-export async function inscribirJugador({ deportista, acudiente, documentos = [], foto = null }, actor) {
-  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para inscribir jugadores.')
+// Con la clave de módulo "inscripcion" encendida, el asistente usa UN solo POST /api/inscripciones (deportista + acudiente, todo o nada);
+// con la apagada, el flujo en memoria de abajo. Se evalúa en cada llamada (no al cargar el módulo).
+export const inscripcionPorApi = () => usarApiDe('inscripcion')
 
-  // 1. Todo se valida antes de crear nada
+// Todo se valida antes de crear nada: pasos 1 y 2, y el paso 3 (archivos). Lanza VALIDACION con `errores` y `paso`.
+function validarTodo({ deportista, acudiente, documentos, foto }) {
   const porTipo = Object.fromEntries(documentos.map((d) => [d.tipo, d.archivo]))
   const datos = { jugador: deportista, acudiente, documentos: porTipo, foto }
   for (const paso of [1, 2]) {
@@ -52,6 +58,45 @@ export async function inscribirJugador({ deportista, acudiente, documentos = [],
   }
   const erroresPaso3 = { ...validarPaso(3, datos), ...erroresDocs }
   if (Object.keys(erroresPaso3).length > 0) throw error('VALIDACION', 'Hay datos que corregir.', { errores: erroresPaso3, paso: 3 })
+}
+
+// Camino con la API. Foto y documentos NO van en el POST: se suben después con el id del deportista que devuelve y los servicios que ya
+// existen (documentosService, fotosService). Si un archivo falla la inscripción NO se pierde: queda hecha y se avisa qué falta subir.
+async function inscribirPorApi({ deportista, acudiente, documentos, foto }, actor) {
+  let hecha
+  try {
+    const dto = await apiRequest('/inscripciones', { method: 'POST', body: JSON.stringify(cuerpoInscripcion(deportista, acudiente)) })
+    try {
+      hecha = adaptarInscripcion(dto)
+    } catch {
+      throw error('RESPUESTA_INVALIDA', MENSAJES_ERROR.RESPUESTA, { mensajeUsuario: MENSAJES_ERROR.RESPUESTA })
+    }
+  } catch (e) {
+    throw e.codigo === 'RESPUESTA_INVALIDA' ? e : errorDeInscripcion(e)
+  }
+  const id = hecha.deportista.id
+  const sinSubir = { documentos: [], foto: false }
+  for (const { tipo, archivo } of documentos) {
+    try {
+      await subirDocumento(id, { tipo, archivo }, actor)
+    } catch {
+      sinSubir.documentos.push(NOMBRES_TIPO_DOCUMENTO[tipo] ?? tipo)
+    }
+  }
+  if (foto) {
+    try {
+      await guardarFoto(id, foto, actor)
+    } catch {
+      sinSubir.foto = true
+    }
+  }
+  return { ...hecha, categoria: hecha.deportista.categoria, sinSubir }
+}
+
+export async function inscribirJugador({ deportista, acudiente, documentos = [], foto = null }, actor) {
+  if (actor?.rol !== 'administrador') throw error('SIN_PERMISO', 'No tienes permiso para inscribir jugadores.')
+  validarTodo({ deportista, acudiente, documentos, foto })
+  if (inscripcionPorApi()) return inscribirPorApi({ deportista, acudiente, documentos, foto }, actor)
 
   // 2. Deportista, con la categoría que da su fecha de nacimiento
   const categorias = await listarCategorias()
