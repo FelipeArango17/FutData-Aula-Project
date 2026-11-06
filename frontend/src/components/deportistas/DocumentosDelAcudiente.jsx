@@ -64,7 +64,7 @@ export default function DocumentosDelAcudiente({ jugadores, onSubir, onVer, clav
       {jugadores.map((j) => (
         <Card as="li" key={j.id} aria-labelledby={`jugador-${j.id}`} className="flex min-w-0 flex-col gap-4">
           <h2 id={`jugador-${j.id}`} className="break-words text-h3">{j.nombre}</h2>
-          <ListaVerificacionDocumentos documentos={j.documentos} tieneFoto={j.tieneFoto} estadoInscripcion={j.estadoInscripcion} documentosFaltantes={j.documentosFaltantes} />
+          <ListaVerificacionDocumentos documentos={j.documentos} tieneFoto={j.tieneFoto} notaFoto="La foto la carga el club." estadoInscripcion={j.estadoInscripcion} documentosFaltantes={j.documentosFaltantes} />
           <section aria-label={`Documentos cargados de ${j.nombre}`} className="flex flex-col gap-3">
             <h3 className="break-words text-body-medium">Documentos cargados</h3>
             {j.documentos.length === 0 ? (

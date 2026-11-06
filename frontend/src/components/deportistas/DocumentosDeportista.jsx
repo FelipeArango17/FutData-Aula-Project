@@ -128,7 +128,7 @@ function TarjetaDocumento({ documento: d, onAprobar, onRechazar, onVer }) {
 // Parte visual. documentos: lista, o null mientras carga. error: no se pudo cargar. exito: { texto, tono? } del último aviso.
 // onVer es opcional: sin él no hay botón "Ver documento" (el modo en memoria no tiene archivos).
 export function PanelDocumentos({
-  documentos, estadoInscripcion, documentosFaltantes = [], tieneFoto = false, error = false, onReintentar, exito = null, onCerrarExito,
+  documentos, estadoInscripcion, documentosFaltantes = [], tieneFoto = false, rutaFoto, error = false, onReintentar, exito = null, onCerrarExito,
   onSubir, onAprobar, onRechazar, onVer, claveFormulario = 0,
 }) {
   let lista
@@ -161,7 +161,7 @@ export function PanelDocumentos({
     <Card aria-labelledby="documentos-titulo" className="flex w-full max-w-2xl flex-col gap-4">
       <h2 id="documentos-titulo" className="break-words text-h3">Documentos</h2>
       <AvisoEstado aviso={exito} tono={exito?.tono} rol={exito?.tono === 'warning' ? 'alert' : 'status'} onCerrar={onCerrarExito} />
-      {!error && documentos !== null && <ListaVerificacionDocumentos documentos={documentos} tieneFoto={tieneFoto} enlazarFoto estadoInscripcion={estadoInscripcion} documentosFaltantes={documentosFaltantes} />}
+      {!error && documentos !== null && <ListaVerificacionDocumentos documentos={documentos} tieneFoto={tieneFoto} enlazarFoto rutaFoto={rutaFoto} estadoInscripcion={estadoInscripcion} documentosFaltantes={documentosFaltantes} />}
       <h3 className="break-words text-body-medium">Documentos cargados</h3>
       {lista}
       <section aria-labelledby="subir-documento-titulo" className="flex flex-col gap-3 border-t pt-4">
@@ -172,7 +172,8 @@ export function PanelDocumentos({
   )
 }
 
-export default function DocumentosDeportista({ idDeportista, actor, tieneFoto = false }) {
+// rutaFoto: solo fuera de la ficha (pantalla Documentación): el enlace de la foto lleva a esa ruta, a la tarjeta de Foto.
+export default function DocumentosDeportista({ idDeportista, actor, tieneFoto = false, rutaFoto }) {
   const porApi = documentosPorApi()
   const [intento, setIntento] = useState(0)
   // Resultado con el intento que lo produjo: si no coincide, está cargando (sin setState síncrono en el efecto)
@@ -228,6 +229,7 @@ export default function DocumentosDeportista({ idDeportista, actor, tieneFoto = 
       estadoInscripcion={cargando ? undefined : carga.estadoInscripcion}
       documentosFaltantes={carga.documentosFaltantes}
       tieneFoto={tieneFoto}
+      rutaFoto={rutaFoto}
       error={!cargando && carga.error}
       onReintentar={() => setIntento((n) => n + 1)}
       exito={exito}
