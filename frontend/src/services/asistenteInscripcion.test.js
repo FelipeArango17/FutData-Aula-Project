@@ -119,4 +119,14 @@ describe('reducirAsistente: navegar sin perder datos', () => {
     expect(e.errores.documento).toMatch(/Ya existe/)
     expect(e.intentos).toBe(1)
   })
+
+  it('con errores de varios pasos: muestra los del primero y los del otro al llegar a él (los campos pueden llamarse igual)', () => {
+    const porPaso = { 1: { nombre: 'Del jugador.' }, 2: { nombre: 'Del acudiente.', correo: 'Mal.' } }
+    let e = aplicar({ ...ESTADO_INICIAL, paso: 4 }, { tipo: 'errorDelServidor', paso: 1, errores: porPaso[1], porPaso })
+    expect(e).toMatchObject({ paso: 1, errores: { nombre: 'Del jugador.' } })
+    e = { ...e, jugador: { ...e.jugador, ...jugadorOk } }
+    e = aplicar({ ...e, errores: {} }, { tipo: 'continuar' })
+    expect(e).toMatchObject({ paso: 2, errores: { nombre: 'Del acudiente.', correo: 'Mal.' }, erroresServidor: {} })
+    expect(e.intentos).toBeGreaterThan(1)
+  })
 })

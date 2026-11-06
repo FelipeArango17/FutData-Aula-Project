@@ -12,8 +12,10 @@ import InscribirConApi from '../../components/inscribir/InscribirConApi.jsx'
 import { useActor } from '../../context/useActor.js'
 import { ESTADO_INICIAL, PASOS, ULTIMO_PASO, reducirAsistente } from '../../services/asistenteInscripcion.js'
 import { deportistasPorApi } from '../../services/deportistasService.js'
-import { inscribirJugador } from '../../services/inscribirJugadorService.js'
+import { inscribirJugador, inscripcionPorApi } from '../../services/inscribirJugadorService.js'
 import { TIPOS_DOCUMENTO_CLUB } from '../../utils/documentosClub.js'
+import { ETIQUETA_ESTADO_INSCRIPCION } from '../../utils/deportistasApi.js'
+import { TEXTO_INSCRIPCION_PENDIENTE, avisosDeInscripcion } from '../../utils/inscripcionApi.js'
 
 // Inscribir jugador: el ÚNICO flujo para registrar a un jugador (reemplaza a "Nuevo deportista"). Ruta /administrador/deportistas/inscribir.
 // Asistente de 4 pasos: 1 Jugador · 2 Acudiente · 3 Documentos (opcional) · 4 Confirmar. Valida cada paso antes de avanzar, manda el
@@ -28,9 +30,10 @@ const SUBTITULOS = [
 const VOLVER = '/administrador/deportistas'
 
 // Cada "Inscribir otro jugador" empieza un asistente nuevo (cambia la clave), sin recargar la página: los datos en memoria se conservan
-// Con la API (módulo "deportistas") no hay asistente: el backend solo acepta los datos del jugador y su foto (InscribirConApi).
+// Con la API (módulo "deportistas") y SIN la clave "inscripcion" no hay asistente: solo los datos del jugador y su foto (InscribirConApi).
+// Con la clave "inscripcion" el asistente de 4 pasos usa POST /api/inscripciones (deportista + acudiente), con o sin API de deportistas.
 export default function Inscribir() {
-  return deportistasPorApi() ? <InscribirConApi /> : <InscribirConAsistente />
+  return deportistasPorApi() && !inscripcionPorApi() ? <InscribirConApi /> : <InscribirConAsistente />
 }
 
 function InscribirConAsistente() {
@@ -46,6 +49,7 @@ function Asistente({ onOtro }) {
   const [fotoPrevia, setFotoPrevia] = useState(null) // URL de la vista previa de la foto elegida
   const fotoPreviaRef = useRef(null)
   const [enviando, setEnviando] = useState(false)
+  const enVuelo = useRef(false) // evita un segundo envío antes de que React pinte el botón deshabilitado
   const [errorGeneral, setErrorGeneral] = useState(null)
   const [resultado, setResultado] = useState(null) // { deportista, parcial }
   const { paso, jugador, acudiente, documentos, foto, errores, intentos } = estado
@@ -69,24 +73,28 @@ function Asistente({ onOtro }) {
   }
 
   async function confirmar() {
-    if (enviando) return
+    if (enviando || enVuelo.current) return
+    enVuelo.current = true
     setEnviando(true)
     setErrorGeneral(null)
     try {
       const adjuntos = TIPOS_DOCUMENTO_CLUB.filter((t) => documentos[t.id]).map((t) => ({ tipo: t.id, archivo: documentos[t.id] }))
       const hecho = await inscribirJugador({ deportista: jugador, acudiente, documentos: adjuntos, foto }, actor)
-      setResultado({ deportista: hecho.deportista, categoria: hecho.categoria, parcial: false })
+      setResultado({ deportista: hecho.deportista, categoria: hecho.categoria, parcial: false, inscripcion: hecho.acudiente ? hecho : null })
     } catch (e) {
-      if (e.paso && e.errores) dispatch({ tipo: 'errorDelServidor', paso: e.paso, errores: e.errores })
+      if (e.paso && e.errores) dispatch({ tipo: 'errorDelServidor', paso: e.paso, errores: e.errores, porPaso: e.erroresPorPaso })
       else if (e.codigo === 'INSCRIPCION_PARCIAL') setResultado({ deportista: e.deportista, categoria: null, parcial: true })
-      else setErrorGeneral(e.codigo === 'SIN_PERMISO' ? e.message : 'No se pudo inscribir al jugador. Intenta de nuevo; lo que escribiste no se perdió.')
+      else setErrorGeneral(e.mensajeUsuario ?? (e.codigo === 'SIN_PERMISO' ? e.message : 'No se pudo inscribir al jugador. Intenta de nuevo; lo que escribiste no se perdió.'))
     } finally {
+      enVuelo.current = false
       setEnviando(false)
     }
   }
 
   if (resultado) {
-    const { deportista, categoria, parcial } = resultado
+    const { deportista, categoria, parcial, inscripcion } = resultado
+    const avisos = inscripcion ? avisosDeInscripcion(inscripcion) : []
+    const sinSubir = inscripcion?.sinSubir
     return (
       <Page title={parcial ? 'Jugador registrado' : 'Jugador inscrito'} subtitle={`${deportista.nombre} ${deportista.apellido}`} tituloRef={tituloRef}>
         <AvisoEstado
@@ -94,8 +102,21 @@ function Asistente({ onOtro }) {
           rol={parcial ? 'alert' : 'status'}
           tono={parcial ? 'danger' : undefined}
         />
+        {avisos.map((a) => <AvisoEstado key={a.texto} aviso={{ texto: a.texto }} rol={a.tono ? 'alert' : 'status'} tono={a.tono} enfocar={false} />)}
+        {sinSubir && (sinSubir.foto || sinSubir.documentos.length > 0) && (
+          <AvisoEstado
+            aviso={{ texto: `La inscripción quedó hecha, pero no se pudo subir: ${[sinSubir.foto && 'la foto', ...sinSubir.documentos].filter(Boolean).join(', ')}. Súbelo desde la ficha del jugador.` }}
+            rol="alert" tono="danger" enfocar={false}
+          />
+        )}
         <Card className="flex w-full max-w-2xl flex-col gap-3">
           {categoria && <p className="break-words text-body">Categoría: {categoria}</p>}
+          {inscripcion && (
+            <>
+              <p className="break-words text-body">Inscripción: {ETIQUETA_ESTADO_INSCRIPCION[deportista.estadoInscripcion] ?? 'Pendiente'}</p>
+              <p className="break-words text-body text-secondary">{TEXTO_INSCRIPCION_PENDIENTE}</p>
+            </>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button to={`${VOLVER}/${deportista.id}`}>Ver ficha del deportista</Button>
             <Button variant="secondary" onClick={onOtro}>Inscribir otro jugador</Button>

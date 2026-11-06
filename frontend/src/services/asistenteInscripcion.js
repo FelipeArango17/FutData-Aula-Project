@@ -18,6 +18,7 @@ export const ESTADO_INICIAL = {
   documentos: {}, // { [idTipo]: File } los archivos quedan aquí hasta confirmar
   foto: null, // File de la foto de perfil (la "Foto tipo documento")
   errores: {},
+  erroresServidor: {}, // { [paso]: { campo: mensaje } } errores del servidor de pasos que aún no se muestran (ver errorDelServidor)
   intentos: 0, // sube con cada intento fallido de continuar: la pantalla manda el foco al primer error
 }
 
@@ -43,13 +44,20 @@ export function primerPasoConErrores(datos) {
   return [1, 2, 3].find((paso) => Object.keys(validarPaso(paso, datos)).length > 0) ?? null
 }
 
+// Cambia de paso mostrando los errores del servidor guardados para ese paso (y mandando el foco al primero)
+function irAlPaso(estado, paso) {
+  const { [paso]: guardados, ...resto } = estado.erroresServidor ?? {}
+  return { ...estado, paso, errores: guardados ?? {}, erroresServidor: resto, intentos: guardados ? estado.intentos + 1 : estado.intentos }
+}
+
 // Reductor del asistente. Acciones:
 //   { tipo: 'jugador', campo, valor } | { tipo: 'acudiente', campo, valor }  -> cambia un campo y quita su error
 //   { tipo: 'documento', idTipo, archivo } (archivo null lo quita) | { tipo: 'foto', archivo }
 //   { tipo: 'continuar' }  -> valida el paso: con errores se queda y los guarda; sin errores avanza
 //   { tipo: 'atras' }      -> retrocede un paso sin perder nada
 //   { tipo: 'ir', paso }   -> salta a un paso ANTERIOR o al mismo (los "Editar" del resumen); no se salta pasos hacia adelante
-//   { tipo: 'errorDelServidor', paso, errores } -> vuelve al paso del error con sus mensajes
+//   { tipo: 'errorDelServidor', paso, errores, porPaso? } -> vuelve al paso del error con sus mensajes. `porPaso` ({ [paso]: errores }) trae
+//     además los de OTROS pasos: se guardan y se muestran al llegar a ese paso (los campos de pasos distintos pueden llamarse igual)
 export function reducirAsistente(estado, accion) {
   switch (accion.tipo) {
     case 'jugador': {
@@ -77,14 +85,16 @@ export function reducirAsistente(estado, accion) {
     case 'continuar': {
       const errores = validarPaso(estado.paso, estado)
       if (Object.keys(errores).length > 0) return { ...estado, errores, intentos: estado.intentos + 1 }
-      return { ...estado, errores: {}, paso: Math.min(estado.paso + 1, ULTIMO_PASO) }
+      return irAlPaso(estado, Math.min(estado.paso + 1, ULTIMO_PASO))
     }
     case 'atras':
-      return { ...estado, errores: {}, paso: Math.max(estado.paso - 1, 1) }
+      return irAlPaso(estado, Math.max(estado.paso - 1, 1))
     case 'ir':
-      return accion.paso <= estado.paso ? { ...estado, errores: {}, paso: Math.max(accion.paso, 1) } : estado
-    case 'errorDelServidor':
-      return { ...estado, paso: accion.paso, errores: accion.errores, intentos: estado.intentos + 1 }
+      return accion.paso <= estado.paso ? irAlPaso(estado, Math.max(accion.paso, 1)) : estado
+    case 'errorDelServidor': {
+      const { [accion.paso]: _propios, ...otros } = accion.porPaso ?? {} // eslint-disable-line no-unused-vars
+      return { ...estado, paso: accion.paso, errores: accion.errores, erroresServidor: otros, intentos: estado.intentos + 1 }
+    }
     default:
       return estado
   }
