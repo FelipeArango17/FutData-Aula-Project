@@ -15,6 +15,7 @@ import co.edu.futdata.datasource.external.WompiNoDisponibleException;
 import co.edu.futdata.services.facade.ConflictoException;
 import co.edu.futdata.services.facade.SemanaNoPermitidaException;
 import co.edu.futdata.services.facade.SinPermisoException;
+import co.edu.futdata.services.facade.SinPermisoAsistenciaException;
 import co.edu.futdata.services.facade.SinPermisoHorarioException;
 import co.edu.futdata.persistence.dao.FranjaYaCanceladaException;
 import co.edu.futdata.services.facade.CodigoNoEnviadoException;
@@ -316,6 +317,12 @@ public class ManejadorGlobalErrores {
     /** Un entrenador quiso cambiar el horario de una categoría que no es suya: 403 con el mensaje de la excepción. */
     @ExceptionHandler(SinPermisoHorarioException.class)
     public ResponseEntity<ErrorResponseDTO> sinPermisoHorario(SinPermisoHorarioException e, HttpServletRequest peticion) {
+        return responder(HttpStatus.FORBIDDEN, e.getMessage(), peticion);
+    }
+
+    /** Un entrenador quiso pasar lista de una categoría que no es suya: 403 con el mensaje de la excepción. */
+    @ExceptionHandler(SinPermisoAsistenciaException.class)
+    public ResponseEntity<ErrorResponseDTO> sinPermisoAsistencia(SinPermisoAsistenciaException e, HttpServletRequest peticion) {
         return responder(HttpStatus.FORBIDDEN, e.getMessage(), peticion);
     }
 
