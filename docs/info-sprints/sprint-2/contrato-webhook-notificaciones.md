@@ -14,7 +14,7 @@ Definir cómo el backend (Spring Boot) le pide a n8n que envíe una notificació
 | `CAMBIO_ENTRENAMIENTO` | HU-026 (CU-05) | Asíncrona: `202` | Aviso al entrenador, los jugadores y los acudientes cuando se crea, modifica o cancela un entrenamiento |
 | `ENLACE_CONTRASENA` | Regla 9 (alta de entrenador y su reenvío) | **Síncrona**: `200` o `502` | Enlace para que la persona cree su propia contraseña (vence en 1 hora) |
 | `RECORDATORIO_PAGO` | Regla 14 (cobros por ciclo de ingreso) | Asíncrona: `202` | Recordatorio al acudiente de una mensualidad creada con anticipación. Un correo por acudiente |
-| `DOCUMENTO_RECHAZADO` | Regla 8 (bloque 3, documentos) | Asíncrona: `202` | Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista. Un correo por acudiente. **El backend ya lo envía y el JSON de Cloud con el evento ya está en el repositorio (`n8n/workflows/futdata-notificaciones_cloud.json`); falta importarlo y publicarlo en n8n Cloud y probarlo con `probar-documento` (Omar)** (hasta entonces responde `400` "Evento no soportado") |
+| `DOCUMENTO_RECHAZADO` | Regla 8 (bloque 3, documentos) | Asíncrona: `202` | Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista. Un correo por acudiente. **El backend ya lo envía y el flujo de n8n Cloud con el evento (`n8n/workflows/futdata-notificaciones_cloud.json`) está publicado en n8n Cloud y probado el 5 de noviembre con `probar-documento` (18 casos; 3 correos de prueba recibidos)** |
 
 ## Reparto de responsabilidades
 
@@ -287,7 +287,7 @@ Los dos son asíncronos, igual que `CAMBIO_ENTRENAMIENTO`: n8n valida el token, 
 | `400` | Faltan campos de `datos` o tienen un formato inválido | `{"aceptado": false, "error": "Faltan campos o tienen un formato inválido", "detalle": "comentario es obligatorio (máximo 300 caracteres)"}` |
 | `401` | Falta la cabecera `X-FutData-Token` o su valor no coincide | `{"enviado": false, "error": "Token inválido"}` |
 
-`detalle` explica el primer problema encontrado y nunca incluye el correo, los nombres, el comentario ni el enlace. **En estos eventos n8n no responde `502`.** Un `202` significa "recibido", no "entregado": si el SMTP falla después, solo queda en el [registro de fallas](#registro-de-fallas-en-n8n) de n8n. Para el backend, un `400` (contrato roto), un `401` (token mal configurado), un tiempo de espera o un error de red cuentan igual: el aviso falló. Mientras el flujo de n8n Cloud no tenga `DOCUMENTO_RECHAZADO`, la respuesta es `400` "Evento no soportado" y el rechazo devuelve `avisoEnviado: false`.
+`detalle` explica el primer problema encontrado y nunca incluye el correo, los nombres, el comentario ni el enlace. **En estos eventos n8n no responde `502`.** Un `202` significa "recibido", no "entregado": si el SMTP falla después, solo queda en el [registro de fallas](#registro-de-fallas-en-n8n) de n8n. Para el backend, un `400` (contrato roto), un `401` (token mal configurado), un tiempo de espera o un error de red cuentan igual: el aviso falló. Si n8n falla o no responde, el rechazo devuelve `avisoEnviado: false`.
 
 ### Respuestas de `ENLACE_CONTRASENA`
 
@@ -313,7 +313,7 @@ Los eventos nuevos **no cambian el endpoint ni el formato del cuerpo**. Para agr
    - **Síncrono** (un solo correo, cuando el backend necesita saber si salió; como `ENLACE_CONTRASENA`): enviar y luego responder `200` con su propio nodo; una falla responde `502`. No hay que tocar `¿Responder 502?`.
    - **Asíncrono** (como `CODIGO_2FA` y `CAMBIO_ENTRENAMIENTO`): responder `202` apenas se validan los datos y después enviar. Agregar el evento a la condición del nodo `¿Responder 502?` para que una falla no intente responder otra vez.
 
-   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son asíncronos: en el JSON de Cloud del repositorio excluye `CAMBIO_ENTRENAMIENTO`, `CODIGO_2FA`, `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`. El flujo publicado hoy en n8n Cloud solo excluye los dos primeros hasta que se importe y publique el JSON del repositorio; mientras tanto, si el envío de un recordatorio falla después del `202`, el flujo intentaría responder otra vez.
+   Los nodos `¿Responder 502?` y `Responder 502` son de los eventos síncronos (hoy `ENLACE_CONTRASENA`). `¿Responder 502?` solo deja pasar los eventos que no son asíncronos: excluye `CAMBIO_ENTRENAMIENTO`, `CODIGO_2FA`, `RECORDATORIO_PAGO` y `DOCUMENTO_RECHAZADO`, así que una falla del envío después del `202` solo queda en el registro de fallas.
 
    En ambos casos la salida de error del nodo de envío va a `Armar registro de falla`, que es común a todos los eventos. Ese nodo toma el correo del ítem que falló (campo `correo`) o, si no lo tiene, de `datos.correo`.
 4. Agregar la plantilla en `n8n/plantillas/` y el caso en los scripts de prueba.

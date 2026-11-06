@@ -22,7 +22,7 @@ Contrato completo (campos, respuestas, cómo llamarlo desde Spring Boot): [`docs
 | `scripts/probar-2fa.sh` / `.ps1` | Prueba de `CODIGO_2FA`: caso válido (202), sin token (401), evento inválido (400) y, opcional, falla de envío (202 y línea en el registro) |
 | `scripts/probar-entrenamiento.sh` / `.ps1` | Prueba de `CAMBIO_ENTRENAMIENTO`: creado, modificado, cancelado y duplicados (202), lista vacía, tipo inválido y más de 200 destinatarios (400), sin token (401) y, opcional, falla de envío |
 | `scripts/probar-enlace.sh` / `.ps1` | Prueba de `ENLACE_CONTRASENA` con un enlace falso: caso válido (200), sin token (401), evento inválido (400), seis casos de datos inválidos (400) y, opcional, falla de envío (502 y línea en el registro sin el enlace) |
-| `scripts/probar-documento.sh` / `.ps1` | Prueba de `DOCUMENTO_RECHAZADO` con un enlace falso: tres casos válidos (202: comentario de varias líneas con HTML, nombres neutros y comentario de 300 caracteres), sin token (401), evento inválido (400), quince casos de datos inválidos (400, sin datos personales en el detalle) y, opcional, falla de envío (202 y línea en el registro sin el correo, los nombres, el comentario ni el enlace) |
+| `scripts/probar-documento.sh` / `.ps1` | Prueba de `DOCUMENTO_RECHAZADO` con un enlace falso: tres casos válidos (202: comentario de varias líneas con HTML, nombres neutros y comentario de 300 caracteres), sin token (401 o 403), evento inválido (400), catorce casos de datos inválidos (400, sin datos personales en el detalle) y, opcional, falla de envío (202 y línea en el registro sin el correo, los nombres, el comentario ni el enlace) |
 | `logs/` | Registro de fallas de envío `fallas-notificaciones.jsonl` (los `.jsonl` están ignorados por Git) |
 
 ## Flujo
