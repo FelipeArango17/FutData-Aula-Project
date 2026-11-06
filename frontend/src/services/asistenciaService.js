@@ -24,6 +24,10 @@
 // - RF008: los permisos se validan aquí solo como simulación. En producción los valida el backend con el JWT.
 // - "Hoy" es hoy() (utils/hoy.js). La fecha de los registros nuevos usa ese día con la hora real, para que la demo sea coherente.
 import { hoy } from '../utils/hoy.js'
+import { usarApiDe } from './usarApi.js'
+import { apiRequest } from './apiClient.js'
+import { adaptarSemana, consultaSemana } from '../utils/semanaApi.js'
+import { adaptarSesionAsistencia, consultaSesion, cuerpoGuardar } from '../utils/asistenciaApi.js'
 import { ENTRENADORES, entrenamientosDeEjemplo, listar as listarEntrenamientos } from './entrenamientosService.js'
 import { obtener as obtenerEntrenador } from './entrenadoresService.js'
 import { idsDeEjemploDeCategoria, listarCategorias, listarDeportistas } from './deportistasService.js'
@@ -241,4 +245,24 @@ export async function editarAsistencia(idEntrenamiento, cambios, actor) {
   }
   registros.set(entrenamiento.id, actualizado)
   return copia(actualizado)
+}
+
+// ---- Modo API (módulo "asistencia") ----
+// La pantalla de la API elige una sesión de la semana del club y pasa lista sobre ella. Los datos de ejemplo de arriba no se usan.
+// El contrato y los adaptadores están en utils/asistenciaApi.js. Los errores son los de apiClient ({ estado, mensaje, campos }).
+const usarApi = usarApiDe('asistencia')
+export const asistenciaPorApi = () => usarApi
+
+// La semana (de lunes a sábado) tal como la ve el club, con `puedeGestionar` calculado por el backend. No depende del módulo del horario.
+export async function listarSemanaDeAsistencia(lunes) {
+  return adaptarSemana(await apiRequest(consultaSemana(lunes)))
+}
+
+export async function obtenerSesionApi(sesion) {
+  return adaptarSesionAsistencia(await apiRequest(consultaSesion(sesion)))
+}
+
+// registros: [{ idDeportista, estado, observacion }] solo con lo que el usuario marcó. Devuelve la sesión ya guardada.
+export async function guardarSesionApi(sesion, registros) {
+  return adaptarSesionAsistencia(await apiRequest('/asistencia/sesion', { method: 'PUT', body: JSON.stringify(cuerpoGuardar(sesion, registros)) }))
 }

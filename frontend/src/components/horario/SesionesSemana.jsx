@@ -11,9 +11,9 @@ import { categoriaDeSesion, entrenadorDeSesion, rangoDeSesion } from './formatoS
 // Cada sesión muestra categoría (con grupo), hora, sede y entrenador ("Por turnos" si no hay). El estado se dice con TEXTO, no solo
 // con color: "Cancelada" (texto tachado y atenuado, con el motivo si existe) y "Extra".
 // props: dias ("AAAA-MM-DD" de lunes a sábado), sesiones, hoy, modo ('cuadricula' | 'lista'),
-//        accionesDe(sesion) -> { cancelar, reactivar, rotar, editarExtra, eliminarExtra } (sin ella la vista es de solo lectura),
+//        accionesDe(sesion) -> { cancelar, reactivar, rotar, editarExtra, eliminarExtra, pasarLista } (sin ella la vista es de solo lectura),
 //        miId (id del entrenador con sesión: su línea dice "Tú"), esPropia(sesion) (resalta con la etiqueta "Tu categoría"),
-//        onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra (reciben la sesión)
+//        onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, onPasarLista (reciben la sesión)
 const descripcion = (s) => `${categoriaDeSesion(s)}, ${diaLargo(s.fecha).toLowerCase()}, ${rangoDeSesion(s)}`
 
 function Estado({ sesion, propia }) {
@@ -44,10 +44,11 @@ function Datos({ sesion, grande = false, contexto }) {
 
 function Acciones({ sesion, acciones, manejadores }) {
   const d = descripcion(sesion)
-  const { onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra } = manejadores
+  const { onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, onPasarLista } = manejadores
   if (!acciones || !Object.values(acciones).some(Boolean)) return null
   return (
     <div className="flex flex-wrap gap-2">
+      {acciones.pasarLista && <Button onClick={() => onPasarLista(sesion)} aria-label={`Pasar lista: ${d}`} className="grow">Pasar lista</Button>}
       {acciones.cancelar && <Button variant="secondary" onClick={() => onCancelar(sesion)} aria-label={`Cancelar entrenamiento: ${d}`} className="grow">Cancelar</Button>}
       {acciones.reactivar && <Button variant="secondary" onClick={() => onReactivar(sesion)} aria-label={`Reactivar entrenamiento: ${d}`} className="grow">Reactivar</Button>}
       {acciones.rotar && <Button variant="secondary" onClick={() => onRotar(sesion)} aria-label={`Cambiar entrenador de todas las semanas: ${d}`} className="grow">Cambiar entrenador (todas las semanas)</Button>}
@@ -126,8 +127,8 @@ function Lista({ dias, sesiones, hoy, accionesDe, manejadores, contexto }) {
   )
 }
 
-export default function SesionesSemana({ dias, sesiones, hoy, modo = 'cuadricula', accionesDe, onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, miId = null, esPropia }) {
-  const manejadores = { onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra }
+export default function SesionesSemana({ dias, sesiones, hoy, modo = 'cuadricula', accionesDe, onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, onPasarLista, miId = null, esPropia }) {
+  const manejadores = { onCancelar, onReactivar, onRotar, onEditarExtra, onEliminarExtra, onPasarLista }
   const Vista = modo === 'cuadricula' ? Cuadricula : Lista
   return <Vista dias={dias} sesiones={sesiones} hoy={hoy} accionesDe={accionesDe} manejadores={manejadores} contexto={{ miId, esPropia }} />
 }
