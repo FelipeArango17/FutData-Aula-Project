@@ -427,7 +427,7 @@ Después de confirmar el rechazo (nunca dentro de la transacción) se avisa por 
 | `false` | No se pudo avisar: n8n falló o no respondió en 5 s, no se pudieron leer los destinatarios, falta `FRONTEND_URL` o el enlace pasa de 2000 caracteres. El rechazo **sí** quedó hecho y la respuesta sigue siendo `200`. Si una llamada falla, no se envían las demás |
 | `null` | El deportista no tiene acudientes con un correo válido; no se llamó a n8n |
 
-> **Hasta que el flujo de n8n Cloud tenga el evento `DOCUMENTO_RECHAZADO`** (paso 6B, ver `docs/PRESENTACION-TECNICA.md` §9.5), n8n responde `400` "Evento no soportado" y el rechazo devuelve `avisoEnviado: false`. Los logs solo llevan el evento, el tipo de excepción y conteos: nunca correos, nombres, comentarios, rutas ni URL.
+> **El flujo de n8n Cloud ya tiene el evento `DOCUMENTO_RECHAZADO`** (publicado y probado el 5 de noviembre, ver `docs/PRESENTACION-TECNICA.md` §9.5). Si n8n falla o no responde, el rechazo devuelve `avisoEnviado: false`. Los logs solo llevan el evento, el tipo de excepción y conteos: nunca correos, nombres, comentarios, rutas ni URL.
 
 ### Errores
 
