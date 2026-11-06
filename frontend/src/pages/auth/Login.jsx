@@ -7,7 +7,10 @@ import Button from '../../components/ui/Button.jsx'
 import Field from '../../components/ui/Field.jsx'
 import Icon from '../../components/Icon.jsx'
 import { useAuth } from '../../context/AuthContext.js'
-import { inicioDe } from '../../config/menus.js'
+import { RUTA_INSCRIPCION, inicioDe } from '../../config/menus.js'
+import { autenticacionReal } from '../../services/supabaseClient.js'
+import { modulosConApi } from '../../services/usarApi.js'
+import { opcionVisible } from '../../utils/menusVisibles.js'
 import { MENSAJE_SIN_CONFIGURACION, sinConfiguracion } from '../../services/auth.js'
 import { rutaDeRetorno } from '../../utils/accesoRutas.js'
 import { MENSAJES as MENSAJES_VALIDACION, requerido, validarCampos, validarCorreo } from '../../utils/validaciones.js'
@@ -175,7 +178,9 @@ export default function Login() {
           Después de la contraseña te enviaremos un código de 6 dígitos a tu correo (verificación en dos pasos).
         </span>
       </p>
-      <Link to="/inscripcion" className={`${claseEnlace} self-start`}>¿Quieres inscribir a un deportista?</Link>
+      {opcionVisible(RUTA_INSCRIPCION, { autenticacionReal, modulos: modulosConApi() }) && (
+        <Link to={RUTA_INSCRIPCION.to} className={`${claseEnlace} self-start`}>¿Quieres inscribir a un deportista?</Link>
+      )}
     </AuthLayout>
   )
 }
