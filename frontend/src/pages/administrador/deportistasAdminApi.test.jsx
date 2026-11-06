@@ -37,12 +37,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Inscribir con la API activa', () => {
-  it('es un solo formulario con los campos del DTO y la foto; sin acudiente, documentos ni pasos, y lo dice', async () => {
+  it('es un solo formulario con los campos del DTO y la foto; sin acudiente ni pasos, y lo dice', async () => {
     const { Inscribir } = await cargar('deportistas')
     const html = dibujar(<Inscribir />)
     for (const campo of ['id="nombre"', 'id="apellido"', 'id="tipoDocumento"', 'id="documento"', 'id="fechaNacimiento', 'id="telefono"', 'id="direccion"', 'id="posicion"']) expect(html).toContain(campo)
     expect(html).toContain('Foto del jugador (opcional)')
-    expect(html).toContain('El acudiente (su cuenta y el vínculo con el jugador) y los documentos todavía no se pueden cargar desde aquí')
+    expect(html).toContain('El acudiente (su cuenta y el vínculo con el jugador) todavía no se puede vincular desde aquí')
     for (const ausente of ['Paso 1 de', 'Nombres del acudiente', 'Parentesco', 'Foto tipo documento', 'Certificado', 'Continuar']) expect(html).not.toContain(ausente)
   })
 
@@ -50,7 +50,7 @@ describe('Inscribir con la API activa', () => {
     const { Inscribir } = await cargar('entrenadores')
     const html = dibujar(<Inscribir />)
     expect(html).toContain('Paso 1 de 4')
-    expect(html).not.toContain('todavía no se pueden cargar desde aquí')
+    expect(html).not.toContain('todavía no se puede vincular desde aquí')
   })
 })
 

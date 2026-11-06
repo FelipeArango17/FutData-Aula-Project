@@ -1,45 +1,53 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
-import Badge from '../../components/ui/Badge.jsx'
-import Button from '../../components/ui/Button.jsx'
-import FilterChips from '../../components/ui/FilterChips.jsx'
+import AvisoEstado from '../../components/ui/AvisoEstado.jsx'
+import SelectorDeportista from '../../components/pagos/SelectorDeportista.jsx'
+import DocumentosDeportista from '../../components/deportistas/DocumentosDeportista.jsx'
+import { useActor } from '../../context/useActor.js'
+import { listarDeportistas } from '../../services/deportistasService.js'
 
-const filtros = ['Pendientes', 'Aprobados', 'Por vencer']
-const documentos = [
-  { quien: 'Juan Pablo Cano', detalle: 'Certificado de estudio · subido hoy', estado: 'Por revisar', tone: 'warning' },
-  { quien: 'Mateo Vélez', detalle: 'Paz y salvo · subido ayer', estado: 'Por revisar', tone: 'warning' },
-  { quien: 'Valeria Ríos', detalle: 'Certificado de estudio · vence el 05 nov.', estado: 'Por vencer', tone: 'warning' },
-  { quien: 'Tomás Giraldo', detalle: 'Formulario de inscripción · subido hace 2 días', estado: 'Por revisar', tone: 'warning' },
-]
-
+// Documentos (administrador): se elige un deportista (búsqueda por nombre o documento) y se ven, suben, aprueban y rechazan sus documentos,
+// con la API (módulo "documentos") o en memoria. El backend no tiene una cola de pendientes de todo el club: la revisión es por deportista.
 export default function Documentos() {
-  const [filtro, setFiltro] = useState('Pendientes')
-  const visibles = documentos.filter((d) =>
-    filtro === 'Pendientes' ? true : filtro === 'Por vencer' ? d.estado === 'Por vencer' : false,
-  )
+  const actor = useActor()
+  const tituloRef = useRef(null)
+  const [intento, setIntento] = useState(0)
+  const [carga, setCarga] = useState({ intento: -1, lista: [], error: false })
+  const [idDeportista, setIdDeportista] = useState('')
+
+  useEffect(() => {
+    tituloRef.current?.focus()
+  }, [])
+  useEffect(() => {
+    let activo = true
+    listarDeportistas({ estado: 'activos' })
+      .then((lista) => activo && setCarga({ intento, lista, error: false }))
+      .catch(() => activo && setCarga({ intento, lista: [], error: true }))
+    return () => {
+      activo = false
+    }
+  }, [intento])
+
+  const cargando = carga.intento !== intento
+  const elegido = carga.lista.find((d) => d.id === idDeportista)
 
   return (
-    <Page title="Documentación" subtitle="Revisión de documentos subidos por acudientes">
-      <FilterChips label="Filtrar documentos" options={filtros} value={filtro} onChange={setFiltro} />
-      {visibles.length === 0 && <p className="text-body text-secondary">No hay documentos en este grupo.</p>}
-      <ul className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {visibles.map((d) => (
-          <Card as="li" key={d.quien + d.detalle} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="min-w-0">
-                <h2 className="break-words text-h3">{d.quien}</h2>
-                <p className="text-body text-secondary">{d.detalle}</p>
-              </div>
-              <Badge tone={d.tone}>{d.estado}</Badge>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-              <Button>Aprobar</Button>
-              <Button variant="secondary">Rechazar</Button>
-            </div>
-          </Card>
-        ))}
-      </ul>
+    <Page title="Documentación" subtitle="Revisión de los documentos de cada deportista" tituloRef={tituloRef}>
+      <Card className="flex w-full max-w-2xl flex-col gap-3">
+        <SelectorDeportista deportistas={carga.lista} value={idDeportista} onChange={setIdDeportista} cargando={cargando} errorDeCarga={!cargando && carga.error} id="documentos-deportista" />
+        {!cargando && carga.error && (
+          <AvisoEstado
+            aviso={{ texto: 'No se pudieron cargar los deportistas.', accion: { texto: 'Reintentar', onClick: () => setIntento((n) => n + 1) } }}
+            rol="alert" tono="danger" enfocar={false}
+          />
+        )}
+      </Card>
+      {elegido ? (
+        <DocumentosDeportista key={elegido.id} idDeportista={elegido.id} actor={actor} />
+      ) : (
+        !cargando && !carga.error && <p className="break-words text-body text-secondary">Elige un deportista para ver y revisar sus documentos.</p>
+      )}
     </Page>
   )
 }

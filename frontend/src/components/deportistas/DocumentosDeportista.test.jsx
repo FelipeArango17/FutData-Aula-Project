@@ -68,19 +68,19 @@ describe('PanelDocumentos: formulario "Subir documento"', () => {
   it('tipo obligatorio con asterisco, archivo PDF/JPG/PNG de máximo 5 MB y vencimiento opcional con min = hoy', () => {
     const html = dibujar()
     expect(html).toContain('* Campo obligatorio')
-    expect(html).toMatch(/<label[^>]*for="documento-tipo"[^>]*>Tipo de documento<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/label>/)
+    expect(html).toMatch(/<label[^>]*for="[^"]+-tipo"[^>]*>Tipo de documento<span[^>]*aria-hidden="true"[^>]*> \*<\/span><\/label>/)
     for (const etiqueta of ['Documento de identidad', 'Certificado de estudio', 'Formulario de inscripción', 'Habeas Data', 'Paz y salvo', 'Carta de renuncia', 'Traspaso nacional']) {
-      expect(html).toContain(`>${etiqueta}</option>`)
+      expect(html).toContain(`>${etiqueta} (`)
     }
     expect(html).not.toContain('Ficha médica')
     expect(html).not.toMatch(/>Foto tipo documento<\/option>/) // la foto es la de perfil, no se sube como documento
     expect(html.match(/<option value="[A-Z_]+">/g)).toHaveLength(7)
     expect(html).toContain('Elige el tipo para ver qué documento se espera.') // la descripción larga aparece como ayuda al elegir
-    expect(html).toMatch(/<input id="documento-archivo"[^>]*aria-required="true"[^>]*type="file"[^>]*accept="\.pdf,application\/pdf,image\/jpeg,image\/png"/)
+    expect(html).toMatch(/<input id="[^"]+-archivo"[^>]*aria-required="true"[^>]*type="file"[^>]*accept="\.pdf,application\/pdf,image\/jpeg,image\/png"/)
     expect(html).toContain('Archivo (PDF, JPG o PNG, máximo 5 MB)')
     expect(html).toContain('Fecha de vencimiento (opcional)')
-    expect(html).toMatch(new RegExp(`<input id="documento-vencimiento"[^>]*type="date"[^>]*min="${hoyLocal()}"`))
-    expect(html).not.toMatch(/documento-vencimiento"[^>]*aria-required/)
+    expect(html).toMatch(new RegExp(`<input id="[^"]+-vencimiento"[^>]*type="date"[^>]*min="${hoyLocal()}"`))
+    expect(html).not.toMatch(/-vencimiento"[^>]*aria-required/)
     expect(html).toContain('>Subir documento</button>')
   })
 })
@@ -88,28 +88,29 @@ describe('PanelDocumentos: formulario "Subir documento"', () => {
 describe('PanelDocumentos: lista de verificación', () => {
   const filas = (html) => html.match(/<li class="flex flex-wrap items-center justify-between gap-2 rounded-md border/g)
 
-  it('muestra el resumen y los 8 requisitos (7 documentos y la foto) con su estado y la marca Obligatorio / Si aplica', () => {
+  it('muestra el resumen "x de 4" y los 7 documentos con su estado y la marca Obligatorio / Si aplica; la foto va aparte', () => {
     const html = dibujar({ documentos: [pendiente, aprobado, rechazado] })
     expect(html).toContain('Lista de verificación')
-    expect(html).toContain('1 de 5 requisitos obligatorios completos')
-    expect(filas(html)).toHaveLength(8)
-    expect(html.match(/>Obligatorio</g)).toHaveLength(5)
-    expect(html.match(/>Si aplica</g)).toHaveLength(3)
-    expect(html).toContain('>Foto tipo documento<')
+    expect(html).toContain('1 de 4 requisitos obligatorios completos')
+    expect(filas(html)).toHaveLength(7)
+    expect(html.match(/>Obligatorio</g)).toHaveLength(4)
+    expect(html.match(/>Si aplica · no cuenta para completar la inscripción</g)).toHaveLength(3)
+    expect(html).toContain('aria-label="Foto del deportista"')
+    expect(html).toContain('Informativo · no cuenta para la inscripción')
     expect(html).not.toContain('Ficha médica')
   })
 
-  it('sin documentos ni foto: 0 de 5, todo sin cargar y la fila de la foto lleva a la tarjeta de Foto', () => {
+  it('sin documentos ni foto: 0 de 4, todo sin cargar y la foto enlaza a la tarjeta de Foto', () => {
     const html = dibujar()
-    expect(html).toContain('0 de 5 requisitos obligatorios completos')
-    expect(html.match(/>Sin cargar</g)).toHaveLength(8)
-    expect(html).toContain('href="#foto-deportista"')
+    expect(html).toContain('0 de 4 requisitos obligatorios completos')
+    expect(html.match(/>Sin cargar</g)).toHaveLength(8) // 7 documentos y la foto
     expect(html.match(/href="#foto-deportista"/g)).toHaveLength(1)
   })
 
-  it('con foto de perfil la fila dice "Cargada", cuenta en el resumen y ya no enlaza', () => {
+  it('con foto de perfil dice "Cargada", pero NO cambia la cuenta y ya no enlaza', () => {
     const html = dibujar({ documentos: [aprobado], tieneFoto: true })
-    expect(html).toContain('2 de 5 requisitos obligatorios completos')
+    expect(html).toContain('1 de 4 requisitos obligatorios completos')
+    expect(dibujar({ documentos: [], tieneFoto: true })).toContain('0 de 4 requisitos obligatorios completos')
     expect(html).toContain('>Cargada<')
     expect(html).not.toContain('href="#foto-deportista"')
     expect(html.match(/>Sin cargar</g)).toHaveLength(6)
@@ -126,5 +127,52 @@ describe('PanelDocumentos: quién subió cada documento', () => {
     const html = dibujar({ documentos: [{ ...aprobado, cargadoPor: 'Administrador' }, { ...pendiente, cargadoPor: 'Acudiente' }] })
     expect(html).toContain('Cargado por: Administrador')
     expect(html).toContain('Cargado por: Acudiente')
+  })
+})
+
+describe('PanelDocumentos: módulo "documentos" (API)', () => {
+  it('muestra estadoInscripcion y "Faltan: …", y aclara que los "Si aplica" no cuentan', () => {
+    const html = dibujar({ documentos: [aprobado], estadoInscripcion: 'PENDIENTE', documentosFaltantes: ['CERTIFICADO_ESTUDIO', 'AUTORIZACION_HABEAS_DATA'] })
+    expect(html).toContain('Inscripción: Pendiente')
+    expect(html).toContain('Faltan: Certificado de estudio, Habeas Data')
+    expect(html).toContain('no cuentan para completar la inscripción')
+    expect(dibujar({ documentos: [aprobado], estadoInscripcion: 'COMPLETA', documentosFaltantes: [] })).not.toContain('Faltan:')
+  })
+
+  it('"Ver documento" solo existe si recibe onVer (con la API); sin él no hay botón', () => {
+    expect(dibujar({ documentos: [pendiente] })).not.toContain('Ver documento')
+    expect(dibujar({ documentos: [pendiente], onVer: async () => {} })).toContain('>Ver documento<')
+  })
+
+  it('un solo documento activo por tipo: "Subir" no ofrece los tipos pendientes o aprobados, pero sí el rechazado', () => {
+    const html = dibujar({ documentos: [pendiente, aprobado, rechazado] })
+    expect(html).not.toContain('value="CERTIFICADO_ESTUDIO"') // pendiente
+    expect(html).not.toContain('value="DOCUMENTO_IDENTIDAD"') // aprobado
+    expect(html).toContain('value="PAZ_Y_SALVO"') // el último está rechazado
+    expect(html).toContain('value="FORMULARIO_INSCRIPCION"')
+  })
+
+  it('si todos los tipos tienen documento activo no se dibuja el formulario y se explica', () => {
+    const ids = ['DOCUMENTO_IDENTIDAD', 'CERTIFICADO_ESTUDIO', 'FORMULARIO_INSCRIPCION', 'AUTORIZACION_HABEAS_DATA', 'PAZ_Y_SALVO', 'CARTA_RENUNCIA', 'TRASPASO_NACIONAL']
+    const html = dibujar({ documentos: ids.map((tipo, i) => ({ ...aprobado, id: `u${i}`, tipo })) })
+    expect(html).toContain('Todos los tipos ya tienen un documento activo')
+    expect(html).not.toContain('id="documento-tipo"')
+  })
+
+  it('cada tarjeta dice Obligatorio o Si aplica con texto', () => {
+    const html = dibujar({ documentos: [pendiente, rechazado] })
+    expect(html).toContain('· Obligatorio')
+    expect(html).toContain('· Si aplica')
+  })
+
+  it('el aviso de rechazo con avisoEnviado false o null es una alerta (warning), no un éxito', () => {
+    const html = dibujar({ documentos: [aprobado], exito: { texto: 'Documento rechazado, pero el correo al acudiente no se pudo enviar.', tono: 'warning' } })
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('el correo al acudiente no se pudo enviar')
+  })
+
+  it('con UUID como id (texto) la lista se dibuja sin errores', () => {
+    const html = dibujar({ documentos: [{ ...pendiente, id: '9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' }], onVer: async () => {} })
+    expect(html).toContain('Aprobar')
   })
 })
