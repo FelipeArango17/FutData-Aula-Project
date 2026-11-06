@@ -18,9 +18,11 @@ Contrato completo (campos, respuestas, cómo llamarlo desde Spring Boot): [`docs
 | `plantillas/codigo-2fa.html` / `.txt` | Correo del código 2FA (HTML y texto plano) |
 | `plantillas/cambio-entrenamiento.html` / `.txt` | Aviso de cambio de entrenamiento (HTML y texto plano) |
 | `plantillas/bienvenida-entrenador.html` / `.txt` | Plantilla `BIENVENIDA_ENTRENADOR` de `ENLACE_CONTRASENA`: bienvenida y botón para crear la contraseña |
+| `plantillas/documento-rechazado.html` / `.txt` | Aviso de `DOCUMENTO_RECHAZADO` al acudiente: el documento rechazado, el motivo (con sus saltos de línea) y un botón a la sección de documentos |
 | `scripts/probar-2fa.sh` / `.ps1` | Prueba de `CODIGO_2FA`: caso válido (202), sin token (401), evento inválido (400) y, opcional, falla de envío (202 y línea en el registro) |
 | `scripts/probar-entrenamiento.sh` / `.ps1` | Prueba de `CAMBIO_ENTRENAMIENTO`: creado, modificado, cancelado y duplicados (202), lista vacía, tipo inválido y más de 200 destinatarios (400), sin token (401) y, opcional, falla de envío |
 | `scripts/probar-enlace.sh` / `.ps1` | Prueba de `ENLACE_CONTRASENA` con un enlace falso: caso válido (200), sin token (401), evento inválido (400), seis casos de datos inválidos (400) y, opcional, falla de envío (502 y línea en el registro sin el enlace) |
+| `scripts/probar-documento.sh` / `.ps1` | Prueba de `DOCUMENTO_RECHAZADO` con un enlace falso: tres casos válidos (202: comentario de varias líneas con HTML, nombres neutros y comentario de 300 caracteres), sin token (401), evento inválido (400), quince casos de datos inválidos (400, sin datos personales en el detalle) y, opcional, falla de envío (202 y línea en el registro sin el correo, los nombres, el comentario ni el enlace) |
 | `logs/` | Registro de fallas de envío `fallas-notificaciones.jsonl` (los `.jsonl` están ignorados por Git) |
 
 ## Flujo
@@ -233,12 +235,14 @@ Comprueba que una falla real del SMTP quede en el [registro de fallas](#registro
    bash scripts/probar-2fa.sh --probar-falla
    bash scripts/probar-entrenamiento.sh --probar-falla
    bash scripts/probar-enlace.sh --probar-falla
+   bash scripts/probar-documento.sh --probar-falla
    ```
 
    ```powershell
    pwsh -File scripts/probar-2fa.ps1 -ProbarFalla
    pwsh -File scripts/probar-entrenamiento.ps1 -ProbarFalla
    pwsh -File scripts/probar-enlace.ps1 -ProbarFalla
+   pwsh -File scripts/probar-documento.ps1 -ProbarFalla
    ```
 
    En este modo se omite el caso *Código 2FA válido*. Corren *Sin token*, *Evento inválido* y *Falla de envío SMTP (responde 202 igual)*, que espera `202` de inmediato, porque n8n responde antes de enviar. Después el script espera hasta 150 s a que aparezca una línea `CODIGO_2FA` nueva en `logs/fallas-notificaciones.jsonl`, y revisa que sea JSON con los cinco campos y que no contenga el código `123456`, el `CORREO_PRUEBA` completo ni el token. Deben salir cuatro líneas `OK`.

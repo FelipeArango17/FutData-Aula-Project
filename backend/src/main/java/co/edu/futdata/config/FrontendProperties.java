@@ -18,6 +18,7 @@ public record FrontendProperties(String url) {
 
     static final String RUTA_CREAR_CONTRASENA = "/crear-contrasena";
     static final String RUTA_PAGOS_ACUDIENTE = "/acudiente/pagos";
+    static final String RUTA_DOCUMENTOS_ACUDIENTE = "/acudiente/documentos";
 
     public FrontendProperties {
         url = url == null || url.isBlank() ? null : url.strip().replaceAll("/+$", "");
@@ -54,5 +55,18 @@ public record FrontendProperties(String url) {
             throw new IllegalStateException("FRONTEND_URL no está configurada");
         }
         return url + RUTA_PAGOS_ACUDIENTE;
+    }
+
+    /**
+     * Enlace a la pantalla de documentos del acudiente ({@code {FRONTEND_URL}/acudiente/documentos}) para el aviso de un
+     * documento rechazado. No lleva datos secretos.
+     *
+     * @throws IllegalStateException si {@code FRONTEND_URL} no está configurada
+     */
+    public String enlaceDocumentos() {
+        if (!configurada()) {
+            throw new IllegalStateException("FRONTEND_URL no está configurada");
+        }
+        return url + RUTA_DOCUMENTOS_ACUDIENTE;
     }
 }

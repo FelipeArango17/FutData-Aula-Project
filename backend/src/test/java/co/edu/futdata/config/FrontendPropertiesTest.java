@@ -35,4 +35,20 @@ class FrontendPropertiesTest {
         assertThatThrownBy(() -> new FrontendProperties("http://localhost:5173").enlaceCrearContrasena(" "))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void armaElEnlaceDeDocumentosDelAcudienteSinDobleBarraNiDatosSecretos() {
+        assertThat(new FrontendProperties("https://futdata.example/").enlaceDocumentos())
+                .isEqualTo("https://futdata.example/acudiente/documentos");
+        assertThat(new FrontendProperties("http://localhost:5173").enlaceDocumentos())
+                .isEqualTo("http://localhost:5173/acudiente/documentos").doesNotContain("?").doesNotContain("token");
+    }
+
+    @Test
+    void sinUrlNoArmaElEnlaceDeDocumentos() {
+        for (String vacia : new String[] {null, "", "   "}) {
+            assertThatThrownBy(() -> new FrontendProperties(vacia).enlaceDocumentos())
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
 }

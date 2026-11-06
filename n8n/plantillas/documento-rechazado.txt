@@ -1,0 +1,17 @@
+Hola, {{nombreAcudiente}}:
+
+El administrador del club revisó el documento "{{documento}}" de {{nombreDeportista}}
+y no pudo aprobarlo. Revisa el motivo, corrige el documento y vuelve a subirlo desde
+la sección de documentos.
+
+Motivo del rechazo:
+
+{{comentario}}
+
+Entra a los documentos en este enlace:
+
+    {{enlace}}
+
+--
+Asociación Deportiva Prado Fútbol Club · FutData
+Este es un correo automático, por favor no lo respondas.

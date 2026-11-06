@@ -214,6 +214,30 @@
               },
               "renameOutput": true,
               "outputKey": "RECORDATORIO_PAGO"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c0000002-0000-4000-8000-000000000005",
+                    "leftValue": "={{ $json.body.evento }}",
+                    "rightValue": "DOCUMENTO_RECHAZADO",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "DOCUMENTO_RECHAZADO"
             }
           ]
         },
@@ -621,6 +645,24 @@
                 "type": "string",
                 "operation": "notEquals"
               }
+            },
+            {
+              "id": "c0000005-0000-4000-8000-000000000003",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "RECORDATORIO_PAGO",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "c0000005-0000-4000-8000-000000000004",
+              "leftValue": "={{ $('Webhook').first().json.body.evento }}",
+              "rightValue": "DOCUMENTO_RECHAZADO",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
             }
           ],
           "combinator": "and"
@@ -636,7 +678,7 @@
         192
       ],
       "onError": "continueRegularOutput",
-      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA) ya respondieron 202: solo registran la falla. Los síncronos (ENLACE_CONTRASENA) siguen a Responder 502."
+      "notes": "Los eventos asíncronos (CAMBIO_ENTRENAMIENTO, CODIGO_2FA, RECORDATORIO_PAGO, DOCUMENTO_RECHAZADO) ya respondieron 202: solo registran la falla. Los síncronos (ENLACE_CONTRASENA) siguen a Responder 502."
     },
     {
       "parameters": {
@@ -930,6 +972,119 @@
       },
       "onError": "continueErrorOutput",
       "notes": "Recordatorio de pago de la mensualidad (RECORDATORIO_PAGO). Asíncrono: se responde 202 antes de enviar. Una falla va a 'Armar registro de falla' (sin correo completo ni enlace)."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida los datos de DOCUMENTO_RECHAZADO (asíncrono: 202 antes de enviar el correo; 400 si los datos no sirven).\n// Devuelve { valido, detalle, ... } y el IF siguiente responde 202 y envía el correo, o responde 400.\n// \"detalle\" explica el primer problema y nunca incluye el correo, los nombres, el comentario ni el enlace.\nconst MAX_CORREO = 254;\nconst MAX_TEXTO = 120;\nconst MAX_COMENTARIO = 300;\nconst MAX_ENLACE = 2000;\nconst RE_CORREO = /^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$/;\nconst RE_ENLACE = /^https?:\\/\\/[^\\s\"'<>]+$/;\nconst RE_CONTROL = /[\\u0000-\\u001f\\u007f]/;\n// El comentario lo escribe el administrador y puede traer saltos de línea: se permiten \\t (09), \\n (0a) y \\r (0d);\n// cualquier otro carácter de control es inválido.\nconst RE_CONTROL_COMENTARIO = /[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/;\n\nconst esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);\nconst html = (v) =>\n  String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n\n// Texto obligatorio de una línea: no vacío, hasta MAX_TEXTO caracteres y sin saltos de línea ni otros caracteres de control.\nconst textoValido = (v) =>\n  typeof v === 'string' && v.trim() !== '' && v.trim().length <= MAX_TEXTO && !RE_CONTROL.test(v);\n\n// Comentario obligatorio: no vacío, hasta MAX_COMENTARIO caracteres (ya recortado) y solo con \\t, \\n y \\r como control.\nconst comentarioValido = (v) =>\n  typeof v === 'string' && v.trim() !== '' && v.trim().length <= MAX_COMENTARIO && !RE_CONTROL_COMENTARIO.test(v);\n\nfunction validar(d) {\n  if (typeof d.correo !== 'string' || d.correo.trim().length > MAX_CORREO || !RE_CORREO.test(d.correo.trim())) {\n    return 'correo no tiene un formato válido';\n  }\n  if (!textoValido(d.nombreAcudiente)) return `nombreAcudiente es obligatorio y de una línea (máximo ${MAX_TEXTO} caracteres)`;\n  if (!textoValido(d.nombreDeportista)) return `nombreDeportista es obligatorio y de una línea (máximo ${MAX_TEXTO} caracteres)`;\n  if (!textoValido(d.documento)) return `documento es obligatorio y de una línea (máximo ${MAX_TEXTO} caracteres)`;\n  if (typeof d.comentario === 'string' && RE_CONTROL_COMENTARIO.test(d.comentario)) {\n    return 'comentario tiene caracteres de control no permitidos (solo se admiten saltos de línea y tabuladores)';\n  }\n  if (!comentarioValido(d.comentario)) return `comentario es obligatorio (máximo ${MAX_COMENTARIO} caracteres)`;\n  if (typeof d.enlaceDocumentos !== 'string' || d.enlaceDocumentos.length > MAX_ENLACE || !RE_ENLACE.test(d.enlaceDocumentos)) {\n    return 'enlaceDocumentos debe empezar por http:// o https:// y no tener espacios';\n  }\n  return null;\n}\n\nlet resultado;\ntry {\n  const datos = $('Webhook').first().json.body.datos;\n  const detalle = esObjeto(datos) ? validar(datos) : 'datos debe ser un objeto';\n  if (detalle) {\n    resultado = { valido: false, detalle };\n  } else {\n    const nombreAcudiente = datos.nombreAcudiente.trim();\n    const nombreDeportista = datos.nombreDeportista.trim();\n    const documento = datos.documento.trim();\n    // En el texto plano el comentario va tal cual (con los saltos de línea unificados a \\n); en el HTML se escapa\n    // primero y después cada salto de línea pasa a <br>, así lo que escribió el administrador nunca llega como HTML.\n    const comentarioTexto = datos.comentario.trim().replace(/\\r\\n?/g, '\\n');\n    const comentarioHtml = html(comentarioTexto).replace(/\\n/g, '<br>').replace(/\\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');\n    resultado = {\n      valido: true,\n      detalle: '',\n      correo: datos.correo.trim(),\n      nombreAcudiente,\n      nombreAcudienteHtml: html(nombreAcudiente),\n      nombreDeportista,\n      nombreDeportistaHtml: html(nombreDeportista),\n      documento,\n      documentoHtml: html(documento),\n      comentarioTexto,\n      comentarioHtml,\n      enlace: datos.enlaceDocumentos,\n      enlaceHtml: html(datos.enlaceDocumentos),\n    };\n  }\n} catch (error) {\n  resultado = { valido: false, detalle: 'datos tiene un formato inválido' };\n}\n\nreturn [{ json: resultado }];\n"
+      },
+      "id": "1d4f7a92-6c35-4b08-a1e7-2b9c0d5e8f13",
+      "name": "Validar datos DOCUMENTO_RECHAZADO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        1568
+      ],
+      "notes": "Valida los datos (correo, nombres y documento de una línea, comentario de hasta 300 caracteres que admite \\n, \\r y \\t, enlace http(s)), escapa el HTML y deja el comentario en texto plano y en HTML con <br>. Sin datos personales en el detalle de los errores."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0000009-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2e5a8b03-7d46-4c19-b2f8-3c0d1e6f9a24",
+      "name": "¿Datos de documento válidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1568
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"aceptado\": true\n}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "3f6b9c14-8e57-4d2a-83a9-4d1e2f7a0b35",
+      "name": "Responder 202 documento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        1488
+      ],
+      "notes": "Responde antes de enviar: el backend espera máximo 5 s y el SMTP tarda más. Una falla del envío solo queda en el registro de fallas."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ aceptado: false, error: 'Faltan campos o tienen un formato inválido', detalle: $json.detalle }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "40a7ad25-9f68-4e3b-94ba-5e2f3a8b1c46",
+      "name": "Responder 400 documento",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1328,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "FutData <futdatanotifications@gmail.com>",
+        "toEmail": "={{ $json.correo }}",
+        "subject": "=Documento rechazado: {{ $json.documento }} de {{ $json.nombreDeportista }}",
+        "emailFormat": "both",
+        "text": "=Hola, {{ $json.nombreAcudiente }}:\n\nEl administrador del club revisó el documento \"{{ $json.documento }}\" de {{ $json.nombreDeportista }}\ny no pudo aprobarlo. Revisa el motivo, corrige el documento y vuelve a subirlo desde\nla sección de documentos.\n\nMotivo del rechazo:\n\n{{ $json.comentarioTexto }}\n\nEntra a los documentos en este enlace:\n\n    {{ $json.enlace }}\n\n--\nAsociación Deportiva Prado Fútbol Club · FutData\nEste es un correo automático, por favor no lo respondas.\n",
+        "html": "=<!DOCTYPE html>\n<html lang=\"es\" xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<meta name=\"x-apple-disable-message-reformatting\">\n<meta name=\"color-scheme\" content=\"light\">\n<meta name=\"supported-color-schemes\" content=\"light\">\n<title>Documento rechazado en FutData</title>\n</head>\n<body style=\"margin:0; padding:0; background-color:#F7F8FA; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;\">\n<!-- Texto de vista previa (oculto en el cuerpo del correo) -->\n<div style=\"display:none; max-height:0; overflow:hidden; mso-hide:all; font-size:1px; line-height:1px; color:#F7F8FA;\">\nNo se pudo aprobar el documento {{ $json.documentoHtml }} de {{ $json.nombreDeportistaHtml }}. Revisa el motivo y vuelve a subirlo.\n</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#F7F8FA;\">\n  <tr>\n    <td align=\"center\" style=\"padding:32px 16px;\">\n      <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"max-width:560px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius:12px;\">\n        <!-- Encabezado -->\n        <tr>\n          <td align=\"left\" style=\"background-color:#0F2C4C; border-radius:12px 12px 0 0; padding:24px 32px;\">\n            <span style=\"font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:22px; font-weight:700; color:#FFFFFF; letter-spacing:0.5px;\">Fut<span style=\"color:#3CB043;\">Data</span></span>\n          </td>\n        </tr>\n        <!-- Cuerpo -->\n        <tr>\n          <td align=\"left\" style=\"padding:32px 32px 8px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; color:#1A2332;\">\n            <p style=\"margin:0 0 16px 0; font-size:18px; font-weight:600; line-height:26px;\">Hola, {{ $json.nombreAcudienteHtml }}:</p>\n            <p style=\"margin:0 0 24px 0; font-size:15px; line-height:24px; color:#4B5563;\">El administrador del club revisó el documento <strong>{{ $json.documentoHtml }}</strong> de <strong>{{ $json.nombreDeportistaHtml }}</strong> y no pudo aprobarlo. Revisa el motivo, corrige el documento y vuelve a subirlo desde la sección de documentos.</p>\n          </td>\n        </tr>\n        <!-- Motivo del rechazo (el comentario conserva sus saltos de línea como <br>) -->\n        <tr>\n          <td style=\"padding:0 32px 24px 32px;\">\n            <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background-color:#FEF3E2; border-left:4px solid #F2A93B; border-radius:6px;\">\n              <tr>\n                <td style=\"padding:16px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:14px; line-height:22px; color:#7A4B00;\">\n                  <strong>Motivo del rechazo:</strong><br>\n                  {{ $json.comentarioHtml }}\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Botón -->\n        <tr>\n          <td align=\"center\" style=\"padding:0 32px;\">\n            <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\">\n              <tr>\n                <td align=\"center\" style=\"background-color:#3CB043; border-radius:8px;\">\n                  <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"display:inline-block; padding:14px 28px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; line-height:20px; color:#FFFFFF; text-decoration:none; border-radius:8px;\">Ir a los documentos</a>\n                </td>\n              </tr>\n            </table>\n          </td>\n        </tr>\n        <!-- Enlace en texto, por si el botón no funciona -->\n        <tr>\n          <td align=\"left\" style=\"padding:16px 32px 32px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:13px; line-height:20px; color:#4B5563;\">\n            Si el botón no funciona, copia y pega este enlace en tu navegador:<br>\n            <a href=\"{{ $json.enlaceHtml }}\" target=\"_blank\" rel=\"noopener\" style=\"color:#0F2C4C; word-break:break-all;\">{{ $json.enlaceHtml }}</a>\n          </td>\n        </tr>\n        <!-- Pie -->\n        <tr>\n          <td align=\"center\" style=\"border-top:1px solid #E5E7EB; padding:20px 32px; font-family:'Plus Jakarta Sans', Arial, Helvetica, sans-serif; font-size:12px; line-height:18px; color:#4B5563;\">\n            Asociación Deportiva Prado Fútbol Club · FutData<br>\n            Este es un correo automático, por favor no lo respondas.\n          </td>\n        </tr>\n      </table>\n    </td>\n  </tr>\n</table>\n</body>\n</html>\n",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "5b8c1d36-a079-4f4c-a5cb-6f3a4b9c2d57",
+      "name": "Enviar aviso de documento rechazado",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1552,
+        1488
+      ],
+      "webhookId": "f3b2d1ef-5b8e-4c3f-8b62-a28eb8b11156",
+      "credentials": {
+        "smtp": {
+          "id": "9sYcTJjryXWzOeBt",
+          "name": "SMTP account"
+        }
+      },
+      "onError": "continueErrorOutput",
+      "notes": "Aviso de documento rechazado (DOCUMENTO_RECHAZADO). Asíncrono: se responde 202 antes de enviar; un correo por acudiente. El texto y el HTML son copia de plantillas/documento-rechazado.html y .txt. Una falla va a 'Armar registro de falla' (sin correo completo, comentario ni enlace)."
     }
   ],
   "pinData": {},
@@ -1007,6 +1162,13 @@
         [
           {
             "node": "Validar datos RECORDATORIO_PAGO",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validar datos DOCUMENTO_RECHAZADO",
             "type": "main",
             "index": 0
           }
@@ -1267,6 +1429,58 @@
       ]
     },
     "Enviar recordatorio de pago": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Armar registro de falla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar datos DOCUMENTO_RECHAZADO": {
+      "main": [
+        [
+          {
+            "node": "¿Datos de documento válidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Datos de documento válidos?": {
+      "main": [
+        [
+          {
+            "node": "Responder 202 documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder 400 documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder 202 documento": {
+      "main": [
+        [
+          {
+            "node": "Enviar aviso de documento rechazado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar aviso de documento rechazado": {
       "main": [
         [],
         [

@@ -44,6 +44,17 @@ public interface INotificador {
     String RECORDATORIO_PAGO = "RECORDATORIO_PAGO";
 
     /**
+     * Aviso al acudiente de que el administrador rechazó un documento de la inscripción de su deportista (bloque 3). Un
+     * correo por acudiente. Respuesta asíncrona ({@code 202}): recibido, no entregado; usa el tiempo de espera normal.
+     *
+     * <p>Datos, todos de una línea salvo el comentario: {@code correo} (máx. 254), {@code nombreAcudiente} (máx. 120),
+     * {@code nombreDeportista} (máx. 120), {@code documento} (etiqueta legible del tipo, máx. 120), {@code comentario}
+     * (el motivo del rechazo, máx. 300) y {@code enlaceDocumentos} ({@code {FRONTEND_URL}/acudiente/documentos}, sin datos
+     * secretos, máx. 2000). El comentario y los nombres son datos de menores y de sus familias: no se registran.
+     */
+    String DOCUMENTO_RECHAZADO = "DOCUMENTO_RECHAZADO";
+
+    /**
      * Pide el envío de una notificación. Retorna normalmente si n8n la aceptó ({@code 200} o {@code 202}).
      * No reintenta.
      *

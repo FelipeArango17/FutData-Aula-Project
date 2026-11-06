@@ -15,4 +15,11 @@ public interface IDestinatariosDAO {
      * @param anioActual el año del {@code Clock} de Bogotá
      */
     List<Destinatario> acudientesDeCategoria(UUID idCategoria, int anioActual);
+
+    /**
+     * Los acudientes vinculados a <b>un</b> deportista que tienen correo (nulo o en blanco se ignoran), sin duplicados
+     * por correo (sin distinguir mayúsculas ni espacios), por apellido y nombre. No filtra por {@code activo}: un
+     * deportista inactivo también puede tener documentos. Vacía si el deportista no existe o no tiene acudientes con correo.
+     */
+    List<Destinatario> acudientesDeDeportista(UUID idDeportista);
 }

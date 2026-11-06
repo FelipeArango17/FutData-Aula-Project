@@ -130,6 +130,11 @@ futdata:
     # firmada que va en las respuestas (de 10s a 60m). Separada de la de los comprobantes, que es corta.
     bucket: ${FOTOS_BUCKET:fotos}
     vigencia-url-firmada: ${FOTOS_VIGENCIA_URL_FIRMADA:60m}
+  documentos:
+    # Documentos de la inscripción (config.DocumentosProperties): bucket privado de la migración 007 y vigencia de la URL
+    # firmada de descarga (de 10s a 60m). Son documentos de menores: 5 minutos por defecto, solo bajo demanda.
+    bucket: ${DOCUMENTOS_BUCKET:documentos}
+    vigencia-url-firmada: ${DOCUMENTOS_VIGENCIA_URL_FIRMADA:300s}
 
 ---
 # Perfil local: valores por defecto para poder trabajar sin credenciales.

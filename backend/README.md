@@ -74,6 +74,7 @@ La configuración está en [`src/main/resources/application.yml`](src/main/resou
 | `FUTDATA_COBROS_DIAS_ANTICIPACION`, `FUTDATA_COBROS_VENTANA_INGRESO_DIAS` | Días de anticipación del cobro del ciclo y días desde el registro en que se cobran inscripción y uniforme | `5`, `7` | Igual |
 | `N8N_CRON_TOKEN` | Secreto de la tarea diaria de n8n para `POST /api/pagos/generar-ciclos` (cabecera `X-Cron-Token`). **Secreto.** Sin ella esa vía queda deshabilitada | vacía | **Opcional** (no la exige el perfil `prod`) |
 | `FOTOS_BUCKET`, `FOTOS_VIGENCIA_URL_FIRMADA` | Bucket de las fotos de los deportistas y vigencia de su URL firmada, de 10 s a 60 min ([Foto](#foto)) | `fotos`, `60m` | Igual |
+| `DOCUMENTOS_BUCKET`, `DOCUMENTOS_VIGENCIA_URL_FIRMADA` | Bucket de los documentos de la inscripción y vigencia de su URL firmada de descarga, de 10 s a 60 min ([Documentos](#documentos-de-la-inscripción-bloque-3)). Son documentos de menores: la vigencia es corta | `documentos`, `300s` | Igual |
 | `PORT` | Puerto HTTP | `8080` | `8080` |
 | `CLUB_NOMBRE`, `CLUB_NIT`, `CLUB_DIRECCION`, `CLUB_TELEFONO`, `CLUB_CORREO` | Datos del club en los PDF ([Comprobante de pago](#comprobante-de-pago-pdf)) | Datos reales del club | Igual que en local |
 | `DB_POOL_MAX` | Conexiones máximas del pool | `5` | `5` |
@@ -341,7 +342,7 @@ Lo que el acudiente ve de **sus propios** jugadores. Solo el rol `ACUDIENTE`.
 
 ### Ficha
 
-Los mismos campos de la lista más `tipoDocumento`, `documento`, `telefono`, `direccion` y `documentosFaltantes`: los tipos de documento obligatorio que aún no tienen uno `APROBADO`, en el orden `DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`. Es `[]` si y solo si `estadoInscripcion` es `COMPLETA`. El estado de cada documento y el comentario de rechazo llegan con el bloque 3.
+Los mismos campos de la lista más `tipoDocumento`, `documento`, `telefono`, `direccion` y `documentosFaltantes`: los tipos de documento obligatorio que aún no tienen uno `APROBADO`, en el orden `DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION`, `AUTORIZACION_HABEAS_DATA`. Es `[]` si y solo si `estadoInscripcion` es `COMPLETA`. El estado de cada documento y el comentario de rechazo se consultan con `GET /api/deportistas/{id}/documentos` ([Documentos](#documentos-de-la-inscripción-bloque-3)).
 
 ### Errores
 
@@ -355,6 +356,91 @@ Los mismos campos de la lista más `tipoDocumento`, `documento`, `telefono`, `di
 Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend).
 
 > **Sin el bloque 2B no hay vínculos reales.** Hasta que la inscripción única cree acudientes y vínculos, ninguna cuenta real tiene filas en `acudiente` (con `id_usuario`) ni en `acudiente_deportista`, así que la lista sale vacía hasta que se vinculen a mano (SQL en Supabase) o con un script de siembra. Las pruebas (`MisJugadoresConPostgresTest`) crean sus propios datos.
+
+## Documentos de la inscripción (bloque 3)
+
+Subir, listar, descargar, aprobar y rechazar los documentos de un deportista (los 7 tipos de la regla 7: `DOCUMENTO_IDENTIDAD`, `CERTIFICADO_ESTUDIO`, `FORMULARIO_INSCRIPCION` y `AUTORIZACION_HABEAS_DATA` son obligatorios; `PAZ_Y_SALVO`, `CARTA_RENUNCIA` y `TRASPASO_NACIONAL`, si aplican). Sin migración: usa la tabla `documento` (004 y 007) y el bucket privado `documentos` (007).
+
+### Endpoints
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `POST /api/deportistas/{id}/documentos` | Sube un documento (multipart: `tipo`, `archivo`, `fechaVencimiento` opcional). Queda `PENDIENTE` | `ADMINISTRADOR`, `ACUDIENTE` dueño | `201`, `400`, `401`, `403`, `404`, `409`, `503` |
+| `GET /api/deportistas/{id}/documentos` | Los documentos del deportista con `estadoInscripcion` y `documentosFaltantes` | `ADMINISTRADOR`, `ACUDIENTE` dueño | `200`, `400`, `401`, `403`, `404` |
+| `GET /api/documentos/{id}/descarga` | `{ url, vigenciaSegundos }`: URL firmada de vida corta, con `Cache-Control: no-store` | `ADMINISTRADOR`, `ACUDIENTE` dueño | `200`, `400`, `401`, `403`, `404`, `503` |
+| `POST /api/documentos/{id}/aprobar` | Aprueba un documento `PENDIENTE` (sin cuerpo) | `ADMINISTRADOR` | `200`, `400`, `401`, `403`, `404`, `409` |
+| `POST /api/documentos/{id}/rechazar` | Rechaza un documento `PENDIENTE` con `{ "comentario": "..." }` y avisa a los acudientes | `ADMINISTRADOR` | `200`, `400`, `401`, `403`, `404`, `409` |
+
+**Quién ve qué.** Son documentos de identidad de menores: solo el `ADMINISTRADOR` y el `ACUDIENTE` dueño del deportista. El `ENTRENADOR` y el `TESORERO` reciben `403` por rol. El usuario sale siempre del token y la propiedad se decide en el SQL (`acudiente_deportista` + `acudiente.id_usuario`), como en el 2C: un deportista de otro acudiente responde `404` con el mismo mensaje que uno inexistente ("No existe un deportista con ese id."), y un documento ajeno, "No existe un documento con ese id." (nunca `403`). Aprobar y rechazar son **solo del administrador**: un acudiente, incluso el dueño, recibe `403`. El servicio falla cerrado ante cualquier rol que no sea de los dos.
+
+### Subir
+
+`POST /api/deportistas/{id}/documentos` con `multipart/form-data`:
+
+- `tipo`: uno de los 7 tipos, en mayúsculas exactas.
+- `archivo`: **PDF, JPG o PNG**, de hasta **5 MB** (5 242 880 bytes; exactamente 5 MB se acepta). El tipo se decide **solo por los bytes iniciales** del archivo (`%PDF-`, `FF D8 FF`, firma PNG): la extensión, el nombre y el `Content-Type` que mande el cliente se ignoran (un PNG guardado como `.jpg` o declarado como PDF se acepta y se guarda como PNG; un texto llamado `.pdf` se rechaza). El PDF se valida por su cabecera: no se revisa si es válido ni si tiene virus. Spring deja pasar hasta 10 MB (`spring.servlet.multipart`) para que el mensaje lo dé el servicio; más de 10 MB también responde `400`.
+- `fechaVencimiento`: opcional, `AAAA-MM-DD`, una fecha real que no sea anterior a hoy (hora de Bogotá; hoy sí vale). Hoy solo se guarda: no hay avisos de vencimiento.
+
+El orden es: autorización, deportista inexistente (`404`), validación (todos los errores juntos en un solo `400`), revisión rápida de si ya hay un documento activo del tipo (`409` antes de subir nada), subida a Storage **fuera de toda transacción** con la ruta `{idDeportista}/{uuid}.pdf|jpg|png` (nunca el nombre del cliente) y una transacción corta que bloquea al deportista (`select ... for no key update`), repite la revisión e inserta. El nombre original se guarda limpio (sin carpetas ni caracteres de control, hasta 255) solo como dato informativo.
+
+- **Un solo documento activo por tipo.** No puede haber dos documentos `PENDIENTE` o `APROBADO` del mismo tipo para un deportista: el segundo da `409` con `campos: ["tipo"]`. Después de un `RECHAZADO` se puede volver a subir; el rechazado queda en el historial. Reemplazar uno `APROBADO` no entra en esta versión. Se permite subir a deportistas inactivos o con la inscripción completa (salvo esa regla).
+- **Compensación.** Si algo falla después de subir (el `409` de la transacción, un error de la base) se borra el archivo de Storage y se relanza la excepción original; si borrar también falla, solo se registra el tipo de excepción. Si falla la subida a Storage no se inserta nada. Dos subidas simultáneas del mismo tipo dejan un documento y un solo archivo.
+- Responde `201` con el documento.
+
+### El documento
+
+```json
+{"id": "6f1c2a9e-…", "idDeportista": "0b3d…", "tipo": "PAZ_Y_SALVO", "nombreOriginal": "paz y salvo.pdf",
+ "tipoContenido": "application/pdf", "tamanoBytes": 183204, "estado": "RECHAZADO",
+ "comentario": "La imagen está borrosa.", "fechaVencimiento": null, "cargadoPor": "Acudiente",
+ "cargadoPorCorreo": "familia@correo.co", "cargadoEn": "2026-11-05T15:00:00Z",
+ "revisadoPor": "admin@pradofc.co", "revisadoEn": "2026-11-05T16:00:00Z"}
+```
+
+- `estado`: `PENDIENTE`, `APROBADO` o `RECHAZADO`. `comentario` es el motivo del rechazo (`null` si no está rechazado). `revisadoPor` y `revisadoEn` son `null` mientras está `PENDIENTE`.
+- `cargadoPor` es `Administrador` o `Acudiente`, según el rol de quien lo subió; es `null` si esa cuenta ya no existe (igual que `cargadoPorCorreo`).
+- **Nunca trae la ruta del archivo**: se descarga con la URL firmada.
+
+### Listar y `estadoInscripcion`
+
+`GET /api/deportistas/{id}/documentos` responde `{ "documentos": [...], "estadoInscripcion": "PENDIENTE", "documentosFaltantes": ["CERTIFICADO_ESTUDIO", ...] }`. Los documentos van del más reciente al más antiguo, **incluidos los rechazados** (historial). `estadoInscripcion` (`COMPLETA` o `PENDIENTE`) y `documentosFaltantes` (los obligatorios sin un documento `APROBADO`, en el orden de la regla; vacía si y solo si es `COMPLETA`) salen de lo que ya calcula el DAO de deportistas: **no hay columna**, así que aprobar o rechazar un documento los actualiza solos. La columna heredada `deportista.estado_inscripcion` no se lee ni se escribe (la lee `PagoDAOImpl`, solo para filtrar cobros).
+
+### Descargar
+
+`GET /api/documentos/{id}/descarga` devuelve `{ "url": "https://…/storage/v1/object/sign/documentos/…?token=…", "vigenciaSegundos": 300 }` con `Cache-Control: no-store`. La URL se pide **solo al descargar**; vive `DOCUMENTOS_VIGENCIA_URL_FIRMADA` (300 s por defecto, de 10 s a 60 min) y quien la tenga puede descargar el archivo hasta que venza, así que no se guarda ni se registra en ningún log. Si el archivo ya no está en el bucket responde `404` ("No se encontró el archivo.").
+
+### Aprobar y rechazar
+
+- `POST /api/documentos/{id}/aprobar` (sin cuerpo): responde `{ "documento": {...}, "estadoInscripcion": "COMPLETA" }`.
+- `POST /api/documentos/{id}/rechazar` con `{ "comentario": "..." }`: responde `{ "documento": {...}, "estadoInscripcion": "PENDIENTE", "avisoEnviado": true }`. El comentario es obligatorio y se guarda **recortado**, de 1 a 300 caracteres (la base no lo limita; lo impone el backend) y puede traer saltos de línea. Sin cuerpo, con `{}`, vacío o solo espacios: `400` con `campos: ["comentario"]` (no un `500`).
+- El orden es: autorización (`403`), documento (`404`), comentario (`400`), revisión (`409`). La revisión es `update ... where estado = 'PENDIENTE'` y la relectura del documento y de `estadoInscripcion`, en una transacción corta. Si ya no está `PENDIENTE` (lo revisó otro administrador o antes) responde `409` con `campos: ["estado"]` y no cambia nada; rechazar uno `APROBADO` también es `409`. Con dos revisiones simultáneas del mismo documento gana una sola. Quedan puestos `revisado_por` (el `sub` del administrador) y `revisado_en`.
+
+### Aviso al rechazar (`DOCUMENTO_RECHAZADO`)
+
+Después de confirmar el rechazo (nunca dentro de la transacción) se avisa por n8n a **cada acudiente vinculado al deportista que tenga un correo válido**, sin correos repetidos: un `notificar` por acudiente (contrato en el [contrato del webhook](../docs/info-sprints/sprint-2/contrato-webhook-notificaciones.md)). Los `datos` son planos: `correo`, `nombreAcudiente`, `nombreDeportista`, `documento` (la etiqueta legible, por ejemplo "Documento de identidad"), `comentario` y `enlaceDocumentos` (`{FRONTEND_URL}/acudiente/documentos`). Si un nombre llega vacío se manda `Acudiente` o `tu deportista`. Aprobar no envía ningún aviso.
+
+`avisoEnviado` en la respuesta del rechazo (la clave va siempre en el JSON, con `null` si no aplica, igual que en el horario):
+
+| Valor | Significa |
+| :--- | :--- |
+| `true` | n8n aceptó todas las llamadas (no garantiza que el correo llegue) |
+| `false` | No se pudo avisar: n8n falló o no respondió en 5 s, no se pudieron leer los destinatarios, falta `FRONTEND_URL` o el enlace pasa de 2000 caracteres. El rechazo **sí** quedó hecho y la respuesta sigue siendo `200`. Si una llamada falla, no se envían las demás |
+| `null` | El deportista no tiene acudientes con un correo válido; no se llamó a n8n |
+
+> **Hasta que el flujo de n8n Cloud tenga el evento `DOCUMENTO_RECHAZADO`** (paso 6B, ver `docs/PRESENTACION-TECNICA.md` §9.5), n8n responde `400` "Evento no soportado" y el rechazo devuelve `avisoEnviado: false`. Los logs solo llevan el evento, el tipo de excepción y conteos: nunca correos, nombres, comentarios, rutas ni URL.
+
+### Errores
+
+| Código | Cuándo |
+| :--- | :--- |
+| `400` | Un `{id}` que no es UUID; en subir, tipo, archivo (vacío, de más de 5 MB o con otra firma) o `fechaVencimiento` inválidos, todos juntos en `campos`; si falla solo el archivo, `campos: ["archivo"]`; en rechazar, el comentario ausente, vacío o de más de 300 caracteres (`campos: ["comentario"]`); falta la parte `archivo` |
+| `401` | Sin token, token inválido o vencido, o un token sin el claim `session_id` |
+| `403` | La cuenta no tiene un rol permitido en esa ruta (el entrenador y el tesorero en las cinco; el acudiente en aprobar y rechazar); **o** la sesión del token no completó el 2FA: en ese caso la respuesta es `403` con `codigo: "2FA_REQUERIDA"` (no `401`), igual que en el 2C |
+| `404` | El deportista o el documento no existe o no es del acudiente (mismo mensaje), o el archivo ya no está en el bucket |
+| `409` | Subir: ya hay un documento `PENDIENTE` o `APROBADO` del tipo (`campos: ["tipo"]`). Aprobar y rechazar: el documento ya no está `PENDIENTE` (`campos: ["estado"]`) |
+| `503` | Supabase Storage no respondió o no está configurado |
+
+Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend).
 
 ## Horario del club (bloque 4A)
 
@@ -1298,7 +1384,7 @@ Los correos los envía n8n. El backend se los pide con `INotificador.notificar(e
 | Cuerpo | `{"evento": ..., "datos": {...}}` |
 | Timeout | 5 s de conexión y 5 s de lectura (`futdata.n8n.timeout`); **15 s solo para `ENLACE_CONTRASENA`** (`futdata.n8n.timeout-enlace`, `N8N_TIMEOUT_ENLACE`), que es síncrono |
 | Reintentos | Ninguno. Si n8n recibió la petición y solo se demoró, un reintento enviaría el correo dos veces |
-| Eventos | `INotificador.CODIGO_2FA`, `INotificador.CAMBIO_ENTRENAMIENTO`, `INotificador.ENLACE_CONTRASENA` e `INotificador.RECORDATORIO_PAGO` (constantes; no escribir la cadena a mano) |
+| Eventos | `INotificador.CODIGO_2FA`, `INotificador.CAMBIO_ENTRENAMIENTO`, `INotificador.ENLACE_CONTRASENA`, `INotificador.RECORDATORIO_PAGO` e `INotificador.DOCUMENTO_RECHAZADO` (constantes; no escribir la cadena a mano). `DOCUMENTO_RECHAZADO` es asíncrono, un `POST` por acudiente, con el tiempo de espera normal de 5 s ([Documentos](#documentos-de-la-inscripción-bloque-3)) |
 
 `N8nClient` **no arma los `datos`**: cada servicio construye los de su evento (HU-002 el código 2FA, HU-026 el aviso de entrenamiento) y depende solo de la interfaz `INotificador`, inyectada por constructor.
 
@@ -1466,6 +1552,12 @@ Las pruebas de los DAO (`EntrenadorDAOImplTest`, `EntrenadorServiceImplConPostgr
 | `EntrenadorServiceImplConPostgresTest` | Servicio con los DAO reales en PostgreSQL: reasignación, `409` sin cambios a medias y correo en minúsculas |
 | `EntrenadorDAOImplTest` | SQL contra PostgreSQL con la migración 001: crear, buscar, listar ordenado con categorías, existencia de documento y correo, traducción de las restricciones `unique`, actualizar sin tocar `documentos` ni categorías, `FOR UPDATE` y reasignación |
 | `EntrenadorControllerTest` | `/api/entrenadores` y `/api/categorias` con MockMvc: JSON de respuesta, `201` con `Location`, `400` (UUID inválido, fecha con otro formato, JSON mal formado, validación con `campos`), `404` y `409` |
+| `ReglasDocumentoTest` | Los 7 tipos (y que `TIPOS` contiene los 4 obligatorios de `ReglasDeportista`); firma real de PDF, JPG y PNG sin importar la extensión ni el `Content-Type`; archivo vacío, de 5 MB exactos y de 5 MB + 1; fecha de vencimiento (real, no pasada, hora de Bogotá); comentario de rechazo (vacío, solo espacios, 300 y 301); nombre original limpio; ruta sin el nombre del cliente |
+| `DocumentosPropertiesTest`, `FrontendPropertiesTest` | Valores por defecto y límites (10 s a 60 min) de `futdata.documentos`; el enlace `{FRONTEND_URL}/acudiente/documentos` |
+| `DocumentoDAOImplTest` | Contra PostgreSQL: insertar y leer con rol y correo de quien subió, orden de la lista, ruta duplicada, un activo por tipo, aprobar y rechazar solo si está `PENDIENTE`, propiedad del acudiente y la carrera de dos subidas con el bloqueo de la fila del deportista |
+| `DocumentoServiceImplTest` | Con dobles: matriz de autorización, subir (orden, compensación del archivo, la ruta sin el nombre del cliente), listar, descargar, aprobar y rechazar (`403`, `404`, `400`, `409`) y el aviso `DOCUMENTO_RECHAZADO` (después del commit, `true`, `false` y `null`, sin datos personales en los logs) |
+| `DocumentoServiceConPostgresTest` | Punta a punta con PostgreSQL y un Storage en memoria: un activo por tipo, rechazar y volver a subir, `estadoInscripcion` hasta el cuarto obligatorio, dos revisiones simultáneas y los avisos con un notificador simulado |
+| `DocumentoControllerTest` | Las cinco rutas por HTTP con la cadena de seguridad completa: roles, `401`, `403` con `2FA_REQUERIDA`, forma del JSON, `Cache-Control: no-store`, `avisoEnviado` en `true`, `false` y `null`, y el comentario ausente como `400` |
 | `DockerDisponibleTest` | Sin Docker la prueba se omite con el aviso; con Docker corre |
 | `SaludControllerTest` | `GET /api/health`: `200` con la base de datos arriba, `503` con la base de datos abajo |
 | `SaludDAOImplTest` | `SELECT 1` con timeout de 2 s; `false` si no hay conexión |

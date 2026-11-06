@@ -149,6 +149,66 @@ class DestinatariosDAOImplTest {
         assertThat(dao.acudientesDeCategoria(UUID.randomUUID(), ANIO)).isEmpty();
     }
 
+    // --- Acudientes de un deportista ------------------------------------------------------------------------
+
+    @Test
+    void losAcudientesDeUnDeportistaSalenPorApellidoYNombreConSuNombreCompleto() {
+        UUID hijo = deportista("2017-03-03", true);
+        vincular(acudiente("María", "Torres", "maria@correo.co"), hijo);
+        vincular(acudiente("Pedro", "Alvarez", "pedro@correo.co"), hijo);
+
+        assertThat(dao.acudientesDeDeportista(hijo)).containsExactly(
+                new Destinatario("pedro@correo.co", "Pedro Alvarez"), new Destinatario("maria@correo.co", "María Torres"));
+    }
+
+    @Test
+    void losCorreosRepetidosSalenUnaVezSinDistinguirMayusculasNiEspacios() {
+        UUID hijo = deportista("2017-03-03", true);
+        vincular(acudiente("Ana", "Uno", "ana@correo.co"), hijo);
+        vincular(acudiente("Ana", "Dos", "  ANA@Correo.co "), hijo);
+
+        assertThat(dao.acudientesDeDeportista(hijo)).hasSize(1);
+        assertThat(dao.acudientesDeDeportista(hijo).get(0).correo()).isEqualToIgnoringCase("ana@correo.co");
+    }
+
+    @Test
+    void ignoraLosAcudientesSinCorreoOConCorreoEnBlanco() {
+        UUID hijo = deportista("2017-03-03", true);
+        vincular(acudiente("Sin", "Correo", null), hijo);
+        vincular(acudiente("En", "Blanco", "   "), hijo);
+        vincular(acudiente("Con", "Correo", "con@correo.co"), hijo);
+
+        assertThat(dao.acudientesDeDeportista(hijo)).extracting(Destinatario::correo).containsExactly("con@correo.co");
+    }
+
+    @Test
+    void soloTraeLosDelDeportistaPedidoYTambienSiEstaInactivo() {
+        UUID hijo = deportista("2017-03-03", false);
+        UUID otro = deportista("2017-03-03", true);
+        vincular(acudiente("De", "Hijo", "hijo@correo.co"), hijo);
+        vincular(acudiente("De", "Otro", "otro@correo.co"), otro);
+
+        assertThat(dao.acudientesDeDeportista(hijo)).extracting(Destinatario::correo).containsExactly("hijo@correo.co");
+    }
+
+    @Test
+    void unAcudienteConDosHijosSaleUnaVezEnCadaUno() {
+        UUID uno = deportista("2017-03-03", true);
+        UUID dos = deportista("2014-03-03", true);
+        UUID madre = acudiente("Ana", "Mora", "ana@correo.co");
+        vincular(madre, uno);
+        vincular(madre, dos);
+
+        assertThat(dao.acudientesDeDeportista(uno)).extracting(Destinatario::correo).containsExactly("ana@correo.co");
+        assertThat(dao.acudientesDeDeportista(dos)).extracting(Destinatario::correo).containsExactly("ana@correo.co");
+    }
+
+    @Test
+    void unDeportistaSinAcudientesOInexistenteDevuelveListaVacia() {
+        assertThat(dao.acudientesDeDeportista(deportista("2017-03-03", true))).isEmpty();
+        assertThat(dao.acudientesDeDeportista(UUID.randomUUID())).isEmpty();
+    }
+
     // --- Datos ----------------------------------------------------------------------------------------------
 
     private UUID acudiente(String nombre, String apellido, String correo) {
