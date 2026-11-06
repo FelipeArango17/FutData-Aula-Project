@@ -12,6 +12,7 @@ import DatosDeportista from '../../components/deportistas/DatosDeportista.jsx'
 import FormularioDeportista from '../../components/deportistas/FormularioDeportista.jsx'
 import { useActor } from '../../context/useActor.js'
 import { actualizarDeportista, deportistasPorApi, listarCategorias, obtenerFichaDeportista } from '../../services/deportistasService.js'
+import { documentosPorApi } from '../../services/documentosService.js'
 import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
 import { ETIQUETA_GRUPO } from '../../utils/categorias.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
@@ -20,7 +21,7 @@ import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '..
 // Figma no tiene una ficha del administrador (la del acudiente es otra pantalla), así que usa los componentes del proyecto.
 // En lectura tiene la foto (arriba) y los documentos (debajo de los datos personales); el formulario de edición no cambia.
 // Con la API (módulo "deportistas"): la foto y los datos salen de GET /api/deportistas/{id} (la foto es una URL firmada), la foto se
-// sube y se quita con el backend, y NO se muestran los documentos ni el historial de cambios (el backend todavía no los tiene).
+// sube y se quita con el backend, y NO se muestra el historial de cambios (el backend todavía no lo tiene). Los documentos se muestran con el módulo "documentos" (API) o sin la API.
 // Los 400/403/404/409 se muestran con el mensaje del backend. La categoría y el estado de la inscripción los calcula el backend.
 // PENDIENTE: pasar al deportista a activo/inactivo desde la ficha no se hizo (se decide con Juan). Permisos: el servicio simula
 // RF008; en producción lo valida el backend con el JWT.
@@ -207,7 +208,7 @@ function Ficha({ id }) {
             <Button to={VOLVER} variant="secondary">Volver a deportistas</Button>
           </div>
         </Card>
-        {!porApi && <DocumentosDeportista idDeportista={deportista.id} actor={actor} tieneFoto={Boolean(foto)} />}
+        {(!porApi || documentosPorApi()) && <DocumentosDeportista idDeportista={deportista.id} actor={actor} tieneFoto={Boolean(foto)} />}
         {!porApi && (
           <div className="w-full max-w-2xl">
             <HistorialCambios entradas={entradas} vacio="Todavía no hay cambios registrados." />

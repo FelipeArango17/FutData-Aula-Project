@@ -19,15 +19,31 @@
 //   trae { archivo }) | 'VALIDACION' (con `errores`: { campo: mensaje }; si falla el archivo junto con otro campo) |
 //   'DOCUMENTO_NO_EXISTE'.
 //
-// PENDIENTE (backend): guardar el archivo en Supabase Storage; "Ver documento" mostrará una URL firmada (hoy la pantalla solo
-// muestra el nombre y el tamaño, porque los documentos de ejemplo no tienen archivo). Al rechazar, el backend avisará al acudiente
-// por correo (n8n); aquí no se envía nada.
-// El administrador sube y revisa documentos; el acudiente solo sube (y solo los de SUS deportistas). El servicio lo simula; en
-// producción lo valida el backend con el JWT.
+// MODO API (módulo "documentos" en VITE_API_MODULOS; bloque 3 del backend). Los ids son UUID (texto). Rutas: ver "Modo API" al final.
+//   listarDocumentos(id)        -> { documentos, estadoInscripcion, documentosFaltantes } (en AMBOS modos)
+//   subirDocumento(id, datos)   -> el documento creado (201)
+//   verDocumento(idDocumento)   -> { url, vigenciaSegundos }: URL firmada de 5 minutos; pídela SOLO al tocar "Ver documento", no la guardes
+//   aprobarDocumento(id)        -> { documento, estadoInscripcion }
+//   rechazarDocumento(id, { comentario }) -> { documento, estadoInscripcion, avisoEnviado } (true: correo enviado; false: falló el correo;
+//                                  null: el deportista no tiene acudientes con correo)
+// Con la API los errores traen `codigo` y un `message` en español: 'VALIDACION' (400) | 'SIN_PERMISO' (403) | 'NO_ENCONTRADO' (404) |
+// 'DOCUMENTO_ACTIVO' (409) | 'ERROR_DE_RED'. En memoria los de siempre (abajo). "Ver documento" solo existe con la API: los documentos de
+// ejemplo no tienen archivo, y no se ofrece en la pantalla.
+// El administrador sube y revisa documentos; el acudiente solo sube (y solo los de SUS deportistas). El modo en memoria lo simula; con la API lo
+// valida el backend con el JWT.
 import { TIPOS_DOCUMENTO, validarArchivo } from '../utils/archivos.js'
 import { esFechaValida, hoyLocal } from '../utils/fechas.js'
-import { IDS_TIPOS_DOCUMENTO, NOMBRES_TIPO_DOCUMENTO } from '../utils/documentosClub.js'
-import { esAcudienteDe } from './deportistasService.js'
+import { IDS_TIPOS_DOCUMENTO, NOMBRES_TIPO_DOCUMENTO, calcularInscripcion, masReciente } from '../utils/documentosClub.js'
+import { adaptarListaDocumentos, errorDeDocumentos } from '../utils/documentosApi.js'
+import { apiRequest, subirArchivo } from './apiClient.js'
+import { usarApiDe } from './usarApi.js'
+import { esAcudienteDe, listarDeportistas } from './deportistasService.js'
+import { obtenerFoto } from './fotosService.js'
+
+// Con "documentos" en VITE_API_MODULOS las funciones hablan con el backend; sin él (y siempre en las pruebas) siguen en memoria.
+// No se mezclan: los ids reales son UUID (texto) y los de ejemplo son números.
+const usarApi = usarApiDe('documentos')
+export const documentosPorApi = () => usarApi
 
 // Los tipos y sus nombres cortos viven en utils/documentosClub.js; aquí solo se reexportan para las pantallas y el servicio.
 export const TIPOS_DOCUMENTO_JUGADOR = IDS_TIPOS_DOCUMENTO
@@ -80,9 +96,9 @@ function quienSube(actor, idDeportista) {
 
 // Reglas de los datos al subir (las usan el formulario y el servicio). `archivo` es un File o { name, type, size }.
 // Devuelve { campo: mensaje } solo con los campos con error.
-export function validarDatosDocumento({ tipo, archivo, fechaVencimiento }, hoy = hoyLocal()) {
+export function validarDatosDocumento({ tipo, archivo, fechaVencimiento }, hoy = hoyLocal(), tiposAceptados = IDS_TIPOS_DOCUMENTO) {
   const errores = {}
-  if (!TIPOS_DOCUMENTO_JUGADOR.includes(tipo)) errores.tipo = 'Selecciona qué tipo de documento es.'
+  if (!tiposAceptados.includes(tipo)) errores.tipo = 'Selecciona qué tipo de documento es.'
   const motivo = validarArchivo(archivo, { tipos: TIPOS_DOCUMENTO })
   if (motivo) errores.archivo = motivo
   const vence = String(fechaVencimiento ?? '').trim()
@@ -93,23 +109,37 @@ export function validarDatosDocumento({ tipo, archivo, fechaVencimiento }, hoy =
   return errores
 }
 
-// Documentos del deportista, del más reciente al más antiguo
+// { documentos (del más reciente al más antiguo), estadoInscripcion ('COMPLETA' | 'PENDIENTE'), documentosFaltantes (tipos obligatorios sin aprobar) }
 export async function listarDocumentos(idDeportista) {
+  if (usarApi) return adaptarListaDocumentos(await llamar(() => apiRequest(rutaDocumentos(idDeportista))))
   await simularRed()
-  return documentos
-    .filter((x) => x.idDeportista === Number(idDeportista))
-    .sort((a, b) => b.cargadoEn.localeCompare(a.cargadoEn) || b.id - a.id)
-    .map(copiar)
+  const delDeportista = documentos.filter((x) => x.idDeportista === Number(idDeportista))
+  return { documentos: [...delDeportista].sort(masReciente).map(copiar), ...calcularInscripcion(delDeportista) }
+}
+
+// Los jugadores cuyos documentos ve el acudiente: [{ id, nombre, tieneFoto }]. Con la API salen de GET /api/acudientes/me/deportistas (solo
+// los suyos; ya trae la URL de la foto). En memoria, los deportistas cuyo correo de acudiente es el del actor.
+export async function listarJugadoresDelAcudiente(actor) {
+  if (usarApi) {
+    const lista = await llamar(() => apiRequest('/acudientes/me/deportistas'), actor)
+    return (Array.isArray(lista) ? lista : []).map((d) => ({ id: d.id, nombre: `${d.nombre} ${d.apellido}`, tieneFoto: Boolean(d.foto) }))
+  }
+  const propios = (await listarDeportistas()).filter((d) => d.acudiente && d.acudiente.toLowerCase() === actor.correo.toLowerCase())
+  return Promise.all(propios.map(async (d) => ({ id: d.id, nombre: `${d.nombre} ${d.apellido}`, tieneFoto: Boolean(await obtenerFoto(d.id)) })))
 }
 
 // Sube (en memoria) un documento PENDIENTE: el administrador o el acudiente del deportista, cualquiera de los 7 tipos.
 export async function subirDocumento(idDeportista, { tipo, archivo, fechaVencimiento } = {}, actor) {
-  await simularRed()
-  const cargadoPor = quienSube(actor, idDeportista)
+  if (!usarApi) await simularRed()
+  const cargadoPor = usarApi ? null : quienSube(actor, idDeportista)
   const errores = validarDatosDocumento({ tipo, archivo, fechaVencimiento })
   const campos = Object.keys(errores)
   if (campos.length === 1 && errores.archivo) throw Object.assign(error('ARCHIVO_INVALIDO', errores.archivo), { errores })
   if (campos.length > 0) throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores })
+  if (usarApi) {
+    // multipart: tipo, archivo y fechaVencimiento (opcional, AAAA-MM-DD); el backend valida el contenido del archivo y el 409 de duplicado activo
+    return llamar(() => subirArchivo(rutaDocumentos(idDeportista), archivo, { tipo, fechaVencimiento: String(fechaVencimiento ?? '').trim() || null }), actor)
+  }
   const nuevo = {
     id: siguienteId++,
     idDeportista: Number(idDeportista),
@@ -130,19 +160,62 @@ export async function subirDocumento(idDeportista, { tipo, archivo, fechaVencimi
   return copiar(nuevo)
 }
 
-// Aprueba o rechaza un documento. Rechazar exige un comentario (hasta COMENTARIO_MAXIMO caracteres); al aprobar es opcional.
-export async function revisarDocumento(idDocumento, { estado, comentario } = {}, actor) {
-  await simularRed()
+function revisar(idDocumento, { estado, comentario }, actor) {
   exigirAdministrador(actor)
   const actual = documentos.find((x) => x.id === Number(idDocumento))
   if (!actual) throw error('DOCUMENTO_NO_EXISTE', 'El documento no existe.')
   const errores = {}
   const texto = String(comentario ?? '').trim()
-  if (estado !== 'APROBADO' && estado !== 'RECHAZADO') errores.estado = 'Elige si se aprueba o se rechaza.'
   if (estado === 'RECHAZADO' && !texto) errores.comentario = 'Escribe el motivo del rechazo.'
   else if (texto.length > COMENTARIO_MAXIMO) errores.comentario = `El comentario no puede superar los ${COMENTARIO_MAXIMO} caracteres.`
   if (Object.keys(errores).length > 0) throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores })
   const revisado = { ...actual, estado, comentario: texto || null, revisadoPor: actor.correo ?? null, revisadoEn: new Date().toISOString() }
   documentos = documentos.map((x) => (x.id === actual.id ? revisado : x))
-  return copiar(revisado)
+  return { documento: copiar(revisado), estadoInscripcion: calcularInscripcion(documentos.filter((x) => x.idDeportista === actual.idDeportista)).estadoInscripcion }
+}
+
+// Aprueba un documento (solo el administrador). Devuelve { documento, estadoInscripcion }.
+export async function aprobarDocumento(idDocumento, actor) {
+  if (usarApi) return llamar(() => apiRequest(`${rutaDocumento(idDocumento)}/aprobar`, { method: 'POST' }), actor)
+  await simularRed()
+  return revisar(idDocumento, { estado: 'APROBADO' }, actor)
+}
+
+// Rechaza un documento con un comentario obligatorio de 1 a COMENTARIO_MAXIMO caracteres (solo el administrador).
+// Devuelve { documento, estadoInscripcion, avisoEnviado }: true = correo enviado; false = el rechazo quedó pero el correo falló; null = el
+// deportista no tiene acudientes con correo. En memoria no se envía nada: avisoEnviado es null.
+export async function rechazarDocumento(idDocumento, { comentario } = {}, actor) {
+  if (usarApi) {
+    const texto = String(comentario ?? '').trim()
+    if (!texto || texto.length > COMENTARIO_MAXIMO) {
+      throw Object.assign(error('VALIDACION', 'Hay datos que corregir.'), { errores: { comentario: texto ? `El comentario no puede superar los ${COMENTARIO_MAXIMO} caracteres.` : 'Escribe el motivo del rechazo.' } })
+    }
+    return llamar(() => apiRequest(`${rutaDocumento(idDocumento)}/rechazar`, { method: 'POST', body: JSON.stringify({ comentario: texto }) }), actor)
+  }
+  await simularRed()
+  return { ...revisar(idDocumento, { estado: 'RECHAZADO', comentario }, actor), avisoEnviado: null }
+}
+
+// Pide la URL firmada de un documento (válida 5 minutos): { url, vigenciaSegundos }. Llámala solo cuando el usuario toque "Ver documento".
+export async function verDocumento(idDocumento, actor) {
+  if (!usarApi) throw error('SIN_ARCHIVO', 'Los documentos de ejemplo no tienen archivo.')
+  return llamar(() => apiRequest(`${rutaDocumento(idDocumento)}/descarga`), actor)
+}
+
+// ---- Modo API ----
+// GET/POST /api/deportistas/{id}/documentos · GET /api/documentos/{id}/descarga · POST /api/documentos/{id}/aprobar|rechazar
+// Roles: ADMINISTRADOR y ACUDIENTE dueño suben, listan y descargan; aprobar y rechazar solo el ADMINISTRADOR; entrenador y tesorero 403;
+// un acudiente que no es dueño recibe 404.
+function rutaDocumentos(idDeportista) {
+  return `/deportistas/${encodeURIComponent(idDeportista)}/documentos`
+}
+function rutaDocumento(idDocumento) {
+  return `/documentos/${encodeURIComponent(idDocumento)}`
+}
+async function llamar(operacion, actor) {
+  try {
+    return await operacion()
+  } catch (e) {
+    throw errorDeDocumentos(e, { rol: actor?.rol })
+  }
 }

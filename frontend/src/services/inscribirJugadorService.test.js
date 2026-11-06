@@ -76,7 +76,7 @@ describe('inscribirJugador: lo que crea', () => {
     }), admin))
     expect(r.documentos).toHaveLength(2)
     expect(r.foto).toBe(true)
-    const guardados = await resolver(documentos.listarDocumentos(22))
+    const guardados = (await resolver(documentos.listarDocumentos(22))).documentos
     expect(guardados.map((d) => d.tipo).sort()).toEqual(['DOCUMENTO_IDENTIDAD', 'PAZ_Y_SALVO'])
     expect(guardados.every((d) => d.cargadoPor === 'Administrador' && d.estado === 'PENDIENTE')).toBe(true)
     expect(await resolver(fotos.obtenerFoto(22))).toBe('blob:foto-de-prueba')
@@ -85,7 +85,7 @@ describe('inscribirJugador: lo que crea', () => {
   it('sin documentos ni foto también se inscribe (el paso 3 es opcional)', async () => {
     const r = await resolver(inscribir.inscribirJugador(datos(), admin))
     expect(r).toMatchObject({ documentos: [], foto: false })
-    expect(await resolver(documentos.listarDocumentos(22))).toEqual([])
+    expect((await resolver(documentos.listarDocumentos(22))).documentos).toEqual([])
   })
 })
 

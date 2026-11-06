@@ -7,11 +7,14 @@ import SubidaFoto from '../ui/SubidaFoto.jsx'
 import CamposDeportista from '../deportistas/CamposDeportista.jsx'
 import { useActor } from '../../context/useActor.js'
 import { DEPORTISTA_VACIO, aplicarCambio, crearDeportista, validarDatosDeportista } from '../../services/deportistasService.js'
+import { ETIQUETA_ESTADO_INSCRIPCION } from '../../utils/deportistasApi.js'
+import { documentosPorApi } from '../../services/documentosService.js'
 import { guardarFoto } from '../../services/fotosService.js'
 
 // Inscribir jugador con la API (módulo "deportistas"): un solo formulario con lo que acepta POST /api/deportistas
 // (DeportistaRequestDTO: datos personales, posición y grupo) y, si se elige, la foto (POST /api/deportistas/{id}/foto).
-// El backend aún no tiene endpoints de acudiente (cuenta y vínculo) ni de documentos, así que NO se piden aquí y la pantalla lo dice.
+// El backend aún no tiene endpoints de acudiente (cuenta y vínculo), así que NO se pide aquí y la pantalla lo dice. Los documentos tampoco se
+// cargan aquí: el administrador los sube desde la ficha una vez creado el jugador (ver `textoDocumentos`).
 // La categoría la calcula el backend con el año de nacimiento. 400 -> mensaje por campo; 409 -> documento repetido; 403 -> sin permiso.
 const VOLVER = '/administrador/deportistas'
 
@@ -99,6 +102,8 @@ function Formulario({ onOtro }) {
         {errorFoto && <AvisoEstado aviso={{ texto: `El jugador quedó registrado, pero la foto no se subió: ${errorFoto} Puedes subirla desde su ficha.` }} rol="alert" tono="danger" enfocar={false} />}
         <Card className="flex w-full max-w-2xl flex-col gap-3">
           {deportista.categoria && <p className="break-words text-body">Categoría: {deportista.categoria}</p>}
+          {deportista.estadoInscripcion && <p className="break-words text-body">Inscripción: {ETIQUETA_ESTADO_INSCRIPCION[deportista.estadoInscripcion] ?? deportista.estadoInscripcion}</p>}
+          {documentosPorApi() && <p className="break-words text-body text-secondary">Para completarla, sube los 4 documentos obligatorios desde la ficha del jugador.</p>}
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
             <Button to={`${VOLVER}/${deportista.id}`}>Ver ficha del deportista</Button>
             <Button variant="secondary" onClick={onOtro}>Inscribir otro jugador</Button>
@@ -120,7 +125,8 @@ function Formulario({ onOtro }) {
         <form ref={formRef} noValidate aria-busy={enviando} onSubmit={enviar} className="flex flex-col gap-4">
           <AvisoEstado aviso={aviso} rol="alert" tono="danger" enfocar={false} />
           <p className="break-words text-small text-secondary">
-            Por ahora solo se registran los datos del jugador y su foto. El acudiente (su cuenta y el vínculo con el jugador) y los documentos todavía no se pueden cargar desde aquí.
+            Por ahora solo se registran los datos del jugador y su foto. El acudiente (su cuenta y el vínculo con el jugador) todavía no se puede vincular desde aquí.
+            {documentosPorApi() ? ' Los documentos se suben desde la ficha del jugador una vez creado.' : ' Los documentos tampoco se cargan aquí.'}
           </p>
           <CamposDeportista texto={texto} fechaNacimiento={valores.fechaNacimiento} />
           <section aria-labelledby="foto-inscribir" className="flex min-w-0 flex-col gap-3">

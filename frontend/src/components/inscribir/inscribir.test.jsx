@@ -189,12 +189,12 @@ describe('/administrador/deportistas/nuevo redirige al asistente', () => {
 describe('documentos del acudiente: quién los subió', () => {
   const doc = (extra) => ({ id: 1, idDeportista: 1, tipo: 'CERTIFICADO_ESTUDIO', nombreOriginal: 'c.pdf', tipoContenido: 'application/pdf', tamanoBytes: 1024, estado: 'PENDIENTE', comentario: null, cargadoPor: 'Acudiente', cargadoEn: '2026-10-20T15:10:00.000Z', ...extra })
 
-  it('cada documento dice "Cargado por: Administrador" o "Acudiente"; hay lista de verificación y formulario con los 7 tipos', () => {
+  it('cada documento dice "Cargado por: Administrador" o "Acudiente"; hay lista de verificación y el formulario ofrece solo los tipos sin documento activo', () => {
     const html = renderToStaticMarkup(<DocumentosDelAcudiente jugadores={[{ id: 1, nombre: 'Santiago Ríos', tieneFoto: false, documentos: [doc(), doc({ id: 2, tipo: 'DOCUMENTO_IDENTIDAD', cargadoPor: 'Administrador' })] }]} onSubir={sinLlenar} />)
     expect(html).toContain('Cargado por: Acudiente')
     expect(html).toContain('Cargado por: Administrador')
     expect(html).toContain('Lista de verificación')
-    expect(html.match(/<option value="[A-Z_]+">/g)).toHaveLength(7)
+    expect(html.match(/<option value="[A-Z_]+">/g)).toHaveLength(5) // certificado (pendiente) e identidad (pendiente) ya tienen documento activo
     expect(html).not.toContain('>Aprobar<') // aprobar y rechazar son solo del administrador
   })
 })
