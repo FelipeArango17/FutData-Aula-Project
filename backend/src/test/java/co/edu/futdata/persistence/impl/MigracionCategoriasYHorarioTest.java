@@ -48,8 +48,7 @@ class MigracionCategoriasYHorarioTest {
     void limpiarTodo() {
         jdbc.getJdbcOperations().update("DELETE FROM entrenamiento");
         jdbc.getJdbcOperations().update("DELETE FROM franja_horario");
-        jdbc.getJdbcOperations().update("DELETE FROM documento");
-        jdbc.getJdbcOperations().update("DELETE FROM deportista");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
         PostgresDePrueba.limpiar();
     }
 

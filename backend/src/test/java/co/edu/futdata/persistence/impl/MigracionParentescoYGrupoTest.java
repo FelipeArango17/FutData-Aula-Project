@@ -40,10 +40,8 @@ class MigracionParentescoYGrupoTest {
 
     @AfterEach
     void limpiarTodo() {
-        jdbc.getJdbcOperations().update("DELETE FROM acudiente_deportista");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
         jdbc.getJdbcOperations().update("DELETE FROM acudiente");
-        jdbc.getJdbcOperations().update("DELETE FROM documento");
-        jdbc.getJdbcOperations().update("DELETE FROM deportista");
         PostgresDePrueba.limpiar();
     }
 

@@ -145,6 +145,24 @@ public final class PostgresDePrueba {
         jdbc.update("DELETE FROM entrenador");
     }
 
+    /**
+     * Borra a los deportistas y todo lo que depende de ellos, en un orden que respeta las claves foráneas
+     * ({@code notificacion_pago} y {@code pago}, {@code asistencia}, {@code inscripcion_torneo}, {@code documento},
+     * {@code acudiente_deportista} y por último {@code deportista}; {@code venta} se desvincula sola con
+     * {@code ON DELETE SET NULL}). Las clases que insertan deportistas la usan en lugar de un
+     * {@code DELETE FROM deportista} a secas, que falla si otra clase dejó pagos, asistencias o documentos.
+     *
+     * <p>No toca lo que siembran las migraciones (categorías, franjas del seed) ni los acudientes, usuarios,
+     * entrenamientos o auditoría: cada clase limpia lo suyo.
+     */
+    public static void limpiarDatosDeDeportistas() {
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource());
+        for (String tabla : List.of("notificacion_pago", "pago", "asistencia", "inscripcion_torneo", "documento",
+                "acudiente_deportista", "deportista")) {
+            jdbc.update("DELETE FROM " + tabla);
+        }
+    }
+
     /** Inserta un entrenador con datos mínimos válidos y devuelve su id. */
     public static UUID entrenador(String nombre, String apellido, String documento, String correo) {
         return jdbc().queryForObject("""
