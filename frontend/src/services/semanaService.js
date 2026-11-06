@@ -3,9 +3,10 @@
 // Modos (los dos no se mezclan: ids numéricos de ejemplo vs UUID de la API):
 // - Ejemplo (sin VITE_API_MODULOS con "horarioclub"; siempre en las pruebas): todo en memoria sobre FRANJAS_EJEMPLO, con todas
 //   las capacidades.
-// - API (módulo "horarioclub"): la semana sale de GET /api/horario-club (datos reales). Se puede cambiar el entrenador de una
-//   franja (PUT); cancelar y extras quedan ocultos hasta que exista el contrato 4B (ver utils/semanaApi.js). El módulo
-//   "entrenamientos" todavía no cambia nada.
+// - API (módulo "horarioclub"): la semana sale de GET /api/horario-semana (franjas, extras y canceladas, con `puedeGestionar` que
+//   calcula el backend). Se puede cancelar y deshacer, crear y eliminar extras (los avisos a acudientes los manda el backend y se
+//   devuelven en `avisoEnviado`: true | false | null) y cambiar el entrenador de una franja (PUT /api/horario-club). Editar un extra
+//   no existe en el backend: queda oculto. Contrato en utils/semanaApi.js.
 //
 // Errores: Error con `codigo` -> 'VALIDACION' (con `errores`) | 'CONFLICTO' | 'NO_EXISTE' | 'NO_DISPONIBLE'; los de la API traen
 // además `estado` y `mensaje` (el del backend, en español).
@@ -14,7 +15,11 @@ import * as horarioClub from './horarioClubService.js'
 import * as entrenadoresService from './entrenadoresService.js'
 import { ID_ENTRENADOR_EJEMPLO, categoriasPorRol } from './entrenamientosService.js'
 import { usarApiDe } from './usarApi.js'
-import { capacidadesApi, excepcionesDeSemanaApi } from '../utils/semanaApi.js'
+import { apiRequest } from './apiClient.js'
+import {
+  CAMPO_DE_FORMULARIO, adaptarAccion, adaptarSemana, capacidadesApi, consultaSemana, cuerpoCancelacion, cuerpoExtra,
+} from '../utils/semanaApi.js'
+import { erroresPorCampo } from '../utils/erroresApi.js'
 import { MENSAJE_MOTIVO, chocaEntrenadorEnSesiones, sesionesDeSemana, validarExtra, validarMotivo } from '../utils/semana.js'
 import { NOMBRES_CATEGORIAS } from '../utils/categorias.js'
 import { lunesDe } from '../utils/fechas.js'
@@ -25,6 +30,18 @@ export const semanaPorApi = () => usarApi
 
 const error = (codigo, mensaje, extra) => Object.assign(new Error(mensaje), { codigo }, extra)
 const noDisponible = () => error('NO_DISPONIBLE', 'Esta acción todavía no está disponible.')
+const json = (cuerpo) => JSON.stringify(cuerpo)
+const rutaExcepcion = (tipo, id) => `/horario-semana/${tipo}/${encodeURIComponent(id)}`
+
+// Errores de la API al crear un extra: el 409 (cruce del entrenador) y los 400 por campo se marcan en el formulario (`errores`, con los
+// nombres de sus campos). Si algún campo no existe en el formulario, queda solo el mensaje del backend.
+function conErroresDeExtra(fallo) {
+  if (fallo?.estado === 409) fallo.errores = { idEntrenador: fallo.mensaje }
+  else if (Array.isArray(fallo?.campos) && fallo.campos.length > 0 && fallo.campos.every((c) => CAMPO_DE_FORMULARIO[c])) {
+    fallo.errores = Object.fromEntries(Object.entries(erroresPorCampo(fallo)).map(([campo, texto]) => [CAMPO_DE_FORMULARIO[campo], texto]))
+  }
+  return fallo
+}
 
 export function capacidades() {
   if (!usarApi) return { leer: true, cancelar: true, extras: true, rotarEntrenador: true }
@@ -36,6 +53,14 @@ export function capacidades() {
 export function identidadEntrenador() {
   if (usarApi) return null
   return { id: ID_ENTRENADOR_EJEMPLO, categorias: [...categoriasPorRol.entrenador] }
+}
+
+// Categorías del club con su id, para crear extras (la API pide el id; la pantalla elige por nombre). En la API salen de las franjas.
+export async function categoriasDelClub() {
+  if (!usarApi) return NOMBRES_CATEGORIAS.map((nombre) => ({ id: idCategoriaDe(nombre), nombre }))
+  const vistas = new Map()
+  for (const f of await horarioClub.listar()) if (f.idCategoria && f.categoria) vistas.set(f.idCategoria, f.categoria)
+  return [...vistas].map(([id, nombre]) => ({ id, nombre }))
 }
 
 // Entrenadores que se pueden elegir (activos o no; la pantalla decide). Solo el administrador puede listarlos en la API.
@@ -55,13 +80,14 @@ const idNumerico = (valor) => (valor === '' || valor === null || valor === undef
 const conNombres = (f) => ({ ...f, categoria: f.categoria ?? nombreDeCategoria(f.idCategoria), entrenador: f.entrenador ?? nombreEntrenador(f.idEntrenador) })
 
 export async function listarSemana(lunes) {
+  if (usarApi) return adaptarSemana(await apiRequest(consultaSemana(lunes)))
   const franjas = (await horarioClub.listar()).map(conNombres)
-  const deLaSemana = usarApi ? await excepcionesDeSemanaApi(lunes) : excepciones
-  return sesionesDeSemana(franjas, deLaSemana, lunes)
+  return sesionesDeSemana(franjas, excepciones, lunes)
 }
 
+// En la API, cancelar, reactivar, crearExtra y eliminarExtra devuelven { sesion, avisoEnviado } (ver utils/semanaApi.js)
 export async function cancelar({ fecha, idFranja, motivo }) {
-  if (usarApi) throw noDisponible()
+  if (usarApi) return adaptarAccion(await apiRequest('/horario-semana/cancelaciones', { method: 'POST', body: json(cuerpoCancelacion({ fecha, idFranja, motivo })) }))
   if (fecha < hoy()) throw error('VALIDACION', 'No se puede cancelar un entrenamiento de una fecha pasada.', { errores: { fecha: 'No se puede cancelar una fecha pasada.' } })
   if (validarMotivo(motivo)) throw error('VALIDACION', MENSAJE_MOTIVO, { errores: { motivo: MENSAJE_MOTIVO } })
   const franja = (await horarioClub.listar()).find((f) => String(f.id) === String(idFranja))
@@ -75,7 +101,7 @@ export async function cancelar({ fecha, idFranja, motivo }) {
 }
 
 export async function reactivar(idExcepcion) {
-  if (usarApi) throw noDisponible()
+  if (usarApi) return adaptarAccion(await apiRequest(rutaExcepcion('cancelaciones', idExcepcion), { method: 'DELETE' }))
   const actual = excepciones.find((e) => e.tipo === 'CANCELACION' && String(e.id) === String(idExcepcion))
   if (!actual) throw error('NO_EXISTE', 'La cancelación no existe.')
   excepciones = excepciones.filter((e) => e !== actual)
@@ -97,7 +123,8 @@ const extraDesde = (id, d) => ({
   grupo: d.grupo || null,
 })
 
-// ¿El entrenador ya tiene otra sesión que se cruza ese día? (cuenta franjas no canceladas y extras de esa semana)
+// ¿El entrenador ya tiene otra sesión que se cruza ese día? (cuenta franjas no canceladas y extras de esa semana). En la API lo decide el
+// servidor: responde 409 al crear el extra y el formulario muestra su mensaje.
 export async function detectarConflicto(datos, ignorarId = null) {
   if (usarApi) return { hayConflicto: false }
   const sesiones = await listarSemana(lunesDe(datos.fecha))
@@ -119,7 +146,15 @@ async function validarYComprobar(datos, ignorarId) {
 }
 
 export async function crearExtra(datos) {
-  if (usarApi) throw noDisponible()
+  if (usarApi) {
+    const categoria = (await categoriasDelClub()).find((c) => c.nombre === datos.categoria)
+    if (!categoria) throw error('NO_EXISTE', 'La categoría no existe.', { estado: 404, mensaje: 'La categoría no existe.' })
+    try {
+      return adaptarAccion(await apiRequest('/horario-semana/extras', { method: 'POST', body: json(cuerpoExtra(datos, categoria.id)) }))
+    } catch (fallo) {
+      throw conErroresDeExtra(fallo)
+    }
+  }
   await validarYComprobar(datos, null)
   const nuevo = extraDesde(siguienteId++, datos)
   excepciones = [...excepciones, nuevo]
@@ -137,7 +172,7 @@ export async function editarExtra(id, datos) {
 }
 
 export async function eliminarExtra(id) {
-  if (usarApi) throw noDisponible()
+  if (usarApi) return adaptarAccion(await apiRequest(rutaExcepcion('extras', id), { method: 'DELETE' }))
   const actual = excepciones.find((e) => e.tipo === 'EXTRA' && String(e.id) === String(id))
   if (!actual) throw error('NO_EXISTE', 'El entrenamiento extra no existe.')
   excepciones = excepciones.filter((e) => e !== actual)

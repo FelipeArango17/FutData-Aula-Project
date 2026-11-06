@@ -28,10 +28,10 @@ describe('SesionesSemana', () => {
     expect(html).toMatch(/aria-current="date"[^>]*>Jue 22 oct<span[^>]*>Hoy<\/span>/)
   })
 
-  it('una sesión cancelada se dice con texto (Cancelado), va tachada y muestra el motivo', () => {
+  it('una sesión cancelada se dice con texto (Cancelada), va tachada y muestra el motivo', () => {
     for (const modo of ['cuadricula', 'lista']) {
       const html = dibujar(modo)
-      expect(html).toContain('Cancelado')
+      expect(html).toContain('Cancelada')
       expect(html).toContain('line-through')
       expect(html).toContain('Motivo: Cancha en mantenimiento')
     }

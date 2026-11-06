@@ -30,6 +30,16 @@ export const fechaConMes = (fecha) => `${diaCorto(fecha)} ${mesEnTexto(fecha).sl
 // Lo que se le dice al usuario al cancelar o crear un extra. El correo lo manda el backend; la pantalla no cuenta notificados.
 export const textoAviso = (categoria) => `Se avisará por correo a los acudientes de ${categoria}.`
 
+// Mensaje tras una acción que avisa a los acudientes. `avisoEnviado` es el de la API: true (salió el correo), false (el cambio SÍ quedó
+// hecho pero no se pudo avisar: no es un fallo, pero se dice) o null (la categoría no tiene acudientes con correo). undefined = modo
+// ejemplo (en memoria): `textoEjemplo` es lo que se añade entonces. Devuelve { texto, tono }.
+export function avisoDeAccion(texto, avisoEnviado, categoria, textoEjemplo = '') {
+  if (avisoEnviado === true) return { texto: `${texto} Se envió el aviso por correo a los acudientes de ${categoria}.`, tono: 'success' }
+  if (avisoEnviado === false) return { texto: `${texto} No se pudo avisar por correo a los acudientes de ${categoria}: avísales por otro medio.`, tono: 'warning' }
+  if (avisoEnviado === null) return { texto: `${texto} ${categoria} no tiene acudientes con correo, así que no se envió ningún aviso.`, tono: 'success' }
+  return { texto: `${texto} ${textoEjemplo}`.trim(), tono: 'success' }
+}
+
 const porSesion = (a, b) =>
   a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora) || ordenCategoria(a.categoria) - ordenCategoria(b.categoria) || (a.grupo ?? '').localeCompare(b.grupo ?? '')
 
@@ -107,8 +117,9 @@ export const esFechaModificable = (fecha, hoy) => fecha >= hoy
 export const puedeCrearExtra = (rol, capacidades, propias) => Boolean(capacidades?.extras) && categoriasCreables(rol, propias).length > 0
 
 // Qué botones lleva una sesión. `capacidades`: lo que ofrece el servicio (en modo API sin 4B no hay cancelar ni extras).
+// En modo API la sesión trae `puedeGestionar` (calculado por el backend): manda sobre la regla local.
 export function accionesDe(sesion, { rol, propias = null, capacidades = {}, hoy }) {
-  const actua = puedeActuarSobre(rol, sesion.categoria, propias)
+  const actua = typeof sesion.puedeGestionar === 'boolean' ? sesion.puedeGestionar : puedeActuarSobre(rol, sesion.categoria, propias)
   const futura = esFechaModificable(sesion.fecha, hoy)
   const esFranja = sesion.tipo === 'FRANJA'
   return {
@@ -116,7 +127,7 @@ export function accionesDe(sesion, { rol, propias = null, capacidades = {}, hoy 
     reactivar: esFranja && Boolean(capacidades.cancelar) && actua && futura && sesion.estado === 'CANCELADO' && sesion.idExcepcion !== null,
     // Rotar entrenadores cambia la franja para todas las semanas: solo el administrador
     rotar: esFranja && Boolean(capacidades.rotarEntrenador) && rol === 'administrador',
-    editarExtra: !esFranja && Boolean(capacidades.extras) && actua && futura,
+    editarExtra: !esFranja && Boolean(capacidades.editarExtra ?? capacidades.extras) && actua && futura,
     eliminarExtra: !esFranja && Boolean(capacidades.extras) && actua && futura,
   }
 }
