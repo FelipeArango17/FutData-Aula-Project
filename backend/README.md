@@ -444,7 +444,7 @@ Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-
 
 ## Inscripción única (bloque 2B)
 
-Un solo `POST` que crea el deportista, crea o reutiliza a su acudiente por correo, los vincula con el parentesco y, si el correo no tiene cuenta, le crea la cuenta de acceso y le envía el enlace para crear su contraseña (regla 9, el mismo camino que el alta de entrenadores del bloque 5). Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` §9.1.2. **Migración 011** (`011_acudiente_documento_opcional.sql`, ya aplicada en la base del equipo): `acudiente.tipo_documento`, `documento_identidad` y `fecha_nacimiento` pasan a ser opcionales, porque la inscripción no los pide. Sin variables de entorno nuevas.
+Un solo `POST` que crea el deportista, crea o reutiliza a su acudiente por correo, los vincula con el parentesco y, si el correo no tiene cuenta, le crea la cuenta de acceso y le envía el enlace para crear su contraseña (regla 9, el mismo camino que el alta de entrenadores del bloque 5). Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` §9.1.3. **Migración 011** (`011_acudiente_documento_opcional.sql`, ya aplicada en la base del equipo): `acudiente.tipo_documento`, `documento_identidad` y `fecha_nacimiento` pasan a ser opcionales, porque la inscripción no los pide. Sin variables de entorno nuevas.
 
 ### Endpoint
 
@@ -699,6 +699,108 @@ Solo `ADMINISTRADOR` y `ENTRENADOR` (acudiente y tesorero reciben `403` por rol)
 - `categorias` son las que tiene a cargo (`categoria.id_entrenador`) en el orden oficial (`edad_minima`); `[]` si no tiene ninguna. Un entrenador inactivo recibe el bloque con las categorías que conserve.
 - Consultas nuevas: `IEntrenadorDAO.buscarPorIdUsuario` e `ICategoriaDAO.listarPorEntrenador`.
 - `/api/auth/2fa/verificar` sigue devolviendo el perfil sin este bloque: el frontend lo obtiene con `GET /api/usuarios/yo`.
+
+## Asistencia (bloque 4C, versión mínima)
+
+Pasar lista de una sesión del horario: la lista de deportistas de una franja en una fecha (o de un extra) con su estado, y guardar las marcas. **Estado:** implementado en la rama `feature/bloque-asistencia`, pendiente de merge. **La migración 012 (`supabase/migrations/012_asistencia_entrenador_opcional.sql`) está pendiente de aplicar en la base real**; las pruebas la aplican solas en su PostgreSQL. Diseño y decisiones en `docs/PRESENTACION-TECNICA.md` (9.1.2).
+
+### Endpoints
+
+| Método y ruta | Descripción | Roles | Respuestas |
+| :--- | :--- | :--- | :--- |
+| `GET /api/asistencia/sesion?fecha=AAAA-MM-DD&idFranja=UUID` (o `&idExcepcion=UUID` para un extra) | La sesión y su lista de deportistas con lo ya guardado. **Solo lee: no crea nada** | `ADMINISTRADOR`; `ENTRENADOR` de la categoría (o que dirige la franja) | `200`, `400`, `401`, `403`, `404`, `409` |
+| `PUT /api/asistencia/sesion` | Guarda las asistencias (upsert por deportista y sesión), todo o nada | Los mismos | `200`, `400`, `401`, `403`, `404`, `409` |
+
+El `TESORERO` y el `ACUDIENTE` reciben `403` por rol, y sin la sesión 2FA verificada el `403` trae `codigo` `2FA_REQUERIDA`, como en las demás rutas protegidas. Para el `ENTRENADOR` rige la misma regla de `puedeGestionar` del horario de la semana: las franjas de **sus categorías** o que **él dirige**, y los extras solo de **sus categorías** (dirigirlos no basta). Un entrenador de otra categoría recibe `403` con "Solo puedes pasar lista de tus categorías".
+
+### Respuesta (la misma en el `GET` y en el `PUT`)
+
+```json
+{
+  "sesion": {
+    "fecha": "2026-11-03",
+    "horaInicio": "16:00",
+    "horaFin": "17:30",
+    "idCategoria": "uuid",
+    "categoria": "Sub-12",
+    "sede": "Horizontes",
+    "grupo": null,
+    "idEntrenador": "uuid",
+    "entrenador": "Luis Mora"
+  },
+  "puedeRegistrar": true,
+  "deportistas": [
+    { "idDeportista": "uuid", "nombre": "Ana", "apellido": "Alfa", "estado": "PRESENTE", "observaciones": null },
+    { "idDeportista": "uuid", "nombre": "Beto", "apellido": "Beta", "estado": null, "observaciones": null }
+  ]
+}
+```
+
+Los campos salen siempre, con `null` cuando no aplican: `grupo` (la sesión no tiene), `idEntrenador` y `entrenador` ("por turnos"), `estado` y `observaciones` (sin registrar). `idEntrenador` y `entrenador` son los **asignados** a la sesión, no quien pasó lista. `puedeRegistrar` es `true` siempre que hay `200` (el `400` y el `403` ya cubren los demás casos). `estado`: `PRESENTE`, `AUSENTE` o `JUSTIFICADO`. Los deportistas salen por apellido y nombre.
+
+### Cuerpo del `PUT`
+
+```json
+{
+  "fecha": "2026-11-03",
+  "idFranja": "uuid",
+  "registros": [
+    { "idDeportista": "uuid", "estado": "AUSENTE", "observaciones": "Sin aviso" },
+    { "idDeportista": "uuid", "estado": "PRESENTE" }
+  ]
+}
+```
+
+- **Sesión:** exactamente uno de `idFranja` o `idExcepcion` (un extra). Con una franja, la fecha debe caer en su día de la semana; con un extra, ser la fecha del extra.
+- **`registros`:** al menos uno; puede traer solo una parte de la lista. `observaciones` es opcional (máximo 300 caracteres; se limpian los espacios y vacías quedan `null`). El `estado` se acepta en cualquier combinación de mayúsculas y minúsculas y se guarda en mayúsculas. Un deportista no puede repetirse.
+- **Upsert:** se puede volver a guardar para corregir. Al corregir se actualizan el estado, las observaciones, quien pasó lista y la hora del registro. Volver a mandar un deportista sin `observaciones` **borra** las que tenía.
+- **Todo o nada:** el `PUT` completo (revisar la lista, crear el entrenamiento y guardar) corre en una sola transacción. Un registro inválido no deja ninguno, ni siquiera el entrenamiento recién creado.
+
+### Cómo se resuelve la sesión
+
+- **La sesión es una franja en una fecha, o un extra.** No existe una tabla de "sesiones": la franja y la excepción de tipo `EXTRA` ya traen categoría, horas, sede, entrenador y grupo.
+- **El entrenamiento se crea al pasar lista.** La asistencia (`asistencia`) apunta a una fila de `entrenamiento`, que el `PUT` busca por `(categoría, fecha, hora de inicio, sede)` y crea si no existe (estado `PROGRAMADO`, con la `hora_fin` de la sesión). El `GET` solo la busca: si no existe, la lista sale sin marcas.
+- **`entrenamiento.id_entrenador` es el entrenador asignado** (el de la franja o el del extra; `null` si es "por turnos"). **`asistencia.id_entrenador` es quien pasó lista** (la ficha del entrenador; `null` si fue el administrador). Por eso la migración 012 hace NULLABLE las dos columnas.
+- **Lista de la sesión:** deportistas **activos** de la categoría de la sesión y, si la sesión tiene grupo (`mañana` o `tarde`), solo los de ese grupo. La categoría es la **calculada por año de nacimiento** (`año de hoy − año de nacimiento` entre `edad_minima` y `edad_maxima`), el mismo criterio de `DeportistaDAOImpl`; una prueba compara las dos listas. **Limitación:** para una fecha pasada la categoría se calcula con la regla vigente **hoy**, no con la de ese día; un deportista que cambió de categoría desde entonces no aparece en la lista de la fecha pasada.
+- **Fechas:** con el reloj de la aplicación (`America/Bogota`). Hoy se puede; una fecha futura da `400` en el `GET` y en el `PUT`.
+- **Cancelada:** una franja con cancelación en esa fecha da `409`. Un extra no se cancela, se elimina.
+
+### Migración 012
+
+`supabase/migrations/012_asistencia_entrenador_opcional.sql` (dentro de `begin/commit`, idempotente, no lee ni cambia datos) solo hace dos `drop not null`:
+
+- `entrenamiento.id_entrenador`: `NULL` = "por turnos".
+- `asistencia.id_entrenador`: `NULL` = pasó lista el administrador.
+
+No amplía ningún `unique`: el de `entrenamiento (lugar, fecha, hora_inicio)` ya no existe (lo reemplazó la 004 y la 007 quitó la exclusión por lugar), así que dos categorías a la misma hora y sede caben. Siguen vigentes `entrenamiento_cruce_categoria_ex` y `entrenamiento_cruce_entrenador_ex` (con `estado = 'PROGRAMADO'`; `NULL` no choca) y `unique (id_deportista, id_entrenamiento)` de `asistencia`, la clave del upsert.
+
+### Entrenamiento y solape
+
+El `PUT` crea el entrenamiento con `INSERT ... ON CONFLICT DO NOTHING` (sin objetivo, que PostgreSQL permite también para restricciones de exclusión, SQLState `23P01`). Así un conflicto no lanza error y la transacción no queda abortada. Si no se inserta nada, se vuelve a leer la fila por su clave: si existe, fue una **carrera** (otra petición creó la misma sesión) y se sigue con ella; si no existe, **otro entrenamiento se cruza de verdad** (de la misma categoría o del mismo entrenador, a otra hora) y el servicio responde `409` sin `campos`: "Esta sesión se cruza con otro entrenamiento ya registrado (de la misma categoría o del mismo entrenador): no se puede pasar lista".
+
+### Orden de las validaciones
+
+Para no revelar nada a quien no tiene permiso: **rol** (`403`) → **forma de la entrada** (`400`, todos los campos juntos) → **sesión** (`404` si la franja o el extra no existe; `400` con `campos: ["fecha"]` si la fecha no cae en el día de la franja o no es la del extra) → **permiso sobre la categoría** (`403`) → **fecha futura** (`400`) → **cancelada** (`409`) → **deportistas de la lista** (`400` con `campos: ["registros"]`) → crear o buscar el entrenamiento (`409` si hay solape) → guardar.
+
+### Errores
+
+| Código | Cuándo |
+| :--- | :--- |
+| `400` | Fecha ausente, inválida (`AAAA-MM-DD`) o futura (`campos: ["fecha"]`); ni `idFranja` ni `idExcepcion`, o los dos (`campos: ["idExcepcion", "idFranja"]`); un id que no es UUID; la fecha no cae en el día de la franja o no es la del extra (`campos: ["fecha"]`); `registros` vacío, con un estado inválido, observaciones de más de 300 caracteres, un `idDeportista` mal formado, repetido o que **no está en la lista de la sesión** (`campos: ["registros"]`, el mensaje dice "registro N: ..."); cuerpo ausente o JSON mal formado |
+| `401` | Sin token, token inválido o vencido |
+| `403` | Rol sin permiso (tesorero, acudiente), sin 2FA (`codigo` `2FA_REQUERIDA`) o un entrenador de otra categoría |
+| `404` | No existe la franja ("No existe una franja con ese id.") o el extra ("No existe un extra con ese id.", también si el id es de una cancelación) |
+| `409` | La franja está cancelada ese día (`campos: ["fecha"]`: "Esa sesión está cancelada ese día: no se puede pasar lista") o la sesión se cruza con otro entrenamiento (sin `campos`) |
+
+Los errores usan el formato de [Formato de errores](#formato-de-errores-para-el-frontend).
+
+### Fuera de esta versión
+
+Historial de asistencia por deportista, reportes, vista del acudiente y auditoría (el proyecto solo audita pagos; pasar lista no registra eventos en `auditoria`).
+
+### Pruebas
+
+`ReglasAsistenciaTest`, `MigracionAsistenciaTest` y `AsistenciaDAOImplTest` (PostgreSQL real: lista, upsert, todo o nada, carrera y solape), `AsistenciaServiceImplTest` (DAO simulados: roles, orden de validaciones, permisos, grupo) y `AsistenciaConPostgresTest` (servicio y DAO reales: entrenador asignado y quien pasó lista, upsert, todo o nada con transacción real), `AsistenciaControllerTest` (HTTP con la seguridad real: forma exacta del JSON, nulos, 401, 403, 2FA, 400, 404, 409) y `AsistenciaControllerConPostgresTest` (recorrido completo por HTTP). Las que usan PostgreSQL se omiten solas sin Docker.
 
 ## Usuarios y roles (HU-004)
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import Page from '../../components/ui/Page.jsx'
 import Card from '../../components/ui/Card.jsx'
 import Button from '../../components/ui/Button.jsx'
@@ -15,6 +15,7 @@ import { actualizarDeportista, deportistasPorApi, listarCategorias, obtenerFicha
 import { documentosPorApi } from '../../services/documentosService.js'
 import { guardarFoto, obtenerFoto, quitarFoto } from '../../services/fotosService.js'
 import { ETIQUETA_GRUPO } from '../../utils/categorias.js'
+import { enfocarAncla } from '../../utils/enfocarAncla.js'
 import { fechaLargaConAnio, formatHora, momentoLegible, partesMomento } from '../../utils/fechas.js'
 
 // Ficha del deportista (HU-010, tarea 319): lectura y edición. Ruta /administrador/deportistas/:id. Solo el administrador.
@@ -52,6 +53,8 @@ function Ficha({ id }) {
   const actor = useActor()
   const porApi = deportistasPorApi()
   const tituloRef = useRef(null)
+  const { hash } = useLocation()
+  const hashAtendido = useRef(false)
   const [intento, setIntento] = useState(0)
   // Resultado con la clave de la petición que lo produjo: si no coincide, está cargando
   const [carga, setCarga] = useState({ intento: -1, ficha: null, categorias: [], error: null })
@@ -94,6 +97,11 @@ function Ficha({ id }) {
   useEffect(() => {
     if (foco) document.getElementById(foco.id)?.focus()
   }, [foco])
+
+  // Llegar con un hash (p. ej. desde Documentación: #foto-deportista): al estar la tarjeta en pantalla se enfoca, una sola vez
+  useEffect(() => {
+    if (hash && !hashAtendido.current && enfocarAncla(hash)) hashAtendido.current = true
+  })
 
   const cargando = carga.intento !== intento
   const ficha = carga.ficha
@@ -192,7 +200,7 @@ function Ficha({ id }) {
     contenido = (
       <>
         <Card aria-labelledby="foto-deportista" className="flex w-full max-w-2xl flex-col gap-4">
-          <h2 id="foto-deportista" className="break-words text-h3">Foto</h2>
+          <h2 id="foto-deportista" tabIndex={-1} className="break-words text-h3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Foto</h2>
           <SubidaFoto nombre={`${deportista.nombre} ${deportista.apellido}`} foto={foto} onGuardar={guardarLaFoto} onQuitar={quitarLaFoto} />
         </Card>
         <Card aria-labelledby="datos-personales" className="flex w-full max-w-2xl flex-col gap-4">

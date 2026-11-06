@@ -38,8 +38,7 @@ class MigracionPagosWompiTest {
 
     @AfterEach
     void limpiar() {
-        jdbc.getJdbcOperations().update("DELETE FROM pago");
-        jdbc.getJdbcOperations().update("DELETE FROM deportista");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
     }
 
     private void insertar(String tipo, LocalDate periodo, String estado, String metodo, String referencia, String transaccion) {

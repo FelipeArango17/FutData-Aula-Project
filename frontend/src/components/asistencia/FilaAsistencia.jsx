@@ -8,7 +8,7 @@ import { MAX_OBSERVACION } from '../../services/asistenciaService.js'
 // Un deportista de la lista editable: fieldset con legend (nombre) y tres opciones tipo radio
 // (Presente / Ausente / Justificado, con texto + ícono) y una observación opcional de hasta 200 caracteres.
 // El avatar va encima del nombre cuando no hay ancho (flex-wrap en rem), para no partir nombres largos.
-export default function FilaAsistencia({ deportista, nombre, foto, valor, error, obsAbierta, deshabilitado, onEstado, onObservacion, onAlternarObs }) {
+export default function FilaAsistencia({ deportista, nombre, foto, valor, error, obsAbierta, deshabilitado, onEstado, onObservacion, onAlternarObs, maxObservacion = MAX_OBSERVACION }) {
   const { id } = deportista
   const errorId = error ? `asistencia-${id}-error` : undefined
   const obsId = `observacion-${id}`
@@ -75,7 +75,7 @@ export default function FilaAsistencia({ deportista, nombre, foto, valor, error,
                   id={obsId}
                   as="textarea"
                   rows={3}
-                  maxLength={MAX_OBSERVACION}
+                  maxLength={maxObservacion}
                   value={valor.observacion}
                   disabled={deshabilitado}
                   describedBy={contadorId}
@@ -83,7 +83,7 @@ export default function FilaAsistencia({ deportista, nombre, foto, valor, error,
                   className="min-h-11 w-full rounded-md border bg-surface px-3 py-2 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 />
                 <p id={contadorId} className="text-small text-secondary">
-                  {valor.observacion.length} de {MAX_OBSERVACION} caracteres
+                  {valor.observacion.length} de {maxObservacion} caracteres
                 </p>
               </>
             )}

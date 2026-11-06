@@ -108,9 +108,9 @@ class HorarioSemanaConPostgresTest {
 
     @AfterEach
     void limpiarTodo() {
-        for (String tabla : java.util.List.of("auditoria", "notificacion_pago", "pago", "acudiente_deportista", "acudiente", "documento", "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         jdbc.getJdbcOperations().update("DELETE FROM excepcion_horario");
         jdbc.getJdbcOperations().update("DELETE FROM franja_horario");
         jdbc.getJdbcOperations().update("DELETE FROM usuario WHERE correo LIKE 'semana-pg-%'");

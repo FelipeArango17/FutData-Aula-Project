@@ -25,3 +25,7 @@ export function opcionesDeCategoria({ soloMias, perfil }) {
 // ¿La sesión es de una de las categorías del entrenador? Se compara por idCategoria (no por nombre).
 export const esDeMisCategorias = (sesion, perfil) =>
   (perfil?.categorias ?? []).some((c) => String(c.idCategoria) === String(sesion.idCategoria))
+
+// ¿La sesión es del entrenador? Una de sus categorías ("Tu categoría") o una franja que él dirige ("Tú").
+export const esDeEntrenador = (sesion, perfil) =>
+  esDeMisCategorias(sesion, perfil) || (Boolean(perfil?.idEntrenador) && String(sesion.idEntrenador ?? '') === String(perfil.idEntrenador))

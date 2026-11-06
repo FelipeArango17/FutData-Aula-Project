@@ -60,8 +60,7 @@ class DeportistaDAOImplTest {
     /** Las demás clases borran categorías sin borrar deportistas: no se dejan filas que lo impidan. */
     @AfterEach
     void limpiarTodo() {
-        jdbc.getJdbcOperations().update("DELETE FROM documento");
-        jdbc.getJdbcOperations().update("DELETE FROM deportista");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
         PostgresDePrueba.limpiar();
         jdbc.getJdbcOperations().update("DELETE FROM usuario WHERE correo LIKE '" + CORREO_PG + "%'");
         jdbc.getJdbcOperations().update("DELETE FROM auth.users WHERE id NOT IN (SELECT id_usuario FROM usuario)");

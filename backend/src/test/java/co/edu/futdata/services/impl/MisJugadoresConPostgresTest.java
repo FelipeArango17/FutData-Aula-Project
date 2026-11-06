@@ -45,9 +45,9 @@ class MisJugadoresConPostgresTest {
     @BeforeEach
     void preparar() {
         jdbc = PostgresDePrueba.jdbc();
-        for (String tabla : List.of("auditoria", "notificacion_pago", "pago", "acudiente_deportista", "acudiente", "documento", "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         jdbc.getJdbcOperations().update("DELETE FROM usuario WHERE correo LIKE 'jugadores-%'");
         jdbc.getJdbcOperations().update("DELETE FROM auth.users WHERE id NOT IN (SELECT id_usuario FROM usuario)");
         PostgresDePrueba.limpiar();

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -44,12 +45,20 @@ class CobrosCicloConPostgresTest {
     @BeforeEach
     void preparar() {
         jdbc = PostgresDePrueba.jdbc();
-        for (String tabla : List.of("auditoria", "notificacion_pago", "pago", "acudiente_deportista", "acudiente", "documento", "deportista")) {
-            jdbc.getJdbcOperations().update("DELETE FROM " + tabla);
-        }
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
         enviados.clear();
         n8nCaido = false;
         pagos = new PagoDAOImpl(jdbc);
+    }
+
+    /** La base se comparte con otras clases: no se dejan pagos ni deportistas que les impidan borrar los suyos. */
+    @AfterEach
+    void limpiarAlTerminar() {
+        jdbc.getJdbcOperations().update("DELETE FROM auditoria");
+        PostgresDePrueba.limpiarDatosDeDeportistas();
+        jdbc.getJdbcOperations().update("DELETE FROM acudiente");
     }
 
     private CobrosCicloServiceImpl servicio(PagoDAOImpl dao) {
