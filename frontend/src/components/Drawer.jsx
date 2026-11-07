@@ -3,10 +3,12 @@ import Icon from './Icon.jsx'
 import Logo from './Logo.jsx'
 import NavMenu from './NavMenu.jsx'
 import { roleLabels, sampleUsers } from '../config/menus.js'
+import { useAuth } from '../context/AuthContext.js'
 
 // Cajón del menú en móvil. Se cierra con Esc, tocando el fondo o al elegir una opción.
 export default function Drawer({ open, onClose, role }) {
   const closeButtonRef = useRef(null)
+  const auth = useAuth()
 
   useEffect(() => {
     if (!open) return
@@ -24,8 +26,13 @@ export default function Drawer({ open, onClose, role }) {
 
   if (!open) return null
 
-  const name = sampleUsers[role]
-  const initials = name.split(' ').map((word) => word[0]).join('')
+  // Misma fuente que el saludo del inicio: la sesión verificada. Solo sin sesión verificada (selector de rol en desarrollo) queda el ejemplo.
+  const usuario = auth?.estado === 'verificada' && auth.usuario?.rol === role ? auth.usuario : null
+  const nombreSesion = String(usuario?.nombre ?? '').trim()
+  const rolMostrado = usuario ? roleLabels[usuario.rol] : roleLabels[role]
+  // Con sesión verificada nunca se cae al ejemplo: nombre, si no el correo, si no el rol.
+  const name = usuario ? nombreSesion || String(usuario.correo ?? '').trim() || rolMostrado : sampleUsers[role]
+  const initials = name.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()
 
   return (
     <div className="fixed inset-0 z-40 md:hidden">
@@ -59,7 +66,7 @@ export default function Drawer({ open, onClose, role }) {
           </span>
           <div className="min-w-0 flex-1 basis-40">
             <p className="break-words text-body-medium">{name}</p>
-            <p className="break-words text-small texto-atenuado">{roleLabels[role]}</p>
+            <p className="break-words text-small texto-atenuado">{rolMostrado}</p>
           </div>
         </div>
         <NavMenu role={role} onNavigate={onClose} />
